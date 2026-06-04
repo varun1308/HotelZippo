@@ -1,0 +1,92 @@
+/* ============================================================
+   HotelZippo — Runtime Brand Accent Themes
+   ------------------------------------------------------------
+   Pure CSS-variable themes that re-tint the entire product live,
+   no rebuild required. Pairs with tailwind.config.js → brandThemes.
+
+   USAGE
+     1. Import after tokens.css (or your Tailwind base):
+          import './brand-themes.css';
+     2. Set the brand on a root element:
+          <html data-brand="ocean">    // teal · ocean · plum · terracotta
+     3. Everything that reads --primary-* (tokens.css, components,
+        Tailwind utilities mapped to these vars) re-tints instantly.
+
+   All four ramps share lightness + chroma; only hue changes, so the
+   UI stays balanced whichever brand you pick. Amber/red hard-flag
+   colours are intentionally NOT themed — they must stay constant.
+
+   Default (no data-brand attribute) = Terracotta, defined in tokens.css.
+   ============================================================ */
+
+/* Terracotta — explicit selector (matches the tokens.css default) */
+[data-brand="terracotta"] {
+  --primary-50:  oklch(0.971 0.013 46);
+  --primary-100: oklch(0.940 0.028 45);
+  --primary-200: oklch(0.890 0.050 44);
+  --primary-300: oklch(0.818 0.078 43);
+  --primary-400: oklch(0.728 0.105 42);
+  --primary-500: oklch(0.638 0.122 41);
+  --primary-600: oklch(0.576 0.118 40);
+  --primary-700: oklch(0.502 0.100 39);
+  --primary-800: oklch(0.430 0.082 38);
+  --primary-900: oklch(0.366 0.064 37);
+  --primary:       var(--primary-500);
+  --primary-hover: var(--primary-600);
+  --primary-press: var(--primary-700);
+  --primary-tint:  var(--primary-50);
+}
+
+/* Teal — calm, spa-like */
+[data-brand="teal"] {
+  --primary-50:  oklch(0.971 0.013 173);
+  --primary-100: oklch(0.940 0.028 172);
+  --primary-200: oklch(0.890 0.050 171);
+  --primary-300: oklch(0.818 0.078 170);
+  --primary-400: oklch(0.728 0.105 169);
+  --primary-500: oklch(0.638 0.122 168);
+  --primary-600: oklch(0.576 0.118 167);
+  --primary-700: oklch(0.502 0.100 166);
+  --primary-800: oklch(0.430 0.082 165);
+  --primary-900: oklch(0.366 0.064 164);
+  --primary:       var(--primary-500);
+  --primary-hover: var(--primary-600);
+  --primary-press: var(--primary-700);
+  --primary-tint:  var(--primary-50);
+}
+
+/* Ocean — trust-forward blue */
+[data-brand="ocean"] {
+  --primary-50:  oklch(0.971 0.013 250);
+  --primary-100: oklch(0.940 0.028 249);
+  --primary-200: oklch(0.890 0.050 248);
+  --primary-300: oklch(0.818 0.078 247);
+  --primary-400: oklch(0.728 0.105 246);
+  --primary-500: oklch(0.638 0.122 245);
+  --primary-600: oklch(0.576 0.118 244);
+  --primary-700: oklch(0.502 0.100 243);
+  --primary-800: oklch(0.430 0.082 242);
+  --primary-900: oklch(0.366 0.064 241);
+  --primary:       var(--primary-500);
+  --primary-hover: var(--primary-600);
+  --primary-press: var(--primary-700);
+  --primary-tint:  var(--primary-50);
+}
+
+/* Plum — warm editorial magenta */
+[data-brand="plum"] {
+  --primary-50:  oklch(0.971 0.013 343);
+  --primary-100: oklch(0.940 0.028 342);
+  --primary-200: oklch(0.890 0.050 341);
+  --primary-300: oklch(0.818 0.078 340);
+  --primary-400: oklch(0.728 0.105 339);
+  --primary-500: oklch(0.638 0.122 338);
+  --primary-600: oklch(0.576 0.118 337);
+  --primary-700: oklch(0.502 0.100 336);
+  --primary-800: oklch(0.430 0.082 335);
+  --primary-900: oklch(0.366 0.064 334);
+  --primary:       var(--primary-500);
+  --primary-hover: var(--primary-600);
+  --primary-press: var(--primary-700);
+  --primary-tint:  var(--primary-50);
+}

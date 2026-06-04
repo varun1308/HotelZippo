@@ -1,0 +1,94 @@
+name: CI
+
+# The "checks pass" half of the merge gate. Required on every PR to main.
+# Steps are guarded so this passes on the pre-scaffold baseline (no package.json yet)
+# and automatically enforces typecheck/lint/test/build once the Next.js app exists.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect Node app
+        id: detect
+        run: |
+          if [ -f package.json ]; then
+            echo "has_app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_app=false" >> "$GITHUB_OUTPUT"
+            echo "No package.json yet — skipping app checks (pre-scaffold baseline)."
+          fi
+
+      - name: Setup Node
+        if: steps.detect.outputs.has_app == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.detect.outputs.has_app == 'true'
+        run: npm ci
+
+      # Each check runs only if the corresponding script exists, so the workflow
+      # tightens phase by phase without edits. Use `npm run <x> --if-present`.
+      - name: Typecheck
+        if: steps.detect.outputs.has_app == 'true'
+        run: npm run typecheck --if-present
+
+      - name: Lint
+        if: steps.detect.outputs.has_app == 'true'
+        run: npm run lint --if-present
+
+      - name: Unit & contract tests (Jest)
+        if: steps.detect.outputs.has_app == 'true'
+        run: npm run test --if-present
+
+      - name: Build
+        if: steps.detect.outputs.has_app == 'true'
+        run: npm run build --if-present
+
+  # Separated so Playwright (slower, browser deps) gates independently once present.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Playwright
+        id: detect
+        run: |
+          if [ -f package.json ] && grep -q '"test:e2e"' package.json; then
+            echo "has_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_e2e=false" >> "$GITHUB_OUTPUT"
+            echo "No test:e2e script yet — skipping (added in Phase 3)."
+          fi
+      - name: Setup Node
+        if: steps.detect.outputs.has_e2e == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        if: steps.detect.outputs.has_e2e == 'true'
+        run: npm ci
+      - name: Install Playwright browsers
+        if: steps.detect.outputs.has_e2e == 'true'
+        run: npx playwright install --with-deps
+      - name: E2E (Playwright)
+        if: steps.detect.outputs.has_e2e == 'true'
+        run: npm run test:e2e

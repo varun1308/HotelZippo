@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo · Hard Flag — Inline Message</title>
+<link rel="stylesheet" href="tokens.css" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  body { background: var(--bg); }
+  .ico svg { width: 1em; height: 1em; stroke-width: 1.75; }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 40px 24px 72px; }
+  .page-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary-600); margin: 0 0 10px; }
+  .page-title { font-family: var(--font-serif); font-weight: 500; font-size: 32px; line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 10px; }
+  .page-sub { font-size: 15.5px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 8px; max-width: 60ch; }
+
+  .scenario-label { display: flex; align-items: center; gap: 12px; margin: 40px 0 20px; }
+  .scenario-label .lbl { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-tertiary); white-space: nowrap; }
+  .scenario-label .rule { flex: 1; height: 1px; background: var(--border); }
+
+  /* chat scaffolding */
+  .stream { display: flex; flex-direction: column; gap: 22px; }
+  .msg { display: flex; gap: 14px; align-items: flex-start; }
+  .msg.user { justify-content: flex-end; }
+  .ava { flex: none; width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(150deg, var(--primary-400), var(--primary-600)); display: grid; place-items: center; color: #fff; box-shadow: var(--sh-sm); }
+  .ava .ico { font-size: 18px; }
+  .body-wrap { flex: 1; min-width: 0; padding-top: 2px; }
+  .who { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+  .body-wrap p { margin: 0; font-size: 16px; line-height: 1.62; color: var(--text); }
+  .body-wrap p em { font-family: var(--font-serif); font-style: italic; }
+  .bubble { max-width: 78%; background: var(--primary-500); color: #fff; padding: 12px 17px; border-radius: 18px 18px 5px 18px; font-size: 15.5px; line-height: 1.5; box-shadow: var(--sh-sm); }
+
+  /* ===== HARD FLAG INLINE MESSAGE ===== */
+  .flag-msg {
+    border-radius: 16px 16px 16px 5px; overflow: hidden; box-shadow: var(--sh-md);
+    border: 1px solid var(--amber-border); background: var(--surface);
+  }
+  .flag-msg.sev-red { border-color: var(--red-border); }
+
+  .flag-msg-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--amber-bg); border-bottom: 1px solid var(--amber-border); }
+  .sev-red .flag-msg-head { background: var(--red-bg); border-bottom-color: var(--red-border); }
+  .flag-msg-icon { flex: none; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--amber); color: #fff; box-shadow: var(--sh-sm); }
+  .sev-red .flag-msg-icon { background: var(--red); }
+  .flag-msg-icon .ico { font-size: 20px; }
+  .flag-msg-titles { flex: 1; min-width: 0; }
+  .flag-sev { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .sev-amber .flag-sev { background: var(--amber); color: #fff; }
+  .sev-red .flag-sev { background: var(--red); color: #fff; }
+  .flag-category { font-weight: 700; font-size: 15px; margin-top: 6px; color: var(--amber-text); }
+  .sev-red .flag-category { color: var(--red-text); }
+
+  .flag-msg-body { padding: 16px 18px 18px; }
+  .flag-desc { font-size: 15px; line-height: 1.6; color: var(--text); margin: 0 0 14px; }
+  .flag-desc b { font-weight: 600; }
+  .flag-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .flag-source { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-tertiary); }
+  .flag-source .ico { font-size: 13px; }
+  .flag-reviews { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); background: var(--surface-2); padding: 5px 11px; border-radius: 999px; font-weight: 500; white-space: nowrap; }
+  .flag-reviews .ico { font-size: 13px; color: var(--star); }
+
+  /* follow-up assistant line under the flag */
+  .followup { margin-top: 14px; }
+
+  /* quick reply chips */
+  .replies { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; margin-left: 50px; }
+  .reply { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: var(--sh-xs); transition: all var(--dur-fast); }
+  .reply:hover { border-color: var(--primary-300); background: var(--primary-50); color: var(--primary-700); }
+  .reply .ico { font-size: 15px; color: var(--primary-500); }
+  .reply:hover .ico { color: var(--primary-600); }
+
+  .note { margin-top: 14px; font-size: 13px; color: var(--text-tertiary); font-style: italic; line-height: 1.5; padding-left: 50px; }
+
+  @media (max-width: 560px) {
+    .wrap { padding: 26px 16px 56px; }
+    .page-title { font-size: 26px; }
+    .replies, .note { margin-left: 0; }
+    .bubble { max-width: 86%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="page-eyebrow">Component 3 · Standalone variant</p>
+  <h1 class="page-title">Hard Flag — inline chat message</h1>
+  <p class="page-sub">When a flag is serious enough to mention before any recommendation, Claude surfaces it as its own message in the stream — never buried, never softened. This is the product's most important trust signal, shown here at both severities.</p>
+
+  <!-- SCENARIO 1 · AMBER -->
+  <div class="scenario-label"><span class="lbl">Moderate · amber — raised mid-conversation</span><span class="rule"></span></div>
+
+  <div class="stream">
+    <div class="msg user">
+      <div class="bubble">What about that big Holiday Inn right on Karon Beach? My cousin stayed there a few years ago and loved it.</div>
+    </div>
+
+    <div class="msg">
+      <div class="ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div>
+      <div class="body-wrap">
+        <div class="who">Concierge</div>
+        <p>Good instinct — it's well-located. Before we go further, though, there's something recent I want to put in front of you.</p>
+      </div>
+    </div>
+
+    <div class="msg">
+      <div class="ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div>
+      <div class="body-wrap">
+        <div class="flag-msg sev-amber">
+          <div class="flag-msg-head">
+            <span class="flag-msg-icon"><span class="ico"><i data-lucide="triangle-alert"></i></span></span>
+            <div class="flag-msg-titles">
+              <span class="flag-sev"><span class="ico"><i data-lucide="alert-triangle"></i></span> Worth knowing</span>
+              <div class="flag-category">Pool area partially closed</div>
+            </div>
+          </div>
+          <div class="flag-msg-body">
+            <p class="flag-desc">Several families this season mention the <b>main pool is roped off for resurfacing</b> until mid-January. The kids' pool stays open, but it's smaller — worth weighing if pool time is a big part of your days.</p>
+            <div class="flag-foot">
+              <span class="flag-source"><span class="ico"><i data-lucide="message-square-quote"></i></span> Based on recent guest reviews</span>
+              <span class="flag-reviews"><span class="ico"><i data-lucide="star"></i></span> 41 reviews · last 3 months</span>
+            </div>
+          </div>
+        </div>
+        <p class="followup">It's still a fine option — I just didn't want it to be a surprise on arrival. Want me to keep it in the running, or focus elsewhere?</p>
+      </div>
+    </div>
+
+    <div class="replies">
+      <button class="reply"><span class="ico"><i data-lucide="check"></i></span> Keep it in the running</button>
+      <button class="reply"><span class="ico"><i data-lucide="compass"></i></span> Show me better-rated options</button>
+    </div>
+  </div>
+
+  <!-- SCENARIO 2 · RED -->
+  <div class="scenario-label"><span class="lbl">Severe · red — raised before recommendations</span><span class="rule"></span></div>
+
+  <div class="stream">
+    <div class="msg">
+      <div class="ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div>
+      <div class="body-wrap">
+        <div class="who">Concierge</div>
+        <p>I've finished going through Karon Beach for your dates. <em>One thing has to come first</em> — it's the reason I won't be recommending the resort you asked about.</p>
+      </div>
+    </div>
+
+    <div class="msg">
+      <div class="ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div>
+      <div class="body-wrap">
+        <div class="flag-msg sev-red">
+          <div class="flag-msg-head">
+            <span class="flag-msg-icon"><span class="ico"><i data-lucide="octagon-alert"></i></span></span>
+            <div class="flag-msg-titles">
+              <span class="flag-sev"><span class="ico"><i data-lucide="octagon-alert"></i></span> Avoid for your dates</span>
+              <div class="flag-category">Active refurbishment</div>
+            </div>
+          </div>
+          <div class="flag-msg-body">
+            <p class="flag-desc">Major construction is underway across the <b>main pool and several room blocks</b> through December. Recent guests report <b>jackhammering from early morning</b> and the main pool fenced off — exactly the kind of disruption that's hard on a 2-year-old and grandparents.</p>
+            <div class="flag-foot">
+              <span class="flag-source"><span class="ico"><i data-lucide="message-square-quote"></i></span> Based on recent guest reviews</span>
+              <span class="flag-reviews"><span class="ico"><i data-lucide="star"></i></span> 18 mentions · last 6 weeks</span>
+            </div>
+          </div>
+        </div>
+        <p class="followup">I'd genuinely revisit it once the work wraps — the bones are good. For December, though, let me point you somewhere your family can actually relax.</p>
+      </div>
+    </div>
+
+    <div class="replies">
+      <button class="reply"><span class="ico"><i data-lucide="sparkles"></i></span> Show me your top pick instead</button>
+      <button class="reply"><span class="ico"><i data-lucide="calendar"></i></span> When does the work finish?</button>
+    </div>
+    <p class="note">The red flag cannot be collapsed or dismissed. It always renders before any positive content — this is the Holiday Inn Karon failure case the product exists to prevent.</p>
+  </div>
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

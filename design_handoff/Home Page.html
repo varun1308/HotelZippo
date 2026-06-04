@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo — Your family's travel concierge</title>
+<link rel="stylesheet" href="tokens.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); font-family: var(--font-sans); color: var(--text); overflow-x: hidden; }
+  .ico svg { width: 1em; height: 1em; stroke-width: 1.75; }
+
+  /* ---- top nav ---- */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    height: 68px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px;
+    background: color-mix(in oklch, var(--bg) 84%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; cursor: pointer; text-decoration: none; }
+  .brand .mark { width: 13px; height: 13px; border-radius: 4px; background: var(--primary-500); transform: rotate(45deg); flex: none; }
+  .brand .name { font-family: var(--font-serif); font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+  .brand .name b { color: var(--primary-600); }
+  .nav-right { display: flex; align-items: center; gap: 14px; }
+  .nav-link { font-size: 14px; font-weight: 500; color: var(--text-secondary); text-decoration: none; cursor: pointer; }
+  .nav-link:hover { color: var(--text); }
+
+  /* ---- hero layout ---- */
+  .hero {
+    min-height: 100dvh; display: flex; align-items: stretch;
+    padding-top: 68px;
+  }
+  .hero-left {
+    flex: 0 0 52%; display: flex; flex-direction: column; justify-content: center;
+  }
+  .hero-top { padding: 60px 56px 28px 80px; }
+  .hero-bot { padding: 0 56px 72px 80px; }
+  .cta-intro { display: none; }
+  .hero-right {
+    flex: 1; position: relative; background: var(--surface-2); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .hero-right::before {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(135deg,
+      rgba(31,27,23,0.028) 0 1px, transparent 1px 13px);
+  }
+
+  /* ---- editorial copy ---- */
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--primary-600); margin: 0 0 24px; display: flex; align-items: center; gap: 10px; }
+  .eyebrow .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-500); box-shadow: 0 0 0 3px var(--primary-100); }
+  .headline { font-family: var(--font-serif); font-weight: 500; font-size: clamp(36px, 3.8vw, 56px); line-height: 1.06; letter-spacing: -0.025em; margin: 0 0 22px; max-width: 14ch; }
+  .headline .line2 { font-style: italic; color: var(--primary-600); }
+  .sub { font-size: clamp(16px, 1.3vw, 18px); line-height: 1.65; color: var(--text-secondary); max-width: 46ch; margin: 0 0 40px; }
+  .sub strong { color: var(--text); font-weight: 600; }
+
+  /* ---- Google sign-in btn ---- */
+  .google-btn {
+    display: inline-flex; align-items: center; gap: 14px;
+    background: #fff; border: 1px solid #dadce0; border-radius: 10px;
+    padding: 14px 24px 14px 18px; cursor: pointer; font-family: 'Roboto', var(--font-sans);
+    font-size: 15.5px; font-weight: 500; color: #3c4043;
+    box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+    transition: all var(--dur-fast); max-width: 280px; width: 100%;
+    text-decoration: none; justify-content: center;
+  }
+  .google-btn:hover { background: #f8f9fa; box-shadow: 0 2px 8px rgba(60,64,67,0.14); border-color: #c6c9cc; }
+  .google-btn:active { transform: scale(0.99); background: #f1f3f4; }
+  .google-btn .g-icon { flex: none; }
+
+  .or-sep { display: flex; align-items: center; gap: 14px; margin: 22px 0; max-width: 280px; }
+  .or-sep span { font-size: 13px; color: var(--text-tertiary); flex: none; }
+  .or-sep::before, .or-sep::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .email-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
+    padding: 14px 24px; cursor: pointer; font-family: var(--font-sans);
+    font-size: 15px; font-weight: 500; color: var(--text);
+    transition: all var(--dur-fast); max-width: 280px; width: 100%;
+    box-shadow: var(--sh-xs); text-decoration: none;
+  }
+  .email-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .email-btn .ico { font-size: 18px; color: var(--text-tertiary); }
+
+  .signin-note { font-size: 12px; color: var(--text-tertiary); max-width: 280px; margin-top: 18px; line-height: 1.5; }
+  .signin-note a { color: var(--text-secondary); text-decoration: underline; text-underline-offset: 2px; }
+
+  /* ---- trust row ---- */
+  .trust { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 44px; }
+  .ti { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-secondary); }
+  .ti .ico { font-size: 15px; color: var(--primary-500); }
+
+  /* ---- app showcase carousel ---- */
+  .showcase { position: relative; z-index: 1; width: 100%; max-width: 392px; display: flex; flex-direction: column; gap: 22px; }
+  .carousel { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .carousel::-webkit-scrollbar { display: none; }
+  .slide { min-width: 100%; scroll-snap-align: center; padding: 10px 8px 18px; box-sizing: border-box; display: flex; justify-content: center; }
+  .slide-card { width: 100%; height: 460px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; box-shadow: 0 20px 44px -18px rgba(31,27,23,0.30); display: flex; flex-direction: column; }
+
+  .sc-head { flex: none; height: 46px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--bg) 55%, var(--surface)); }
+  .sc-brand { display: flex; align-items: center; gap: 7px; font-family: var(--font-serif); font-size: 15px; font-weight: 600; }
+  .sc-brand .m { width: 9px; height: 9px; border-radius: 2px; background: var(--primary-500); transform: rotate(45deg); }
+  .sc-ctx { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.05em; color: var(--text-tertiary); text-transform: uppercase; }
+  .sc-ctx .ico { font-size: 13px; }
+
+  /* slide 1 · chat */
+  .sc-chat { flex: 1; min-height: 0; padding: 18px 16px; display: flex; flex-direction: column; gap: 16px; }
+  .sc-msg { display: flex; gap: 10px; align-items: flex-start; }
+  .sc-ava { flex: none; width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(150deg, var(--primary-400), var(--primary-600)); display: grid; place-items: center; color: #fff; }
+  .sc-ava .ico { font-size: 15px; }
+  .sc-who { font-size: 10px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 4px; }
+  .sc-text { font-size: 13.5px; line-height: 1.5; color: var(--text); }
+  .sc-text em { font-family: var(--font-serif); font-style: italic; }
+  .sc-user { justify-content: flex-end; }
+  .sc-bubble { background: var(--primary-500); color: #fff; padding: 9px 13px; border-radius: 14px 14px 4px 14px; font-size: 13px; line-height: 1.45; max-width: 82%; }
+  .sc-typing { display: inline-flex; gap: 4px; align-items: center; padding: 11px 14px; background: var(--surface-2); border-radius: 14px 14px 14px 4px; }
+  .sc-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); display: block; animation: scblink 1.4s infinite both; }
+  .sc-typing i:nth-child(2) { animation-delay: 0.2s; }
+  .sc-typing i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes scblink { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+
+  /* hero (slides 2 & 3) */
+  .sc-hero { position: relative; flex: none; }
+  .sc-hero .photo-slot { position: absolute; inset: 0; }
+  .sc-hero-scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(20,15,12,0.82) 0%, rgba(20,15,12,0.05) 72%); }
+  .sc-badge { position: absolute; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 5px; background: var(--primary-500); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
+  .sc-badge .ico { font-size: 11px; }
+  .sc-hname { position: absolute; left: 14px; right: 14px; bottom: 12px; font-family: var(--font-serif); font-size: 16px; font-weight: 500; color: #fff; line-height: 1.15; }
+  .sc-meta { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; color: rgba(255,255,255,0.86); }
+  .sc-stars { display: inline-flex; gap: 1px; }
+  .sc-stars span { font-size: 9px; color: var(--star); }
+  .sc-tier { background: rgba(255,255,255,0.18); padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; }
+
+  /* slide 2 · top pick verdict */
+  .sc-verdict { flex: 1; min-height: 0; padding: 15px 16px; background: var(--primary-50); }
+  .sc-vlabel { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary-600); margin-bottom: 7px; }
+  .sc-vtext { font-family: var(--font-serif); font-style: italic; font-size: 13px; line-height: 1.5; color: var(--text); }
+  .sc-ctas { flex: none; display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .sc-btn { flex: 1; height: 38px; border-radius: 9px; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 5px; }
+  .sc-btn .ico { font-size: 14px; }
+  .sc-btn.sec { background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); }
+  .sc-btn.pri { background: var(--primary-500); color: #fff; }
+
+  /* slide 3 · hard flag */
+  .sc-flag { display: flex; gap: 11px; padding: 13px 15px; background: var(--red-bg); border-bottom: 1px solid var(--red-border); }
+  .sc-flag-ic { flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--red); color: #fff; display: grid; place-items: center; }
+  .sc-flag-ic .ico { font-size: 16px; }
+  .sc-flag-label { font-weight: 700; font-size: 12.5px; color: var(--red-text); }
+  .sc-flag-text { font-size: 12px; line-height: 1.45; color: var(--text-secondary); margin-top: 3px; }
+  .sc-flag-src { font-family: var(--font-mono); font-size: 9px; color: var(--text-tertiary); margin-top: 6px; }
+  .sc-note { flex: 1; min-height: 0; padding: 14px 16px; }
+
+  /* slide 4 · shortlist */
+  .sc-list { flex: 1; min-height: 0; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .sc-item { display: flex; gap: 11px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 12px; }
+  .sc-thumb { flex: none; width: 46px; height: 46px; border-radius: 9px; position: relative; overflow: hidden; }
+  .sc-iname { font-size: 13px; font-weight: 600; line-height: 1.2; }
+  .sc-imeta { font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sc-dotflag { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+  .sc-dotflag .d { width: 6px; height: 6px; border-radius: 50%; }
+  .sc-dotflag.amber { color: var(--amber-text); } .sc-dotflag.amber .d { background: var(--amber); }
+  .sc-dotflag.red { color: var(--red-text); } .sc-dotflag.red .d { background: var(--red); }
+  .sc-share { flex: none; margin: 0 14px 14px; height: 38px; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 12.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--text); }
+  .sc-share .ico { font-size: 14px; }
+
+  /* caption + dots */
+  .showcase-foot { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .cap { font-size: 14px; color: var(--text-secondary); font-weight: 500; text-align: center; min-height: 21px; max-width: 32ch; line-height: 1.4; }
+  .dots { display: flex; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--border-strong); border: 0; padding: 0; cursor: pointer; transition: width 0.3s, background 0.3s; }
+  .dot.active { width: 22px; background: var(--primary-500); }
+
+  /* ---- footer ---- */
+  .foot { border-top: 1px solid var(--border); padding: 24px 80px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--text-tertiary); }
+  .foot a { color: var(--text-tertiary); text-decoration: none; }
+  .foot a:hover { color: var(--text-secondary); }
+
+  @media (max-width: 900px) {
+    .hero { flex-direction: column; }
+    /* dissolve hero-left so hero-top/hero-bot participate in hero's column flow */
+    .hero-left { display: contents; }
+    .hero-top { order: 1; padding: 46px 24px 10px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .eyebrow { justify-content: center; }
+    .headline { margin-left: auto; margin-right: auto; max-width: 17ch; }
+    .sub { margin-left: auto; margin-right: auto; max-width: 42ch; margin-bottom: 0; }
+    /* clean, framed showcase — no full-bleed grey band on mobile */
+    .hero-right { order: 2; flex: none; min-height: 0; background: transparent; padding: 18px 20px 8px; }
+    .hero-right::before { display: none; }
+    .showcase { max-width: 400px; }
+    .hero-bot { order: 3; padding: 12px 24px 48px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .hero-bot .google-btn, .hero-bot .email-btn, .hero-bot .or-sep { max-width: 340px; }
+    .signin-note { max-width: 340px; text-align: center; }
+    .trust { justify-content: center; max-width: 380px; }
+    .cta-intro { display: block; font-family: var(--font-serif); font-size: 23px; font-weight: 500; letter-spacing: -0.01em; color: var(--text); margin: 0 0 22px; }
+    .nav { padding: 0 24px; }
+    .foot { padding: 20px 28px; }
+  }
+  @media (max-width: 560px) {
+    .hero-top { padding: 38px 20px 8px; }
+    .hero-right { padding: 14px 16px 4px; }
+    .hero-bot { padding: 10px 20px 40px; }
+    .headline { max-width: 20ch; }
+    .trust { gap: 8px 18px; }
+    .nav { height: 56px; padding: 0 18px; }
+    .hero { padding-top: 56px; }
+    .foot { padding: 18px 20px; flex-direction: column; align-items: flex-start; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <a class="brand" href="HotelZippo Prototype.html">
+    <span class="mark"></span>
+    <span class="name">Hotel<b>Zippo</b></span>
+  </a>
+  <div class="nav-right">
+    <a class="nav-link" href="HotelZippo Prototype.html">Sign in</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left">
+    <!-- copy: eyebrow, headline, sub — shows above preview on mobile -->
+    <div class="hero-top">
+      <div class="eyebrow"><span class="pulse"></span> Your family travel concierge</div>
+      <h1 class="headline">One confident recommendation. <span class="line2">No more research spiral.</span></h1>
+      <p class="sub">Finding the right hotel for a family trip can mean <strong>30–40 hours</strong> of reviews, maps, and YouTube videos. Tell me about your family and where you're heading — I'll do the research and hand you one recommendation you can trust, with everything you need to know before you book.</p>
+    </div>
+
+    <!-- CTAs: shows below preview on mobile -->
+    <div class="hero-bot">
+      <p class="cta-intro">Ready to find your family's hotel?</p>
+      <!-- Google sign-in -->
+      <a class="google-btn" href="HotelZippo Prototype.html" role="button">
+        <span class="g-icon">
+          <svg width="22" height="22" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            <path fill="none" d="M0 0h48v48H0z"/>
+          </svg>
+        </span>
+        Sign up to try — it's free
+      </a>
+      <div class="or-sep"><span>or</span></div>
+      <a class="email-btn" href="HotelZippo Prototype.html" role="button">
+        <span class="ico"><i data-lucide="mail"></i></span> Continue with email
+      </a>
+      <p class="signin-note">By continuing you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>. Already have an account? The buttons above sign you in automatically.</p>
+      <div class="trust">
+        <span class="ti"><span class="ico"><i data-lucide="search-check"></i></span> Real guest reviews</span>
+        <span class="ti"><span class="ico"><i data-lucide="triangle-alert"></i></span> Red flags surfaced</span>
+        <span class="ti"><span class="ico"><i data-lucide="users"></i></span> Built for families</span>
+        <span class="ti"><span class="ico"><i data-lucide="lock"></i></span> Free in beta</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP SHOWCASE (carousel) -->
+  <div class="hero-right">
+    <div class="showcase">
+      <div class="carousel" id="carousel">
+
+        <!-- 1 · Conversation -->
+        <div class="slide">
+          <div class="slide-card">
+            <div class="sc-head"><span class="sc-brand"><span class="m"></span>HotelZippo</span><span class="sc-ctx"><span class="ico"><i data-lucide="messages-square"></i></span> Chat</span></div>
+            <div class="sc-chat">
+              <div class="sc-msg"><div class="sc-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div><div><div class="sc-who">Concierge</div><div class="sc-text">Tell me about your family and where you're headed — I'll handle the research.</div></div></div>
+              <div class="sc-msg sc-user"><div class="sc-bubble">Phuket in December — 2 kids, ages 2 and 7, plus grandparents.</div></div>
+              <div class="sc-msg"><div class="sc-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div><div><div class="sc-who">Concierge</div><div class="sc-text"><em>On it.</em> Reading recent family reviews and checking for anything you'd want flagged…</div></div></div>
+              <div class="sc-msg"><div class="sc-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div><div class="sc-typing"><i></i><i></i><i></i></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2 · Top Pick -->
+        <div class="slide">
+          <div class="slide-card">
+            <div class="sc-head"><span class="sc-brand"><span class="m"></span>HotelZippo</span><span class="sc-ctx"><span class="ico"><i data-lucide="sparkles"></i></span> Top Pick</span></div>
+            <div class="sc-hero" style="height:168px">
+              <div class="photo-slot" data-label="resort hero"></div>
+              <div class="sc-hero-scrim"></div>
+              <span class="sc-badge"><span class="ico"><i data-lucide="award"></i></span> Top Pick</span>
+              <div class="sc-hname">JW Marriott Phuket Resort &amp; Spa
+                <div class="sc-meta"><span class="sc-stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></span><span>Mai Khao, Phuket</span><span class="sc-tier">Luxury</span></div>
+              </div>
+            </div>
+            <div class="sc-verdict"><div class="sc-vlabel">Why this one</div><div class="sc-vtext">"For your family of six, this is the one I'd book. The Indian breakfast counter and calm, shallow beach do the heavy lifting here."</div></div>
+            <div class="sc-ctas"><div class="sc-btn sec"><span class="ico"><i data-lucide="bookmark"></i></span> Save</div><div class="sc-btn pri">Proceed to book</div></div>
+          </div>
+        </div>
+
+        <!-- 3 · Honesty / hard flag -->
+        <div class="slide">
+          <div class="slide-card">
+            <div class="sc-head"><span class="sc-brand"><span class="m"></span>HotelZippo</span><span class="sc-ctx"><span class="ico"><i data-lucide="shield-alert"></i></span> Honesty</span></div>
+            <div class="sc-hero" style="height:120px">
+              <div class="photo-slot" data-label="resort"></div>
+              <div class="sc-hero-scrim"></div>
+              <div class="sc-hname" style="font-size:15px">Holiday Inn Resort Karon Beach
+                <div class="sc-meta"><span class="sc-stars"><span>★</span><span>★</span><span>★</span><span>★</span></span><span>Karon, Phuket</span></div>
+              </div>
+            </div>
+            <div class="sc-flag"><span class="sc-flag-ic"><span class="ico"><i data-lucide="octagon-alert"></i></span></span><div><div class="sc-flag-label">Active refurbishment — avoid for now</div><div class="sc-flag-text">Construction across the main pool and room blocks through your dates.</div><div class="sc-flag-src">Based on recent guest reviews</div></div></div>
+            <div class="sc-note"><div class="sc-vlabel" style="color:var(--text-tertiary)">Why I'd wait</div><div class="sc-vtext" style="font-size:12.5px">"I'd normally rank this higher — but I won't send your family into a construction site. Worth another look once it's done."</div></div>
+          </div>
+        </div>
+
+        <!-- 4 · Shortlist -->
+        <div class="slide">
+          <div class="slide-card">
+            <div class="sc-head"><span class="sc-brand"><span class="m"></span>HotelZippo</span><span class="sc-ctx"><span class="ico"><i data-lucide="bookmark"></i></span> Shortlist · 2</span></div>
+            <div class="sc-list">
+              <div class="sc-item"><div class="sc-thumb photo-slot" data-label=""></div><div style="flex:1;min-width:0"><div class="sc-iname">JW Marriott Phuket</div><div class="sc-imeta"><span>Mai Khao · Luxury</span><span class="sc-dotflag amber"><span class="d"></span>Note</span></div></div><span class="ico" style="color:var(--text-tertiary);font-size:16px"><i data-lucide="x"></i></span></div>
+              <div class="sc-item"><div class="sc-thumb photo-slot" data-label=""></div><div style="flex:1;min-width:0"><div class="sc-iname">Angsana Laguna Phuket</div><div class="sc-imeta"><span>Bang Tao · Comfort</span></div></div><span class="ico" style="color:var(--text-tertiary);font-size:16px"><i data-lucide="x"></i></span></div>
+            </div>
+            <div class="sc-share"><span class="ico"><i data-lucide="link"></i></span> Share with partner</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="showcase-foot">
+        <div class="cap" id="cap">Just have a conversation — no forms, no filters</div>
+        <div class="dots" id="dots">
+          <button class="dot active" aria-label="Slide 1"></button>
+          <button class="dot" aria-label="Slide 2"></button>
+          <button class="dot" aria-label="Slide 3"></button>
+          <button class="dot" aria-label="Slide 4"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="foot">
+  <span>© 2026 HotelZippo · AI-powered travel research for families</span>
+  <span style="display:flex;gap:20px;"><a href="#">Privacy</a> <a href="#">Terms</a> <a href="#">Contact</a></span>
+</footer>
+
+<script>
+  lucide.createIcons();
+
+  (function () {
+    const carousel = document.getElementById('carousel');
+    const slides = [...carousel.children];
+    const dots = [...document.querySelectorAll('.dot')];
+    const caps = [
+      'Just have a conversation — no forms, no filters',
+      'Get one recommendation you can trust',
+      'See the flags other sites quietly bury',
+      'Save your shortlist, share with your partner'
+    ];
+    const capEl = document.getElementById('cap');
+    let idx = 0, timer = null;
+    function render() { dots.forEach((d, i) => d.classList.toggle('active', i === idx)); capEl.textContent = caps[idx]; }
+    function go(i, smooth) { idx = (i + slides.length) % slides.length; carousel.scrollTo({ left: idx * carousel.clientWidth, behavior: smooth === false ? 'auto' : 'smooth' }); render(); }
+    function auto() { clearInterval(timer); timer = setInterval(() => go(idx + 1), 4500); }
+    dots.forEach((d, i) => d.addEventListener('click', () => { go(i); auto(); }));
+    let scrollT;
+    carousel.addEventListener('scroll', () => { clearTimeout(scrollT); scrollT = setTimeout(() => { const i = Math.round(carousel.scrollLeft / carousel.clientWidth); if (i !== idx) { idx = i; render(); } }, 90); });
+    carousel.addEventListener('pointerdown', auto);
+    render(); auto();
+  })();
+</script>
+</body>
+</html>

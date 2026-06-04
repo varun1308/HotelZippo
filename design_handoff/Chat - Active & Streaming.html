@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo · Chat — Active &amp; Streaming</title>
+<link rel="stylesheet" href="tokens.css" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { background: var(--bg); overflow: hidden; }
+  .app { height: 100dvh; display: flex; flex-direction: column; }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    flex: none; height: 64px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; border-bottom: 1px solid var(--border);
+    background: color-mix(in oklch, var(--bg) 86%, transparent);
+    backdrop-filter: blur(10px); position: relative; z-index: 20;
+  }
+  .brand { display: flex; align-items: baseline; gap: 9px; }
+  .brand .mark { width: 12px; height: 12px; border-radius: 3px; background: var(--primary-500); transform: rotate(45deg); }
+  .brand .name { font-family: var(--font-serif); font-size: 21px; font-weight: 600; letter-spacing: -0.02em; }
+  .brand .name b { color: var(--primary-600); font-weight: 600; }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px;
+    border-radius: var(--r-btn); border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-family: var(--font-sans); font-size: 14px; font-weight: 500;
+    cursor: pointer; box-shadow: var(--sh-xs); transition: all var(--dur-fast) var(--ease-standard);
+  }
+  .ghost-btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .ghost-btn svg { width: 16px; height: 16px; }
+  .ghost-btn .count {
+    min-width: 19px; height: 19px; padding: 0 5px; border-radius: var(--r-pill);
+    background: var(--surface-3); color: var(--text-secondary); font-size: 11px; font-weight: 600;
+    display: grid; place-items: center;
+  }
+  .brief-toggle { display: none; }
+
+  /* ---------- workspace: chat + brief rail ---------- */
+  .workspace { flex: 1; min-height: 0; display: flex; }
+  .chat-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  /* ---------- stream ---------- */
+  .stream { flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
+  .stream-inner { width: 100%; max-width: 720px; margin: 0 auto; padding: 30px 24px 8px; }
+
+  /* message rows */
+  .msg { display: flex; gap: 14px; margin-bottom: 26px; align-items: flex-start; }
+  .msg.enter { animation: msgIn var(--dur-slow) var(--ease-out); }
+  @keyframes msgIn { from { transform: translateY(8px); } to { transform: none; } }
+
+  .ava {
+    flex: none; width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(150deg, var(--primary-400), var(--primary-600));
+    display: grid; place-items: center; color: #fff; box-shadow: var(--sh-sm);
+  }
+  .ava svg { width: 18px; height: 18px; }
+
+  .assistant .body-wrap { flex: 1; min-width: 0; padding-top: 2px; }
+  .assistant .who { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; letter-spacing: -0.01em; }
+  .assistant .body-wrap p { margin: 0 0 12px; font-size: 16px; line-height: 1.62; color: var(--text); }
+  .assistant .body-wrap p:last-child { margin-bottom: 0; }
+  .assistant .body-wrap .ack { color: var(--text-secondary); }
+  .assistant .body-wrap .q { font-weight: 500; }
+  .assistant .body-wrap em { font-family: var(--font-serif); font-style: italic; }
+
+  .cursor { display: inline-block; width: 2px; height: 1.05em; background: var(--primary-500); margin-left: 1px; vertical-align: text-bottom; animation: caret 1s steps(1) infinite; }
+  @keyframes caret { 50% { opacity: 0; } }
+
+  .msg.user { justify-content: flex-end; }
+  .msg.user .bubble {
+    max-width: 78%; background: var(--primary-500); color: #fff; padding: 12px 17px;
+    border-radius: 18px 18px 5px 18px; font-size: 15.5px; line-height: 1.5; box-shadow: var(--sh-sm);
+  }
+
+  .typing-row { display: flex; gap: 14px; margin-bottom: 26px; align-items: flex-start; }
+  .typing {
+    display: inline-flex; gap: 6px; align-items: center; padding: 14px 18px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 18px 18px 18px 5px; box-shadow: var(--sh-xs); margin-top: 2px;
+  }
+  .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-tertiary); display: block; animation: blink 1.4s infinite both; }
+  .typing i:nth-child(2) { animation-delay: 0.2s; }
+  .typing i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+  .form-offer {
+    margin: -8px 0 26px 50px; display: inline-flex; align-items: center; gap: 12px; background: var(--surface);
+    border: 1px dashed var(--border-strong); border-radius: var(--r-card); padding: 11px 14px; box-shadow: var(--sh-xs); max-width: 460px;
+  }
+  .form-offer svg.lead { width: 17px; height: 17px; color: var(--primary-500); flex: none; }
+  .form-offer .fo-text { font-size: 13.5px; color: var(--text-secondary); flex: 1; }
+  .form-offer button {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--r-btn); padding: 7px 12px;
+    font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; transition: all var(--dur-fast);
+  }
+  .form-offer button:hover { background: var(--primary-50); border-color: var(--primary-300); color: var(--primary-700); }
+  .form-offer button svg { width: 14px; height: 14px; }
+
+  .researching {
+    margin: -8px 0 26px 50px; display: inline-flex; align-items: center; gap: 12px; background: var(--primary-50);
+    border: 1px solid var(--primary-100); border-radius: var(--r-pill); padding: 10px 18px 10px 14px; color: var(--primary-700); font-size: 14px; font-weight: 500;
+  }
+  .researching .spin { width: 17px; height: 17px; border: 2px solid var(--primary-200); border-top-color: var(--primary-500); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- composer ---------- */
+  .composer-zone { flex: none; background: linear-gradient(to top, var(--bg) 64%, transparent); padding: 12px 24px 18px; position: relative; z-index: 4; }
+  .composer { max-width: 720px; margin: 0 auto; }
+  .input-shell {
+    display: flex; align-items: flex-end; gap: 10px; background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 18px; padding: 10px 10px 10px 18px; box-shadow: var(--sh-md); transition: border-color var(--dur-base), box-shadow var(--dur-base);
+  }
+  .input-shell:focus-within { border-color: var(--primary-400); box-shadow: var(--sh-md), var(--ring-primary); }
+  .input-shell textarea {
+    flex: 1; border: 0; outline: 0; resize: none; background: transparent; color: var(--text);
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.5; padding: 9px 0; max-height: 160px;
+  }
+  .input-shell textarea::placeholder { color: var(--text-tertiary); }
+  .send-btn {
+    flex: none; width: 42px; height: 42px; border-radius: 12px; border: 0; background: var(--primary-500); color: #fff;
+    display: grid; place-items: center; cursor: pointer; transition: background var(--dur-fast), transform var(--dur-fast);
+  }
+  .send-btn:hover { background: var(--primary-600); }
+  .send-btn:active { transform: scale(0.94); }
+  .send-btn:disabled { background: var(--surface-3); color: var(--text-tertiary); cursor: default; }
+  .send-btn svg { width: 19px; height: 19px; }
+  .composer-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 4px; }
+  .composer-foot .hint { font-size: 12.5px; color: var(--text-tertiary); }
+  .composer-foot .hint kbd { font-family: var(--font-mono); font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--text-secondary); }
+  .replay { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); background: none; border: 0; cursor: pointer; font-family: var(--font-sans); }
+  .replay:hover { color: var(--primary-600); }
+  .replay svg { width: 14px; height: 14px; }
+
+  /* ---------- BRIEF RAIL ---------- */
+  .brief {
+    flex: none; width: 344px; border-left: 1px solid var(--border); background: var(--surface);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .brief-head { flex: none; padding: 22px 24px 16px; border-bottom: 1px solid var(--border); }
+  .brief-head .eyebrow { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary); }
+  .brief-head .eyebrow svg { width: 14px; height: 14px; color: var(--primary-500); }
+  .brief-head h2 { margin: 12px 0 4px; font-family: var(--font-serif); font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .brief-head .sub { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .brief-close { display: none; }
+
+  .brief-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+
+  .bf {
+    display: flex; gap: 13px; align-items: flex-start; padding: 13px 12px; border-radius: var(--r-input);
+    border: 1px solid transparent; transition: background var(--dur-base), border-color var(--dur-base);
+  }
+  .bf-ic {
+    flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--surface-2); color: var(--text-tertiary); transition: all var(--dur-base) var(--ease-out);
+  }
+  .bf-ic svg { width: 17px; height: 17px; }
+  .bf-main { flex: 1; min-width: 0; padding-top: 1px; }
+  .bf-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; color: var(--text-tertiary); transition: color var(--dur-base); }
+  .bf-value { font-size: 14.5px; line-height: 1.4; color: var(--text); margin-top: 4px; font-weight: 500; }
+  .bf-pending { font-size: 13.5px; color: var(--text-tertiary); margin-top: 4px; font-style: italic; opacity: 0.9; }
+  .bf-check { flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--success); color: #fff; display: none; place-items: center; margin-top: 8px; }
+  .bf-check svg { width: 12px; height: 12px; stroke-width: 3; }
+
+  /* filled state */
+  .bf.filled { background: var(--surface); border-color: var(--border); box-shadow: var(--sh-xs); }
+  .bf.filled .bf-ic { background: var(--primary-50); color: var(--primary-600); }
+  .bf.filled .bf-label { color: var(--text-secondary); }
+  .bf.filled .bf-check { display: grid; }
+  .bf.filled .bf-pending { display: none; }
+  /* settle animation on fill */
+  @media (prefers-reduced-motion: no-preference) {
+    .bf.just-filled { animation: settle 0.5s var(--ease-out); }
+    @keyframes settle { 0% { transform: translateX(6px); } 100% { transform: none; } }
+    .bf.just-filled .bf-value { animation: fadeUp 0.45s var(--ease-out); }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  }
+
+  .brief-foot { flex: none; padding: 16px; border-top: 1px solid var(--border); }
+
+  /* preferences section */
+  .brief-divider { height: 1px; background: var(--border); margin: 12px 12px 6px; }
+  .prefs-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px 0; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; color: var(--text-tertiary); }
+  .prefs-head svg { width: 14px; height: 14px; color: var(--primary-500); }
+  .prefs { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px 2px; }
+  .prefs:empty { display: none; }
+  .pref-chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: var(--r-pill); background: var(--primary-50); border: 1px solid var(--primary-100); color: var(--primary-800); font-size: 13px; font-weight: 500; line-height: 1.25; }
+  .pref-chip svg { width: 13px; height: 13px; color: var(--primary-500); flex: none; }
+  .prefs-empty { padding: 8px 12px 4px; font-size: 12.5px; color: var(--text-tertiary); font-style: italic; line-height: 1.5; }
+  @media (prefers-reduced-motion: no-preference) { .pref-chip.just-added { animation: fadeUp 0.4s var(--ease-out); } }
+  .meter { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .meter .track { flex: 1; height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .meter .track i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--primary-400), var(--primary-600)); border-radius: 3px; transition: width var(--dur-slow) var(--ease-out); }
+  .meter .pct { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); flex: none; }
+  .find-btn {
+    width: 100%; height: 46px; border-radius: var(--r-btn); border: 0; background: var(--primary-500); color: #fff;
+    font-family: var(--font-sans); font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    transition: background var(--dur-fast), transform var(--dur-fast); box-shadow: var(--sh-sm);
+  }
+  .find-btn svg { width: 17px; height: 17px; }
+  .find-btn:hover:not(:disabled) { background: var(--primary-600); }
+  .find-btn:active:not(:disabled) { transform: scale(0.99); }
+  .find-btn:disabled { background: var(--surface-2); color: var(--text-tertiary); cursor: default; box-shadow: none; }
+  .foot-hint { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); text-align: center; }
+
+  .scrim { display: none; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1024px) {
+    .brief {
+      position: fixed; top: 0; right: 0; height: 100dvh; width: min(360px, 88vw); z-index: 40;
+      transform: translateX(100%); transition: transform var(--dur-panel) var(--ease-out); box-shadow: var(--sh-panel);
+    }
+    .brief.open { transform: none; }
+    .brief-close { display: grid; place-items: center; position: absolute; top: 18px; right: 18px; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--text-secondary); }
+    .brief-close svg { width: 16px; height: 16px; }
+    .brief-toggle { display: inline-flex; }
+    .scrim.show { display: block; position: fixed; inset: 0; background: var(--overlay); z-index: 35; }
+  }
+  @media (max-width: 600px) {
+    .topbar { height: 56px; padding: 0 16px; }
+    .ghost-btn .lbl { display: none; } .ghost-btn { padding: 0 11px; }
+    .stream-inner { padding: 20px 16px 8px; }
+    .msg.user .bubble { max-width: 85%; }
+    .form-offer { flex-direction: column; align-items: flex-start; margin-left: 0; }
+    .researching { margin-left: 0; }
+    .composer-zone { padding: 8px 14px 14px; }
+    .composer-foot .hint .enter-text { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark"></span><span class="name">Hotel<b>Zippo</b></span></div>
+    <div class="topbar-actions">
+      <button class="ghost-btn brief-toggle" id="briefToggle"><i data-lucide="notebook-pen"></i><span class="lbl">Brief</span><span class="count" id="briefCount">0</span></button>
+      <button class="ghost-btn" id="replayTop"><i data-lucide="rotate-ccw"></i><span class="lbl">Replay</span></button>
+      <button class="ghost-btn" aria-label="Shortlist"><i data-lucide="bookmark"></i><span class="lbl">Shortlist</span><span class="count">0</span></button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- CHAT -->
+    <div class="chat-col">
+      <main class="stream" id="stream">
+        <div class="stream-inner"><div id="thread"></div></div>
+      </main>
+      <div class="composer-zone">
+        <div class="composer">
+          <div class="input-shell">
+            <textarea id="ta" rows="1" placeholder="Message your concierge…"></textarea>
+            <button class="send-btn" id="send" disabled aria-label="Send"><i data-lucide="arrow-up"></i></button>
+          </div>
+          <div class="composer-foot">
+            <span class="hint"><span class="enter-text">Press </span><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for new line</span>
+            <button class="replay" id="replayFoot"><i data-lucide="play"></i> Replay conversation</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BRIEF RAIL -->
+    <aside class="brief" id="brief">
+      <button class="brief-close" id="briefClose" aria-label="Close"><i data-lucide="x"></i></button>
+      <div class="brief-head">
+        <div class="eyebrow"><i data-lucide="notebook-pen"></i> Trip brief</div>
+        <h2>What I'm gathering</h2>
+        <p class="sub">I take notes as we talk. Once the essentials are in, I'll start the research.</p>
+      </div>
+      <div class="brief-body" id="briefBody">
+        <div class="bf" data-key="destination">
+          <div class="bf-ic"><i data-lucide="map-pin"></i></div>
+          <div class="bf-main"><div class="bf-label">Destination</div><div class="bf-pending">Where to?</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="dates">
+          <div class="bf-ic"><i data-lucide="calendar-days"></i></div>
+          <div class="bf-main"><div class="bf-label">When</div><div class="bf-pending">Travel dates</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="type">
+          <div class="bf-ic"><i data-lucide="umbrella"></i></div>
+          <div class="bf-main"><div class="bf-label">Trip type</div><div class="bf-pending">What kind of stay</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="who">
+          <div class="bf-ic"><i data-lucide="users"></i></div>
+          <div class="bf-main"><div class="bf-label">Who's travelling</div><div class="bf-pending">Your crew</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="budget">
+          <div class="bf-ic"><i data-lucide="wallet"></i></div>
+          <div class="bf-main"><div class="bf-label">Budget</div><div class="bf-pending">Comfort level</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="food">
+          <div class="bf-ic"><i data-lucide="utensils"></i></div>
+          <div class="bf-main"><div class="bf-label">Food</div><div class="bf-pending">Dietary needs</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="brief-divider"></div>
+        <div class="prefs-head"><i data-lucide="sparkles"></i> Personal preferences</div>
+        <div class="prefs" id="prefs"></div>
+        <p class="prefs-empty" id="prefsEmpty">I'll note anything special you mention — favourite spots, must-haves, things to avoid.</p>
+      </div>
+      <div class="brief-foot">
+        <div class="meter"><span class="track"><i id="meterFill"></i></span><span class="pct" id="meterPct">0 / 6</span></div>
+        <button class="find-btn" id="findBtn" disabled><i data-lucide="search"></i> Find hotels</button>
+        <p class="foot-hint" id="footHint">A few more details and I'll begin.</p>
+      </div>
+    </aside>
+  </div>
+  <div class="scrim" id="scrim"></div>
+</div>
+
+<script>
+lucide.createIcons();
+const thread = document.getElementById('thread');
+const stream = document.getElementById('stream');
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+const toBottom = () => { stream.scrollTop = stream.scrollHeight; };
+
+const TOTAL = 6;
+const CORE = ['destination', 'dates', 'type', 'who'];
+let filled = 0;
+let prefCount = 0;
+
+function updateBadge() { document.getElementById('briefCount').textContent = filled + prefCount; }
+function coreReady() { return CORE.every(k => document.querySelector(`.bf[data-key="${k}"]`).classList.contains('filled')); }
+function refreshFoot() {
+  const find = document.getElementById('findBtn'), hint = document.getElementById('footHint');
+  if (coreReady()) {
+    find.disabled = false;
+    hint.textContent = "Ready — the more you share, the sharper the match.";
+  } else if (filled >= 3) {
+    hint.textContent = "Almost there — just the essentials left.";
+  } else {
+    hint.textContent = "A few more details and I'll begin.";
+  }
+}
+
+function setField(key, value) {
+  const el = document.querySelector(`.bf[data-key="${key}"]`);
+  if (!el || el.classList.contains('filled')) return;
+  const val = el.querySelector('.bf-value');
+  val.textContent = value; val.hidden = false;
+  el.classList.add('filled', 'just-filled');
+  setTimeout(() => el.classList.remove('just-filled'), 600);
+  filled++;
+  const pct = Math.round(filled / TOTAL * 100);
+  document.getElementById('meterFill').style.width = pct + '%';
+  document.getElementById('meterPct').textContent = `${filled} / ${TOTAL}`;
+  updateBadge();
+  refreshFoot();
+}
+
+function addPref(text, icon) {
+  document.getElementById('prefsEmpty').style.display = 'none';
+  const chip = document.createElement('span');
+  chip.className = 'pref-chip just-added';
+  chip.innerHTML = `<svg data-lucide="${icon}"></svg> ${text}`;
+  document.getElementById('prefs').appendChild(chip);
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+  setTimeout(() => chip.classList.remove('just-added'), 500);
+  prefCount++;
+  updateBadge();
+}
+
+const script = [
+  { type: 'assistant',
+    html: `<p>I'll do the deep research so you don't have to. First, let's get to know your crew.</p><p class="q">Who's travelling on this trip — and are there any little ones I should plan around?</p>` },
+  { type: 'user', text: "Me, my wife, our two kids — 2 and 7 — and my parents." },
+  { type: 'assistant', after: () => setField('who', "6 guests · 2 adults, kids aged 2 & 7, 2 grandparents"),
+    html: `<p class="ack">A full house across three generations — I'll make sure everyone's looked after, from the toddler to the grandparents.</p><p class="q">Any food preferences I should keep front of mind?</p>` },
+  { type: 'user', text: "We're vegetarian. My parents really prefer Indian food." },
+  { type: 'assistant', offer: true, after: () => setField('food', "Vegetarian · Indian options important"),
+    html: `<p class="ack">Noted — vegetarian throughout, with reliable Indian options so your parents feel at home. That's a detail I weigh heavily.</p><p class="q">Now, where are you dreaming of heading?</p>` },
+  { type: 'user', text: "Somewhere nice and warm, on a beach." },
+  { type: 'assistant',
+    html: `<p>I need a little more to work with before I can recommend honestly — "warm and beachy" covers half the map.</p><p class="q">Which country or city are you leaning toward, and roughly when are you travelling?</p>` },
+  { type: 'user', text: "Phuket, Thailand — last two weeks of December. Beach resort, ideally." },
+  { type: 'assistant',
+    after: () => { setField('destination', "Phuket, Thailand"); setField('dates', "Late December · ~2 weeks"); setField('type', "Beach resort"); },
+    html: `<p class="ack">Perfect — Phuket in late December, a beach resort.</p><p class="q">What kind of budget are we working with — value, comfort, or happy to splurge for the right place?</p>` },
+  { type: 'user', text: "Comfort as a baseline, but I'll happily pay more for the right resort." },
+  { type: 'assistant', after: () => setField('budget', "Comfort · open to luxury"),
+    html: `<p class="ack">Understood — comfort as your floor, with room to step up when a place truly earns it.</p><p class="q">Last thing: anything that would make this trip special, or anything you'd want to avoid?</p>` },
+  { type: 'user', text: "We'd love to be near the main attractions and night markets, a calm beach for our 2-year-old, and a kids' club would be a real bonus." },
+  { type: 'assistant', researching: true,
+    after: () => {
+      addPref("Near main attractions & night markets", "map");
+      addPref("Calm, shallow beach for toddler", "waves");
+      addPref("Kids' club a plus", "baby");
+    },
+    html: `<p class="ack">Wonderful — I'll prioritise a calm, shallow beach for your little one, easy reach to Phuket's main attractions and night markets, and a proper kids' club.</p><p>Give me a moment. I'm reading through recent family reviews and checking for anything you'd want flagged before booking.</p>` },
+];
+
+function addUser(text) {
+  const row = document.createElement('div');
+  row.className = 'msg user enter';
+  row.innerHTML = `<div class="bubble"></div>`;
+  row.querySelector('.bubble').textContent = text;
+  thread.appendChild(row); toBottom();
+}
+function showTyping() {
+  const row = document.createElement('div');
+  row.className = 'typing-row'; row.id = 'typing';
+  row.innerHTML = `<div class="ava"><i data-lucide="concierge-bell"></i></div><div class="typing"><i></i><i></i><i></i></div>`;
+  thread.appendChild(row); lucide.createIcons({ nameAttr: 'data-lucide' }); toBottom();
+}
+function hideTyping() { const t = document.getElementById('typing'); if (t) t.remove(); }
+
+async function addAssistant(step) {
+  const row = document.createElement('div');
+  row.className = 'msg assistant enter';
+  row.innerHTML = `<div class="ava"><i data-lucide="concierge-bell"></i></div><div class="body-wrap"><div class="who">Concierge</div><div class="content"></div></div>`;
+  thread.appendChild(row);
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+  const content = row.querySelector('.content');
+  const tmp = document.createElement('div'); tmp.innerHTML = step.html;
+  const paras = [...tmp.children];
+  for (const p of paras) {
+    const dest = document.createElement('p'); dest.className = p.className; content.appendChild(dest);
+    const tokens = tokenize(p);
+    const cur = document.createElement('span'); cur.className = 'cursor'; dest.appendChild(cur);
+    for (const tk of tokens) {
+      cur.insertAdjacentHTML('beforebegin', tk); toBottom();
+      await wait(tk.trim().length > 0 ? (22 + Math.random()*34) : 0);
+    }
+    cur.remove();
+  }
+}
+function tokenize(node) {
+  const out = [];
+  node.childNodes.forEach(n => {
+    if (n.nodeType === 3) { n.textContent.split(/(\s+)/).forEach(w => { if (w.length) out.push(w); }); }
+    else if (n.nodeType === 1) { out.push(n.outerHTML); }
+  });
+  return out;
+}
+function addFormOffer() {
+  const el = document.createElement('div');
+  el.className = 'form-offer enter';
+  el.innerHTML = `<svg class="lead" data-lucide="clipboard-list"></svg><span class="fo-text">Prefer to fill everything at once? You can switch to a quick family-profile form anytime.</span><button><svg data-lucide="arrow-right"></svg> Switch to form</button>`;
+  thread.appendChild(el); lucide.createIcons({ nameAttr: 'data-lucide' }); toBottom();
+}
+function addResearching() {
+  const el = document.createElement('div');
+  el.className = 'researching enter';
+  el.innerHTML = `<span class="spin"></span> Researching Phuket hotels for your family…`;
+  thread.appendChild(el); toBottom();
+}
+
+function resetBrief() {
+  filled = 0; prefCount = 0;
+  document.querySelectorAll('.bf').forEach(el => {
+    el.classList.remove('filled', 'just-filled');
+    const v = el.querySelector('.bf-value'); v.hidden = true; v.textContent = '';
+  });
+  document.getElementById('prefs').innerHTML = '';
+  document.getElementById('prefsEmpty').style.display = '';
+  document.getElementById('meterFill').style.width = '0%';
+  document.getElementById('meterPct').textContent = '0 / 6';
+  document.getElementById('briefCount').textContent = '0';
+  document.getElementById('findBtn').disabled = true;
+  document.getElementById('footHint').textContent = "A few more details and I'll begin.";
+}
+
+let playToken = 0;
+async function play() {
+  const mine = ++playToken;
+  thread.innerHTML = ''; resetBrief();
+  await wait(400);
+  for (const step of script) {
+    if (mine !== playToken) return;
+    if (step.type === 'user') {
+      addUser(step.text); await wait(650);
+    } else {
+      showTyping(); await wait(820);
+      if (mine !== playToken) return;
+      hideTyping();
+      await addAssistant(step);
+      if (step.after) step.after();
+      if (step.offer) addFormOffer();
+      if (step.researching) addResearching();
+      await wait(550);
+    }
+  }
+}
+
+document.getElementById('replayTop').addEventListener('click', play);
+document.getElementById('replayFoot').addEventListener('click', play);
+
+// brief panel toggle (mobile/tablet)
+const brief = document.getElementById('brief'), scrim = document.getElementById('scrim');
+const openBrief = () => { brief.classList.add('open'); scrim.classList.add('show'); };
+const closeBrief = () => { brief.classList.remove('open'); scrim.classList.remove('show'); };
+document.getElementById('briefToggle').addEventListener('click', openBrief);
+document.getElementById('briefClose').addEventListener('click', closeBrief);
+scrim.addEventListener('click', closeBrief);
+
+// composer niceties
+const ta = document.getElementById('ta'), send = document.getElementById('send');
+const grow = () => { ta.style.height='auto'; ta.style.height = Math.min(ta.scrollHeight,160)+'px'; };
+ta.addEventListener('input', () => { grow(); send.disabled = ta.value.trim()===''; });
+ta.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); } });
+
+play();
+</script>
+</body>
+</html>

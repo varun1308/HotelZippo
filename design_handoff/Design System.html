@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo · Design System</title>
+<link rel="stylesheet" href="tokens.css" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  /* ---------- page shell ---------- */
+  .ds-wrap { max-width: 1080px; margin: 0 auto; padding: 0 32px 160px; }
+  .ds-section { padding-top: 88px; }
+  .ds-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--primary-600);
+    margin-bottom: 14px;
+  }
+  .ds-eyebrow::before {
+    content: ""; width: 18px; height: 1.5px; background: var(--primary-500); display: inline-block;
+  }
+  .ds-section > h2 { margin: 0 0 6px; }
+  .ds-section > .lede { color: var(--text-secondary); max-width: 56ch; margin: 0 0 36px; }
+  .rule { height: 1px; background: var(--border); border: 0; margin: 0; }
+
+  /* ---------- masthead ---------- */
+  .masthead { padding: 96px 0 16px; }
+  .wordmark { display: flex; align-items: baseline; gap: 10px; }
+  .wordmark .mark {
+    width: 13px; height: 13px; border-radius: 3px;
+    background: var(--primary-500); transform: rotate(45deg);
+    box-shadow: var(--sh-sm);
+  }
+  .wordmark .name { font-family: var(--font-serif); font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .wordmark .name b { color: var(--primary-600); font-weight: 600; }
+  .masthead h1 { margin: 40px 0 18px; max-width: 18ch; }
+  .masthead .sub { font-size: 19px; color: var(--text-secondary); max-width: 60ch; line-height: 1.6; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }
+  .meta-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--r-pill);
+    background: var(--surface); font-size: 13px; color: var(--text-secondary);
+    box-shadow: var(--sh-xs);
+  }
+  .meta-chip svg { width: 15px; height: 15px; color: var(--primary-500); }
+
+  /* ---------- principles ---------- */
+  .principles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .principle {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card);
+    padding: 22px; box-shadow: var(--sh-sm);
+  }
+  .principle .ico {
+    width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--primary-50); color: var(--primary-600); margin-bottom: 16px;
+  }
+  .principle .ico svg { width: 19px; height: 19px; }
+  .principle h4 { margin: 0 0 6px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .principle p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
+
+  /* ---------- color ---------- */
+  .swatch-scale { display: grid; grid-template-columns: repeat(10, 1fr); gap: 0; border-radius: var(--r-card); overflow: hidden; box-shadow: var(--sh-sm); border: 1px solid var(--border); }
+  .swatch { aspect-ratio: 3 / 4; display: flex; flex-direction: column; justify-content: flex-end; padding: 12px 10px; }
+  .swatch .n { font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+  .swatch .h { font-family: var(--font-mono); font-size: 9.5px; opacity: 0.72; margin-top: 2px; }
+
+  .neutrals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 16px; }
+  .nchip { border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; background: var(--surface); box-shadow: var(--sh-xs); }
+  .nchip .well { height: 76px; }
+  .nchip .body { padding: 12px 14px; }
+  .nchip .body .lab { font-size: 13px; font-weight: 600; }
+  .nchip .body .val { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+
+  .semantics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 8px; }
+  .sem-card { border: 1px solid var(--border); border-radius: var(--r-card); padding: 20px; background: var(--surface); box-shadow: var(--sh-sm); }
+  .sem-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .sem-dot { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; }
+  .sem-dot svg { width: 18px; height: 18px; }
+  .sem-head .lab { font-weight: 600; font-size: 15px; }
+  .sem-head .use { font-size: 12.5px; color: var(--text-tertiary); margin-top: 1px; }
+  .sem-tokens { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sem-tok { font-family: var(--font-mono); font-size: 11px; padding: 4px 9px; border-radius: var(--r-pill); border: 1px solid var(--border); }
+
+  .flag-note {
+    margin-top: 18px; display: flex; gap: 12px; align-items: flex-start;
+    padding: 16px 18px; border-radius: var(--r-card);
+    background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber-text);
+  }
+  .flag-note svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+  .flag-note b { color: var(--amber-text); }
+  .flag-note p { margin: 0; font-size: 13.5px; line-height: 1.55; }
+
+  /* ---------- typography ---------- */
+  .type-families { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 40px; }
+  .fam { border: 1px solid var(--border); border-radius: var(--r-card); padding: 24px; background: var(--surface); box-shadow: var(--sh-sm); }
+  .fam .big { font-size: 46px; line-height: 1; margin-bottom: 18px; }
+  .fam .role { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-600); font-weight: 600; }
+  .fam .fname { font-size: 17px; font-weight: 600; margin: 4px 0 8px; }
+  .fam .desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .fam .glyphs { font-family: inherit; margin-top: 14px; color: var(--text-tertiary); font-size: 14px; letter-spacing: 0.04em; }
+
+  .specimen { display: flex; align-items: baseline; gap: 24px; padding: 18px 0; border-top: 1px solid var(--border); }
+  .specimen:first-child { border-top: 0; }
+  .specimen .meta { flex: none; width: 168px; }
+  .specimen .meta .tk { font-family: var(--font-mono); font-size: 12px; color: var(--text); font-weight: 500; }
+  .specimen .meta .px { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+  .specimen .sample { flex: 1; min-width: 0; }
+
+  .voice {
+    margin-top: 28px; border-left: 3px solid var(--primary-400);
+    padding: 4px 0 4px 24px; max-width: 64ch;
+  }
+  .voice .vlabel { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-600); font-weight: 600; margin-bottom: 10px; }
+
+  /* ---------- spacing ---------- */
+  .space-row { display: flex; align-items: center; gap: 20px; padding: 9px 0; }
+  .space-row .tok { font-family: var(--font-mono); font-size: 12px; width: 132px; flex: none; color: var(--text-secondary); }
+  .space-row .tok b { color: var(--text); }
+  .space-bar { height: 18px; background: var(--primary-300); border-radius: 3px; }
+
+  /* ---------- radius ---------- */
+  .radii { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .radius-card { text-align: center; }
+  .radius-box { height: 92px; background: var(--surface); border: 1.5px solid var(--primary-300); }
+  .radius-card .rl { font-size: 13px; font-weight: 600; margin-top: 12px; }
+  .radius-card .rv { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+  /* ---------- elevation ---------- */
+  .elevs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; padding: 12px 8px; }
+  .elev { background: var(--surface); border-radius: var(--r-card); padding: 22px; }
+  .elev.standard { box-shadow: var(--sh-sm); border: 1px solid var(--border); }
+  .elev.toppick { box-shadow: var(--sh-lg); border: 1px solid var(--primary-200); }
+  .elev.panel { box-shadow: var(--sh-md); border: 1px solid var(--border); }
+  .elev .el { font-size: 14px; font-weight: 600; }
+  .elev .ev { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 4px; line-height: 1.5; }
+  .elev .ec { font-size: 12.5px; color: var(--text-secondary); margin-top: 10px; }
+
+  /* ---------- motion ---------- */
+  .motion-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; }
+  .motion-demos { display: flex; flex-direction: column; gap: 14px; }
+  .mdemo { border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px 18px; background: var(--surface); box-shadow: var(--sh-xs); }
+  .mdemo .mh { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .mdemo .mh .ml { font-size: 13px; font-weight: 600; }
+  .mdemo .mh .mv { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
+  .track { height: 26px; background: var(--surface-2); border-radius: var(--r-pill); position: relative; overflow: hidden; }
+  .dot { position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; border-radius: 50%; background: var(--primary-500); }
+  .dot.run { animation: slide 2.4s infinite; }
+  @keyframes slide { 0%,12% { left: 4px; } 50% { left: calc(100% - 22px); } 88%,100% { left: 4px; } }
+  .ease-table { border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+  .ease-row { display: grid; grid-template-columns: 120px 1fr; gap: 16px; padding: 14px 18px; border-top: 1px solid var(--border); align-items: center; }
+  .ease-row:first-child { border-top: 0; background: var(--surface-2); }
+  .ease-row .en { font-family: var(--font-mono); font-size: 12px; }
+  .ease-row .ed { font-size: 12.5px; color: var(--text-secondary); }
+  .typing { display: inline-flex; gap: 5px; align-items: center; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--primary-400); display: block; animation: blink 1.4s infinite both; }
+  .typing i:nth-child(2) { animation-delay: 0.2s; }
+  .typing i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+  /* ---------- icons ---------- */
+  .icon-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; }
+  .icell { border: 1px solid var(--border); border-radius: var(--r-input); background: var(--surface); padding: 16px 8px 12px; text-align: center; box-shadow: var(--sh-xs); }
+  .icell svg { width: 22px; height: 22px; stroke-width: 1.75; color: var(--text); }
+  .icell .iname { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); margin-top: 9px; }
+  .cat-icons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 16px; }
+  .cat { display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px; background: var(--surface); box-shadow: var(--sh-xs); }
+  .cat .cico { width: 40px; height: 40px; border-radius: 10px; background: var(--primary-50); color: var(--primary-600); display: grid; place-items: center; flex: none; }
+  .cat .cico svg { width: 20px; height: 20px; }
+  .cat .clab { font-size: 14px; font-weight: 600; }
+  .cat .csub { font-size: 12px; color: var(--text-tertiary); }
+
+  /* ---------- imagery ---------- */
+  .imagery { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; }
+  .imagery .photo-slot { border-radius: var(--r-card); border: 1px solid var(--border); }
+  .ratio-169 { aspect-ratio: 16/9; }
+  .ratio-43 { aspect-ratio: 4/3; }
+  .ratio-11 { aspect-ratio: 1/1; }
+
+  .footnote { margin-top: 96px; padding-top: 28px; border-top: 1px solid var(--border); color: var(--text-tertiary); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+  @media (max-width: 880px) {
+    .principles, .type-families, .imagery { grid-template-columns: 1fr 1fr; }
+    .elevs, .motion-grid { grid-template-columns: 1fr; }
+    .icon-grid { grid-template-columns: repeat(4, 1fr); }
+    .radii { grid-template-columns: repeat(2, 1fr); }
+    .semantics, .cat-icons, .neutrals { grid-template-columns: 1fr; }
+    .swatch-scale { grid-template-columns: repeat(5, 1fr); }
+    .specimen { flex-direction: column; gap: 8px; }
+    .specimen .meta { width: auto; }
+  }
+  @media (max-width: 520px) {
+    .ds-wrap { padding: 0 20px 120px; }
+    .principles, .type-families, .imagery { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="ds-wrap">
+
+  <!-- MASTHEAD -->
+  <header class="masthead">
+    <div class="wordmark">
+      <span class="mark"></span>
+      <span class="name">Hotel<b>Zippo</b></span>
+    </div>
+    <h1 class="t-display-lg">The design system for a concierge, not a chatbot.</h1>
+    <p class="sub">The visual language behind HotelZippo — an AI that replaces 30–40 hours of fragmented family-trip research with one confident, reasoned recommendation. Warm and editorial like a trusted friend; precise and trustworthy enough for a high-confidence researcher.</p>
+    <div class="meta-row">
+      <span class="meta-chip"><i data-lucide="palette"></i> Airbnb warmth · Linear precision</span>
+      <span class="meta-chip"><i data-lucide="wind"></i> Expressed as Tailwind tokens</span>
+      <span class="meta-chip"><i data-lucide="smartphone"></i> Web-first · responsive to 375px</span>
+      <span class="meta-chip"><i data-lucide="git-commit-horizontal"></i> v1 · Review 1 of 4</span>
+    </div>
+  </header>
+
+  <!-- PRINCIPLES -->
+  <section class="ds-section" id="principles">
+    <span class="ds-eyebrow t-label">Foundations</span>
+    <h2 class="t-h1">What the design must protect</h2>
+    <p class="lede">Nine UX principles govern the product. Four of them shape every pixel here.</p>
+    <div class="principles">
+      <div class="principle">
+        <div class="ico"><i data-lucide="concierge-bell"></i></div>
+        <h4>Concierge, not search</h4>
+        <p>No results pages, no filters, no ranked lists. A verdict with reasoning, delivered in conversation.</p>
+      </div>
+      <div class="principle">
+        <div class="ico"><i data-lucide="triangle-alert"></i></div>
+        <h4>Hard flags never dilute</h4>
+        <p>Structural issues are always amber or red, always above the fold, never collapsed. The Karon failure must be impossible.</p>
+      </div>
+      <div class="principle">
+        <div class="ico"><i data-lucide="quote"></i></div>
+        <h4>A trusted friend's voice</h4>
+        <p>Warm, specific, personal. Claude's verdicts are set in an editorial serif italic — advice, not a database row.</p>
+      </div>
+      <div class="principle">
+        <div class="ico"><i data-lucide="scale"></i></div>
+        <h4>Weighted honesty</h4>
+        <p>Conflicting reviews shown with percentages, not smoothed into false consensus. Transparency builds trust.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- COLOR -->
+  <section class="ds-section" id="color">
+    <span class="ds-eyebrow t-label">01 · Color</span>
+    <h2 class="t-h1">Terracotta, warm stone, and two colors that mean danger</h2>
+    <p class="lede">A single warm brand hue carries trust and action. Neutrals are warm-toned, never clinical grey. Amber and red are reserved exclusively for hard flags — semantics, not decoration.</p>
+
+    <h3 class="t-h3" style="margin:0 0 14px;">Brand · Terracotta</h3>
+    <div class="swatch-scale" id="primaryScale"></div>
+    <p class="t-caption" style="margin-top:12px;">Defined in OKLCH for perceptual evenness — all steps share hue family ~41°, chroma tapering at the extremes. <b>500</b> is the core brand and primary CTA; <b>600</b> hover, <b>700</b> pressed; <b>50</b> tints icon wells and assistant surfaces.</p>
+
+    <h3 class="t-h3" style="margin:40px 0 4px;">Warm neutrals</h3>
+    <div class="neutrals">
+      <div class="nchip"><div class="well" style="background:var(--bg);"></div><div class="body"><div class="lab">Canvas</div><div class="val">--bg · #FBFAF8</div></div></div>
+      <div class="nchip"><div class="well" style="background:var(--surface);box-shadow:inset 0 0 0 1px var(--border);"></div><div class="body"><div class="lab">Surface</div><div class="val">--surface · #FFFFFF</div></div></div>
+      <div class="nchip"><div class="well" style="background:var(--surface-2);"></div><div class="body"><div class="lab">Recessed</div><div class="val">--surface-2 · #F5F3EF</div></div></div>
+      <div class="nchip"><div class="well" style="background:var(--border-strong);"></div><div class="body"><div class="lab">Border</div><div class="val">--border · #E8E4DD</div></div></div>
+      <div class="nchip"><div class="well" style="background:var(--text);"></div><div class="body"><div class="lab">Text</div><div class="val">--text · #1F1B17</div></div></div>
+      <div class="nchip"><div class="well" style="background:var(--text-secondary);"></div><div class="body"><div class="lab">Secondary</div><div class="val">#6B6359</div></div></div>
+      <div class="nchip"><div class="well" style="background:var(--text-tertiary);"></div><div class="body"><div class="lab">Tertiary</div><div class="val">#9A9186</div></div></div>
+      <div class="nchip"><div class="well" style="background:var(--star);"></div><div class="body"><div class="lab">Rating gold</div><div class="val">--star · #E0972B</div></div></div>
+    </div>
+
+    <h3 class="t-h3" style="margin:40px 0 14px;">Semantic · the trust signals</h3>
+    <div class="semantics">
+      <div class="sem-card">
+        <div class="sem-head">
+          <div class="sem-dot" style="background:var(--amber-bg);color:var(--amber);"><i data-lucide="triangle-alert"></i></div>
+          <div><div class="lab">Amber — moderate hard flag</div><div class="use">Refurbishment, dated facilities, mixed signal</div></div>
+        </div>
+        <div class="sem-tokens">
+          <span class="sem-tok" style="background:var(--amber);color:#fff;">#F59E0B</span>
+          <span class="sem-tok" style="background:var(--amber-bg);color:var(--amber-text);">bg #FEF6E7</span>
+          <span class="sem-tok" style="border-color:var(--amber-border);color:var(--amber-text);">text #8A540A</span>
+        </div>
+      </div>
+      <div class="sem-card">
+        <div class="sem-head">
+          <div class="sem-dot" style="background:var(--red-bg);color:var(--red);"><i data-lucide="octagon-alert"></i></div>
+          <div><div class="lab">Red — severe hard flag</div><div class="use">Active construction, maintenance failures</div></div>
+        </div>
+        <div class="sem-tokens">
+          <span class="sem-tok" style="background:var(--red);color:#fff;">#EF4444</span>
+          <span class="sem-tok" style="background:var(--red-bg);color:var(--red-text);">bg #FDEDEC</span>
+          <span class="sem-tok" style="border-color:var(--red-border);color:var(--red-text);">text #A82820</span>
+        </div>
+      </div>
+      <div class="sem-card">
+        <div class="sem-head">
+          <div class="sem-dot" style="background:var(--success-bg);color:var(--success);"><i data-lucide="circle-check"></i></div>
+          <div><div class="lab">Success — confirmed signal</div><div class="use">"Confirmed by recent Indian-family reviews"</div></div>
+        </div>
+        <div class="sem-tokens">
+          <span class="sem-tok" style="background:var(--success);color:#fff;">#0E7C66</span>
+          <span class="sem-tok" style="background:var(--success-bg);color:var(--success-text);">bg #E7F2EE</span>
+        </div>
+      </div>
+      <div class="sem-card">
+        <div class="sem-head">
+          <div class="sem-dot" style="background:var(--primary-50);color:var(--primary-600);"><i data-lucide="badge-check"></i></div>
+          <div><div class="lab">Top Pick accent</div><div class="use">The one elevated recommendation per set</div></div>
+        </div>
+        <div class="sem-tokens">
+          <span class="sem-tok" style="background:var(--primary-500);color:#fff;">primary-500</span>
+          <span class="sem-tok" style="background:var(--primary-50);color:var(--primary-700);">tint 50</span>
+        </div>
+      </div>
+    </div>
+    <div class="flag-note">
+      <i data-lucide="shield-alert"></i>
+      <p><b>Hard constraint.</b> Hard-flag colors are never softened to grey, never muted, never collapsed or dismissible. This is the product's most important trust signal — the design treats amber and red as load-bearing, not decorative.</p>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY -->
+  <section class="ds-section" id="type">
+    <span class="ds-eyebrow t-label">02 · Typography</span>
+    <h2 class="t-h1">Editorial headline, precise interface, honest mono</h2>
+    <p class="lede">A warm serif carries the editorial, magazine-like moments and Claude's voice. A clean grotesque runs the entire interface. A mono labels placeholders and tokens.</p>
+
+    <div class="type-families">
+      <div class="fam">
+        <div class="big serif" style="font-weight:500;">Aa</div>
+        <div class="role">Display & voice</div>
+        <div class="fname serif">Newsreader</div>
+        <div class="desc">Warm transitional serif with beautiful italics. Used for headlines, hotel names, and Claude's verdicts.</div>
+        <div class="glyphs serif">ABCDEFG · abcdefg · 0123</div>
+      </div>
+      <div class="fam">
+        <div class="big" style="font-weight:600;">Aa</div>
+        <div class="role">Interface</div>
+        <div class="fname">Geist</div>
+        <div class="desc">Modern, neutral grotesque tuned for UI. Body copy, labels, buttons, every control. Pairs with the Next.js stack.</div>
+        <div class="glyphs">ABCDEFG · abcdefg · 0123</div>
+      </div>
+      <div class="fam">
+        <div class="big mono">Aa</div>
+        <div class="role">Utility</div>
+        <div class="fname mono">Geist Mono</div>
+        <div class="desc">Placeholder labels, price tiers, source attributions, and design tokens. The honest, technical register.</div>
+        <div class="glyphs mono">ABCDEFG · 0123</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="specimen"><div class="meta"><div class="tk">display-lg</div><div class="px">Newsreader 52 / 1.04</div></div><div class="sample t-display-lg">A place your family will love</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">display</div><div class="px">Newsreader 40 / 1.08</div></div><div class="sample t-display">JW Marriott Phuket Resort</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">h1</div><div class="px">Newsreader 32 / 1.14</div></div><div class="sample t-h1">Here's what I found in Phuket</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">h2</div><div class="px">Newsreader 24 / 1.22</div></div><div class="sample t-h2">Mai Khao Beach · Luxury</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">h3 / control</div><div class="px">Geist 20 · 600</div></div><div class="sample t-h3">Rooms, facilities, food, location</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">body-lg</div><div class="px">Geist 18 / 1.55</div></div><div class="sample t-body-lg">The kids' club runs full-day programming, and recent family reviews confirm it.</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">body</div><div class="px">Geist 16 / 1.6</div></div><div class="sample t-body">Buffet breakfast includes a dedicated Indian counter — confirmed across recent reviews from Indian guests.</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">body-sm</div><div class="px">Geist 14 / 1.55</div></div><div class="sample t-body-sm">60% of families praised the lagoon pool; 40% found the main buffet repetitive over long stays.</div></div>
+      <div class="specimen"><div class="meta"><div class="tk">label</div><div class="px">Geist 12 · 600 · 0.08em</div></div><div class="sample t-label" style="color:var(--primary-600);">Top Pick · Based on recent guest reviews</div></div>
+    </div>
+
+    <div class="voice">
+      <div class="vlabel">Claude's voice — verdict specimen</div>
+      <p class="t-verdict">For a multi-generational Phuket trip with a 2- and 7-year-old, this is the one I'd book. The family rooms take an extra bed without feeling cramped, the breakfast buffet has a reliable Indian and vegetarian spread your parents will be happy with, and the beach is calm enough for the little one. It's a touch above your usual ceiling — but for a resort-anchored trip, the experience earns it.</p>
+    </div>
+  </section>
+
+  <!-- SPACING -->
+  <section class="ds-section" id="spacing">
+    <span class="ds-eyebrow t-label">03 · Spacing</span>
+    <h2 class="t-h1">A 4-pixel base, all the way up</h2>
+    <p class="lede">Every gap, pad, and margin is a multiple of 4. Generous by default — editorial layouts breathe.</p>
+    <div id="spaceScale"></div>
+  </section>
+
+  <!-- RADIUS -->
+  <section class="ds-section" id="radius">
+    <span class="ds-eyebrow t-label">04 · Radius</span>
+    <h2 class="t-h1">Soft, never bubbly</h2>
+    <p class="lede">Inputs and buttons share a 10px radius; cards round to 16px; panels to 20px; badges go fully round. Restraint keeps the product feeling editorial rather than playful.</p>
+    <div class="radii">
+      <div class="radius-card"><div class="radius-box" style="border-radius:var(--r-xs);"></div><div class="rl">xs</div><div class="rv">6px · chips</div></div>
+      <div class="radius-card"><div class="radius-box" style="border-radius:var(--r-input);"></div><div class="rl">input / button</div><div class="rv">10px</div></div>
+      <div class="radius-card"><div class="radius-box" style="border-radius:var(--r-card);"></div><div class="rl">card</div><div class="rv">16px</div></div>
+      <div class="radius-card"><div class="radius-box" style="border-radius:var(--r-panel);"></div><div class="rl">panel</div><div class="rv">20px</div></div>
+      <div class="radius-card"><div class="radius-box" style="border-radius:var(--r-pill);"></div><div class="rl">pill</div><div class="rv">full · badges</div></div>
+    </div>
+  </section>
+
+  <!-- ELEVATION -->
+  <section class="ds-section" id="elevation">
+    <span class="ds-eyebrow t-label">05 · Elevation</span>
+    <h2 class="t-h1">Shadow carries hierarchy</h2>
+    <p class="lede">Warm-tinted shadows (never pure black). The Top Pick card sits visibly higher than standard cards — elevation is one of the ways it becomes unmistakable.</p>
+    <div class="elevs">
+      <div class="elev standard"><div class="el">Standard card</div><div class="ev">--sh-sm</div><div class="ec">Resting hotel cards, form fields, chips. Subtle lift off the warm canvas.</div></div>
+      <div class="elev toppick"><div class="el">Top Pick card</div><div class="ev">--sh-lg + primary border</div><div class="ec">The single elevated recommendation. Higher shadow, warm tinted border.</div></div>
+      <div class="elev panel"><div class="el">Slide-in panel</div><div class="ev">--sh-panel</div><div class="ec">Shortlist panel drawer. Directional shadow toward the canvas edge.</div></div>
+    </div>
+  </section>
+
+  <!-- MOTION -->
+  <section class="ds-section" id="motion">
+    <span class="ds-eyebrow t-label">06 · Motion</span>
+    <h2 class="t-h1">Calm, smooth, never jittery</h2>
+    <p class="lede">Streaming text must never cause jarring reflows. Cards reveal gently; panels slide with intent. All motion respects <span class="mono" style="font-size:13px;">prefers-reduced-motion</span>.</p>
+    <div class="motion-grid">
+      <div class="motion-demos">
+        <div class="mdemo">
+          <div class="mh"><span class="ml">Card reveal</span><span class="mv">320ms · ease-out</span></div>
+          <div class="track"><span class="dot run"></span></div>
+        </div>
+        <div class="mdemo">
+          <div class="mh"><span class="ml">Panel slide</span><span class="mv">380ms · ease-out</span></div>
+          <div class="track"><span class="dot run" style="animation-duration:2.9s;"></span></div>
+        </div>
+        <div class="mdemo">
+          <div class="mh"><span class="ml">Typing indicator</span><span class="mv">while streaming</span></div>
+          <div style="height:26px;display:flex;align-items:center;padding-left:6px;"><span class="typing"><i></i><i></i><i></i></span></div>
+        </div>
+      </div>
+      <div class="ease-table">
+        <div class="ease-row"><div class="en">token</div><div class="ed">use</div></div>
+        <div class="ease-row"><div class="en">fast · 120ms</div><div class="ed">Hover, press, small state changes</div></div>
+        <div class="ease-row"><div class="en">base · 200ms</div><div class="ed">Buttons, toggles, fades</div></div>
+        <div class="ease-row"><div class="en">slow · 320ms</div><div class="ed">Card reveal, message entrance</div></div>
+        <div class="ease-row"><div class="en">panel · 380ms</div><div class="ed">Shortlist drawer slide</div></div>
+        <div class="ease-row"><div class="en">ease-out</div><div class="ed">cubic-bezier(.2,.7,.2,1) — entrances</div></div>
+        <div class="ease-row"><div class="en">standard</div><div class="ed">cubic-bezier(.4,0,.2,1) — most transitions</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ICONOGRAPHY -->
+  <section class="ds-section" id="icons">
+    <span class="ds-eyebrow t-label">07 · Iconography</span>
+    <h2 class="t-h1">One set: Lucide, outline, 1.75px</h2>
+    <p class="lede">A single consistent outline set keeps the interface calm and trustworthy. The four review categories each own a fixed icon — used identically everywhere they appear.</p>
+    <div class="cat-icons">
+      <div class="cat"><div class="cico"><i data-lucide="bed-double"></i></div><div><div class="clab">Rooms</div><div class="csub">bed-double</div></div></div>
+      <div class="cat"><div class="cico"><i data-lucide="waves"></i></div><div><div class="clab">Facilities</div><div class="csub">waves</div></div></div>
+      <div class="cat"><div class="cico"><i data-lucide="utensils"></i></div><div><div class="clab">Food</div><div class="csub">utensils</div></div></div>
+      <div class="cat"><div class="cico"><i data-lucide="map-pin"></i></div><div><div class="clab">Location</div><div class="csub">map-pin</div></div></div>
+    </div>
+    <div class="icon-grid" id="iconGrid" style="margin-top:16px;"></div>
+  </section>
+
+  <!-- IMAGERY -->
+  <section class="ds-section" id="imagery">
+    <span class="ds-eyebrow t-label">08 · Imagery</span>
+    <h2 class="t-h1">Real photography only — placeholders are elegant, never broken</h2>
+    <p class="lede">No AI-generated hotel images, ever. Until curated photography is dropped in, slots render as a quiet warm-toned hatch with a mono caption — composed, not broken.</p>
+    <div class="imagery">
+      <div class="photo-slot ratio-169" data-label="hero · 16:9"></div>
+      <div class="photo-slot ratio-43" data-label="room · 4:3"></div>
+      <div class="photo-slot ratio-11" data-label="detail · 1:1"></div>
+    </div>
+  </section>
+
+  <footer class="footnote">
+    <span>HotelZippo Design System · v1 · Review 1 of 4</span>
+    <span class="mono">terracotta · newsreader + geist · lucide</span>
+  </footer>
+
+</div>
+
+<script>
+  // primary scale
+  const steps = [
+    ['50','oklch(.971 .013 46)','#1F1B17'], ['100','oklch(.940 .028 45)','#1F1B17'],
+    ['200','oklch(.890 .050 44)','#1F1B17'], ['300','oklch(.818 .078 43)','#1F1B17'],
+    ['400','oklch(.728 .105 42)','#fff'], ['500','oklch(.638 .122 41)','#fff'],
+    ['600','oklch(.576 .118 40)','#fff'], ['700','oklch(.502 .100 39)','#fff'],
+    ['800','oklch(.430 .082 38)','#fff'], ['900','oklch(.366 .064 37)','#fff']
+  ];
+  document.getElementById('primaryScale').innerHTML = steps.map(([n,c,t]) =>
+    `<div class="swatch" style="background:var(--primary-${n});color:${t}"><span class="n">${n}</span><span class="h">${c.replace('oklch','').trim()}</span></div>`
+  ).join('');
+
+  // spacing
+  const spaces = [['1',4],['2',8],['3',12],['4',16],['5',20],['6',24],['8',32],['10',40],['12',48],['16',64],['20',80]];
+  document.getElementById('spaceScale').innerHTML = spaces.map(([n,px]) =>
+    `<div class="space-row"><span class="tok"><b>space-${n}</b> · ${px}px</span><span class="space-bar" style="width:${px}px"></span></div>`
+  ).join('');
+
+  // icon library
+  const icons = ['send','arrow-up','sparkles','message-circle','bookmark','share-2','calendar-days',
+    'users','baby','utensils','bed-double','waves','map-pin','star','triangle-alert','octagon-alert',
+    'circle-check','shield-check','plus','x','chevron-down','chevron-right','pencil','badge-check',
+    'wallet','plane','search','loader'];
+  document.getElementById('iconGrid').innerHTML = icons.map(i =>
+    `<div class="icell"><i data-lucide="${i}"></i><div class="iname">${i}</div></div>`
+  ).join('');
+
+  lucide.createIcons();
+</script>
+</body>
+</html>
