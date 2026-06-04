@@ -1,0 +1,22 @@
+/* HotelZippo global stylesheet.
+   Order matters: all @import rules must come before any other CSS.
+   1. Google Fonts (Newsreader / Geist / Geist Mono) — the design "voice".
+   2. Locked design tokens (CSS custom properties, .t-* type classes, .photo-slot).
+   3. Runtime brand-accent switching ([data-brand]).
+   4. Tailwind layers (tokens above feed tailwind.config.js theme).
+   See specs/05-ui-component-specs.md — design system is locked in design_handoff/. */
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap');
+@import './tokens.css';
+@import './brand-themes.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+  }
+}
