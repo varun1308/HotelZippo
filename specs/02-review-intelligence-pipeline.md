@@ -28,8 +28,8 @@ When a trip brief is complete (destination + trip type), the Conversation Agent:
 
 ## Phase 2 action items (in scope now)
 
-1. Implement `/lib/review-intelligence/query.ts` to the consumption contract above.
-2. Unit + integration tests: low_confidence excluded, review_count_total=0 excluded, evaluate_only branch, budget map, all-`none` family-signal drop, top-15 sort/limit, hard_flags passthrough.
+1. ✅ Implement `/lib/review-intelligence/query.ts` to the consumption contract above. **BUILT (phase-2-recommend):** `queryCandidates(supabase, { destination, evaluateOnly, preShortlistedHotels?, budgetTier? })` returns ≤15 `candidateSchema` rows (hotel_intelligence + joined `hotel`). DB-level filter excludes low_confidence + review_count_total=0; `evaluate_only` restricts to the normalised pre-shortlist (no budget/family/sort); else budget→price_tier (`BUDGET_TO_PRICE_TIERS`), drop all-`none` family signal, sort review_count_family desc, take `MAX_CANDIDATES`=15. Never reads `raw_reviews`; hard_flags untouched.
+2. ✅ Unit + integration tests: low_confidence excluded, review_count_total=0 excluded, evaluate_only branch, budget map, all-`none` family-signal drop, top-15 sort/limit, hard_flags passthrough — `tests/unit/review-query.test.ts` + `tests/integration/review-query.test.ts`.
 
 ## Full pipeline action items (Phase 6 — reference only)
 
