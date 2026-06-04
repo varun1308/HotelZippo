@@ -34,6 +34,8 @@ Authoritative details (columns, types, indexes, SQL for pipeline + curation tabl
 3. Each table ships a Zod schema (`/lib/db/schemas/`) + a contract test.
 4. Implement + verify RLS: **user A cannot read user B's data** (Phase 1 acceptance).
 
-## Migrations (Phase 1)
+## Migrations (Phase 1) — BUILT (phase-1-schema)
 
-`0001_core_tables.sql` · `0002_pipeline_tables.sql` · `0003_curation_staging.sql` · `0004_rls_policies.sql` · `0005_storage.sql` (hotel-images bucket per 12g). The pipeline tables' **schema** is created in Phase 1 (so the model is complete + validatable); the **worker** that writes them is built in Phase 6.
+`0001_core_tables.sql` · `0002_pipeline_tables.sql` · `0003_curation_staging.sql` · `0004_rls_policies.sql` · `0005_storage.sql` (hotel-images bucket per 12g) — live in `supabase/migrations/`. The pipeline tables' **schema** is created in Phase 1 (so the model is complete + validatable); the **worker** that writes them is built in Phase 6.
+
+Zod schemas per table: `lib/db/schemas.ts`. Client factories: `lib/db/client.ts` (browser, anon, RLS-enforced) + `lib/db/server.ts` (service role, `server-only`-guarded). Gate tests: `tests/integration/rls.test.ts` (cross-user isolation) + `tests/integration/schema.test.ts` (all 10 tables + Zod contract), run against local Supabase via the CLI.
