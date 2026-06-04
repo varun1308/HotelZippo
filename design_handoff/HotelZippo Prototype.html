@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo · Chat — Active &amp; Streaming</title>
+<link rel="stylesheet" href="tokens.css" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { background: var(--bg); overflow: hidden; }
+  .app { height: 100dvh; display: flex; flex-direction: column; }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    flex: none; height: 64px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; border-bottom: 1px solid var(--border);
+    background: color-mix(in oklch, var(--bg) 86%, transparent);
+    backdrop-filter: blur(10px); position: relative; z-index: 20;
+  }
+  .brand { display: flex; align-items: baseline; gap: 9px; }
+  .brand .mark { width: 12px; height: 12px; border-radius: 3px; background: var(--primary-500); transform: rotate(45deg); }
+  .brand .name { font-family: var(--font-serif); font-size: 21px; font-weight: 600; letter-spacing: -0.02em; }
+  .brand .name b { color: var(--primary-600); font-weight: 600; }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px;
+    border-radius: var(--r-btn); border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-family: var(--font-sans); font-size: 14px; font-weight: 500;
+    cursor: pointer; box-shadow: var(--sh-xs); transition: all var(--dur-fast) var(--ease-standard);
+  }
+  .ghost-btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .ghost-btn svg { width: 16px; height: 16px; }
+  .ghost-btn .count {
+    min-width: 19px; height: 19px; padding: 0 5px; border-radius: var(--r-pill);
+    background: var(--surface-3); color: var(--text-secondary); font-size: 11px; font-weight: 600;
+    display: grid; place-items: center;
+  }
+  .brief-toggle { display: none; }
+
+  /* ---------- workspace: chat + brief rail ---------- */
+  .workspace { flex: 1; min-height: 0; display: flex; }
+  .chat-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  /* ---------- stream ---------- */
+  .stream { flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
+  .stream-inner { width: 100%; max-width: 720px; margin: 0 auto; padding: 30px 24px 8px; }
+
+  /* message rows */
+  .msg { display: flex; gap: 14px; margin-bottom: 26px; align-items: flex-start; }
+  .msg.enter { animation: msgIn var(--dur-slow) var(--ease-out); }
+  @keyframes msgIn { from { transform: translateY(8px); } to { transform: none; } }
+
+  .ava {
+    flex: none; width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(150deg, var(--primary-400), var(--primary-600));
+    display: grid; place-items: center; color: #fff; box-shadow: var(--sh-sm);
+  }
+  .ava svg { width: 18px; height: 18px; }
+
+  .assistant .body-wrap { flex: 1; min-width: 0; padding-top: 2px; }
+  .assistant .who { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; letter-spacing: -0.01em; }
+  .assistant .body-wrap p { margin: 0 0 12px; font-size: 16px; line-height: 1.62; color: var(--text); }
+  .assistant .body-wrap p:last-child { margin-bottom: 0; }
+  .assistant .body-wrap .ack { color: var(--text-secondary); }
+  .assistant .body-wrap .q { font-weight: 500; }
+  .assistant .body-wrap em { font-family: var(--font-serif); font-style: italic; }
+
+  .cursor { display: inline-block; width: 2px; height: 1.05em; background: var(--primary-500); margin-left: 1px; vertical-align: text-bottom; animation: caret 1s steps(1) infinite; }
+  @keyframes caret { 50% { opacity: 0; } }
+
+  .msg.user { justify-content: flex-end; }
+  .msg.user .bubble {
+    max-width: 78%; background: var(--primary-500); color: #fff; padding: 12px 17px;
+    border-radius: 18px 18px 5px 18px; font-size: 15.5px; line-height: 1.5; box-shadow: var(--sh-sm);
+  }
+
+  .typing-row { display: flex; gap: 14px; margin-bottom: 26px; align-items: flex-start; }
+  .typing {
+    display: inline-flex; gap: 6px; align-items: center; padding: 14px 18px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 18px 18px 18px 5px; box-shadow: var(--sh-xs); margin-top: 2px;
+  }
+  .typing i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-tertiary); display: block; animation: blink 1.4s infinite both; }
+  .typing i:nth-child(2) { animation-delay: 0.2s; }
+  .typing i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+  .form-offer {
+    margin: -8px 0 26px 50px; display: inline-flex; align-items: center; gap: 12px; background: var(--surface);
+    border: 1px dashed var(--border-strong); border-radius: var(--r-card); padding: 11px 14px; box-shadow: var(--sh-xs); max-width: 460px;
+  }
+  .form-offer svg.lead { width: 17px; height: 17px; color: var(--primary-500); flex: none; }
+  .form-offer .fo-text { font-size: 13.5px; color: var(--text-secondary); flex: 1; }
+  .form-offer button {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--r-btn); padding: 7px 12px;
+    font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; transition: all var(--dur-fast);
+  }
+  .form-offer button:hover { background: var(--primary-50); border-color: var(--primary-300); color: var(--primary-700); }
+  .form-offer button svg { width: 14px; height: 14px; }
+
+  .researching {
+    margin: -8px 0 26px 50px; display: inline-flex; align-items: center; gap: 12px; background: var(--primary-50);
+    border: 1px solid var(--primary-100); border-radius: var(--r-pill); padding: 10px 18px 10px 14px; color: var(--primary-700); font-size: 14px; font-weight: 500;
+  }
+  .researching .spin { width: 17px; height: 17px; border: 2px solid var(--primary-200); border-top-color: var(--primary-500); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- composer ---------- */
+  .composer-zone { flex: none; background: linear-gradient(to top, var(--bg) 64%, transparent); padding: 12px 24px 18px; position: relative; z-index: 4; }
+  .composer { max-width: 720px; margin: 0 auto; }
+  .input-shell {
+    display: flex; align-items: flex-end; gap: 10px; background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 18px; padding: 10px 10px 10px 18px; box-shadow: var(--sh-md); transition: border-color var(--dur-base), box-shadow var(--dur-base);
+  }
+  .input-shell:focus-within { border-color: var(--primary-400); box-shadow: var(--sh-md), var(--ring-primary); }
+  .input-shell textarea {
+    flex: 1; border: 0; outline: 0; resize: none; background: transparent; color: var(--text);
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.5; padding: 9px 0; max-height: 160px;
+  }
+  .input-shell textarea::placeholder { color: var(--text-tertiary); }
+  .send-btn {
+    flex: none; width: 42px; height: 42px; border-radius: 12px; border: 0; background: var(--primary-500); color: #fff;
+    display: grid; place-items: center; cursor: pointer; transition: background var(--dur-fast), transform var(--dur-fast);
+  }
+  .send-btn:hover { background: var(--primary-600); }
+  .send-btn:active { transform: scale(0.94); }
+  .send-btn:disabled { background: var(--surface-3); color: var(--text-tertiary); cursor: default; }
+  .send-btn svg { width: 19px; height: 19px; }
+  .composer-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 4px; }
+  .composer-foot .hint { font-size: 12.5px; color: var(--text-tertiary); }
+  .composer-foot .hint kbd { font-family: var(--font-mono); font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--text-secondary); }
+  .replay { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); background: none; border: 0; cursor: pointer; font-family: var(--font-sans); }
+  .replay:hover { color: var(--primary-600); }
+  .replay svg { width: 14px; height: 14px; }
+
+  /* ---------- BRIEF RAIL ---------- */
+  .brief {
+    flex: none; width: 344px; border-left: 1px solid var(--border); background: var(--surface);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .brief-head { flex: none; padding: 22px 24px 16px; border-bottom: 1px solid var(--border); }
+  .brief-head .eyebrow { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary); }
+  .brief-head .eyebrow svg { width: 14px; height: 14px; color: var(--primary-500); }
+  .brief-head h2 { margin: 12px 0 4px; font-family: var(--font-serif); font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .brief-head .sub { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .brief-close { display: none; }
+
+  .brief-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+
+  .bf {
+    display: flex; gap: 13px; align-items: flex-start; padding: 13px 12px; border-radius: var(--r-input);
+    border: 1px solid transparent; transition: background var(--dur-base), border-color var(--dur-base);
+  }
+  .bf-ic {
+    flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--surface-2); color: var(--text-tertiary); transition: all var(--dur-base) var(--ease-out);
+  }
+  .bf-ic svg { width: 17px; height: 17px; }
+  .bf-main { flex: 1; min-width: 0; padding-top: 1px; }
+  .bf-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; color: var(--text-tertiary); transition: color var(--dur-base); }
+  .bf-value { font-size: 14.5px; line-height: 1.4; color: var(--text); margin-top: 4px; font-weight: 500; }
+  .bf-pending { font-size: 13.5px; color: var(--text-tertiary); margin-top: 4px; font-style: italic; opacity: 0.9; }
+  .bf-check { flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--success); color: #fff; display: none; place-items: center; margin-top: 8px; }
+  .bf-check svg { width: 12px; height: 12px; stroke-width: 3; }
+
+  /* filled state */
+  .bf.filled { background: var(--surface); border-color: var(--border); box-shadow: var(--sh-xs); }
+  .bf.filled .bf-ic { background: var(--primary-50); color: var(--primary-600); }
+  .bf.filled .bf-label { color: var(--text-secondary); }
+  .bf.filled .bf-check { display: grid; }
+  .bf.filled .bf-pending { display: none; }
+  /* settle animation on fill */
+  @media (prefers-reduced-motion: no-preference) {
+    .bf.just-filled { animation: settle 0.5s var(--ease-out); }
+    @keyframes settle { 0% { transform: translateX(6px); } 100% { transform: none; } }
+    .bf.just-filled .bf-value { animation: fadeUp 0.45s var(--ease-out); }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  }
+
+  .brief-foot { flex: none; padding: 16px; border-top: 1px solid var(--border); }
+
+  /* preferences section */
+  .brief-divider { height: 1px; background: var(--border); margin: 12px 12px 6px; }
+  .prefs-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px 0; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; color: var(--text-tertiary); }
+  .prefs-head svg { width: 14px; height: 14px; color: var(--primary-500); }
+  .prefs { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px 2px; }
+  .prefs:empty { display: none; }
+  .pref-chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: var(--r-pill); background: var(--primary-50); border: 1px solid var(--primary-100); color: var(--primary-800); font-size: 13px; font-weight: 500; line-height: 1.25; }
+  .pref-chip svg { width: 13px; height: 13px; color: var(--primary-500); flex: none; }
+  .prefs-empty { padding: 8px 12px 4px; font-size: 12.5px; color: var(--text-tertiary); font-style: italic; line-height: 1.5; }
+  @media (prefers-reduced-motion: no-preference) { .pref-chip.just-added { animation: fadeUp 0.4s var(--ease-out); } }
+  .meter { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .meter .track { flex: 1; height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .meter .track i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--primary-400), var(--primary-600)); border-radius: 3px; transition: width var(--dur-slow) var(--ease-out); }
+  .meter .pct { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); flex: none; }
+  .find-btn {
+    width: 100%; height: 46px; border-radius: var(--r-btn); border: 0; background: var(--primary-500); color: #fff;
+    font-family: var(--font-sans); font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    transition: background var(--dur-fast), transform var(--dur-fast); box-shadow: var(--sh-sm);
+  }
+  .find-btn svg { width: 17px; height: 17px; }
+  .find-btn:hover:not(:disabled) { background: var(--primary-600); }
+  .find-btn:active:not(:disabled) { transform: scale(0.99); }
+  .find-btn:disabled { background: var(--surface-2); color: var(--text-tertiary); cursor: default; box-shadow: none; }
+  .foot-hint { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); text-align: center; }
+
+  /* ===================== INLINE RECOMMENDATION CARDS ===================== */
+  .ico svg { width: 1em; height: 1em; stroke-width: 1.75; }
+  .star-f svg { fill: var(--star); stroke: var(--star); }
+  .rec-block { margin: 2px 0 26px; display: flex; flex-direction: column; gap: 0; }
+  .rec-intro { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 20px; }
+  .rec-intro .ava { flex: none; width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(150deg, var(--primary-400), var(--primary-600)); display: grid; place-items: center; color: #fff; box-shadow: var(--sh-sm); }
+  .rec-intro .ava .ico { font-size: 18px; }
+  .rec-intro .who { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+  .rec-intro p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text); }
+  .rec-intro em { font-family: var(--font-serif); font-style: italic; }
+
+  .hero { position: relative; }
+  .hero .photo-slot { position: absolute; inset: 0; }
+  .hero-scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(20,15,12,0.82) 0%, rgba(20,15,12,0.14) 46%, rgba(20,15,12,0.04) 100%); }
+  .hero-top { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .hero-bottom { position: absolute; left: 22px; right: 22px; bottom: 18px; }
+  .tp-badge { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px 8px 12px; border-radius: 999px; white-space: nowrap; background: var(--primary-500); color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; box-shadow: var(--sh-md); }
+  .tp-badge .ico { font-size: 15px; }
+  .loyalty { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; white-space: nowrap; font-weight: 600; font-size: 12px; background: rgba(255,255,255,0.16); color: #fff; border: 1px solid rgba(255,255,255,0.28); backdrop-filter: blur(6px); }
+  .loyalty .ico { font-size: 14px; }
+  .std-rank { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.28); color: #fff; font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; backdrop-filter: blur(6px); white-space: nowrap; }
+  .std-rank .ico { font-size: 13px; }
+  .h-name { font-family: var(--font-serif); font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; color: #fff; }
+  .rec-meta { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 13.5px; color: rgba(255,255,255,0.92); margin-top: 9px; }
+  .rec-meta .dot { opacity: 0.5; }
+  .stars { display: inline-flex; gap: 2px; color: #fff; }
+  .stars .ico { font-size: 13px; }
+  .meta-tier { color: #fff; background: rgba(255,255,255,0.18); padding: 2px 11px; border-radius: 999px; font-weight: 600; font-size: 12.5px; backdrop-filter: blur(4px); }
+
+  .flag-bar { display: flex; gap: 13px; align-items: flex-start; padding: 15px 22px; background: var(--amber-bg); border-bottom: 1px solid var(--amber-border); }
+  .flag-bar.sev-red { background: var(--red-bg); border-bottom-color: var(--red-border); }
+  .fic { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--amber); color: #fff; }
+  .sev-red .fic { background: var(--red); }
+  .fic .ico { font-size: 18px; }
+  .flag-label { font-weight: 700; font-size: 13px; color: var(--amber-text); }
+  .sev-red .flag-label { color: var(--red-text); }
+  .flag-text { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); margin-top: 3px; }
+  .flag-src { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 7px; }
+  .flag-src .ico { font-size: 12px; }
+
+  .verdict { background: var(--primary-50); border: 1px solid var(--primary-100); border-radius: 14px; padding: 20px 22px; }
+  .verdict-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .verdict-ava { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(150deg, var(--primary-400), var(--primary-600)); display: grid; place-items: center; color: #fff; box-shadow: var(--sh-sm); }
+  .verdict-ava .ico { font-size: 17px; }
+  .verdict-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary-600); }
+  .verdict-text { font-family: var(--font-serif); font-style: italic; font-weight: 400; font-size: 18px; line-height: 1.55; color: var(--text); margin: 0; }
+
+  .cats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .cat { display: flex; gap: 12px; align-items: flex-start; }
+  .cat-ic { flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--primary-50); color: var(--primary-600); display: grid; place-items: center; }
+  .cat-ic .ico { font-size: 17px; }
+  .cat-lab { font-weight: 600; font-size: 13.5px; margin-bottom: 3px; }
+  .cat-txt { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin: 0; }
+
+  .rec-ctas { display: flex; gap: 12px; }
+  .hz-btn { flex: 1; height: 48px; border-radius: var(--r-btn); font-family: var(--font-sans); font-weight: 600; font-size: 14.5px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; cursor: pointer; border: 1px solid transparent; transition: background var(--dur-fast), border-color var(--dur-fast), transform var(--dur-fast); }
+  .hz-btn .ico { font-size: 16px; }
+  .hz-btn:active { transform: scale(0.99); }
+  .hz-btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .hz-btn-secondary:hover { background: var(--surface-2); }
+  .hz-btn-secondary.saved { background: var(--primary-50); border-color: var(--primary-300); color: var(--primary-700); }
+  .hz-btn-primary { background: var(--primary-500); color: #fff; }
+  .hz-btn-primary:hover { background: var(--primary-600); }
+
+  .toppick { background: var(--surface); border: 1px solid var(--primary-200); border-radius: var(--r-card); box-shadow: var(--sh-lg); overflow: hidden; }
+  .toppick .hero { height: 270px; }
+  .toppick .h-name { font-size: 29px; }
+  .toppick .card-body { padding: 24px; display: flex; flex-direction: column; gap: 22px; }
+
+  .alt-head { display: flex; align-items: center; gap: 12px; margin: 30px 2px 16px; }
+  .alt-head .lbl { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary); white-space: nowrap; }
+  .alt-head .rule { flex: 1; height: 1px; background: var(--border); }
+
+  .std-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--sh-sm); overflow: hidden; margin-bottom: 16px; transition: box-shadow var(--dur-base); }
+  .std-card:hover { box-shadow: var(--sh-md); }
+  .std-card .hero { height: 180px; }
+  .std-card .h-name { font-size: 22px; }
+  .std-body { padding: 18px 22px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .std-blurb { font-size: 15px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+  .std-blurb b { color: var(--text); font-weight: 600; }
+  .std-detail { display: none; flex-direction: column; gap: 20px; }
+  .std-card.open .std-detail { display: flex; animation: detailIn var(--dur-slow) var(--ease-out); }
+  @media (prefers-reduced-motion: no-preference) { @keyframes detailIn { from { transform: translateY(-5px); } to { transform: none; } } }
+  .std-card.open .std-blurb { display: none; }
+  .std-foot { display: flex; align-items: center; gap: 12px; }
+  .see-details { flex: 1; height: 46px; border-radius: var(--r-btn); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-family: var(--font-sans); font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: background var(--dur-fast); }
+  .see-details:hover { background: var(--surface-2); }
+  .see-details .ico { font-size: 16px; }
+  .std-card.open .see-details .chev { transform: rotate(180deg); }
+  .see-details .chev { transition: transform var(--dur-base); display: inline-flex; }
+  .icon-save { flex: none; width: 46px; height: 46px; border-radius: var(--r-btn); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; transition: all var(--dur-fast); }
+  .icon-save:hover { background: var(--primary-50); border-color: var(--primary-300); color: var(--primary-600); }
+  .icon-save.saved { background: var(--primary-500); border-color: var(--primary-500); color: #fff; }
+  .icon-save .ico { font-size: 18px; }
+  .std-card.open .std-foot { display: none; }
+  .std-ctas { display: none; }
+  .std-card.open .std-ctas { display: flex; gap: 12px; }
+
+  /* ===================== POST-RECOMMENDATION ACTION BAR ===================== */
+  .actionbar { flex: none; display: none; border-top: 1px solid var(--border); background: var(--surface); padding: 12px 24px; }
+  .actionbar.show { display: block; }
+  .actionbar-inner { max-width: 720px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+  .ab-btn { height: 42px; padding: 0 16px; border-radius: var(--r-btn); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-family: var(--font-sans); font-weight: 600; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; transition: all var(--dur-fast); }
+  .ab-btn .ico { font-size: 16px; display: inline-flex; }
+  .ab-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .ab-btn.primary { background: var(--primary-500); color: #fff; border-color: var(--primary-500); }
+  .ab-btn.primary:hover { background: var(--primary-600); }
+  .ab-btn.escape { margin-left: auto; background: transparent; border-style: dashed; color: var(--text-secondary); }
+  .ab-btn.escape:hover { color: var(--primary-600); border-color: var(--primary-300); background: var(--primary-50); }
+
+  /* ===================== SHORTLIST PANEL ===================== */
+  .sl-scrim { display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 45; }
+  .sl-scrim.show { display: block; }
+  .shortlist {
+    position: fixed; top: 0; right: 0; height: 100dvh; width: 392px; max-width: 90vw; z-index: 50;
+    background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--sh-panel);
+    display: flex; flex-direction: column; transform: translateX(100%); transition: transform var(--dur-panel) var(--ease-out);
+  }
+  .shortlist.open { transform: none; }
+  .sl-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid var(--border); }
+  .sl-head h2 { margin: 0; font-family: var(--font-serif); font-size: 22px; font-weight: 500; display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+  .sl-count { font-family: var(--font-sans); font-size: 12px; font-weight: 700; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--primary-500); color: #fff; display: inline-grid; place-items: center; }
+  .sl-close { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); cursor: pointer; display: grid; place-items: center; }
+  .sl-close .ico { font-size: 17px; display: inline-flex; }
+  .sl-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sl-empty { margin: auto; text-align: center; color: var(--text-tertiary); font-size: 14px; line-height: 1.55; max-width: 26ch; padding: 40px 0; }
+  .sl-empty .ico { font-size: 30px; color: var(--surface-3); display: block; margin-bottom: 12px; }
+  .sl-item { display: flex; gap: 13px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--sh-xs); }
+  .sl-item.removing { animation: slOut var(--dur-base) var(--ease-in) forwards; }
+  @keyframes slOut { to { opacity: 0; transform: translateX(20px); height: 0; padding: 0; margin: 0; } }
+  .sl-thumb { position: relative; flex: none; width: 60px; height: 60px; border-radius: 10px; overflow: hidden; }
+  .sl-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .sl-name { font-weight: 600; font-size: 14px; line-height: 1.3; }
+  .sl-meta { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .sl-flagdot { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+  .sl-flagdot .d { width: 8px; height: 8px; border-radius: 50%; }
+  .sl-flagdot.amber { color: var(--amber-text); } .sl-flagdot.amber .d { background: var(--amber); }
+  .sl-flagdot.red { color: var(--red-text); } .sl-flagdot.red .d { background: var(--red); }
+  .sl-item-book { margin-top: 2px; height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: var(--primary-500); color: #fff; font-family: var(--font-sans); font-weight: 600; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
+  .sl-item-book:hover { background: var(--primary-600); }
+  .sl-remove { flex: none; width: 30px; height: 30px; border-radius: 8px; border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer; display: grid; place-items: center; align-self: flex-start; }
+  .sl-remove:hover { background: var(--surface-2); color: var(--red); }
+  .sl-remove .ico { font-size: 16px; display: inline-flex; }
+  .sl-foot { flex: none; padding: 16px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
+  .sl-foot button { flex: 1; height: 44px; border-radius: var(--r-btn); font-family: var(--font-sans); font-weight: 600; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: all var(--dur-fast); }
+  .sl-foot .ico { font-size: 16px; display: inline-flex; }
+  .sl-share { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+  .sl-share:hover { background: var(--surface-2); }
+  .sl-share.copied { background: var(--success-bg); border-color: var(--success); color: var(--success-text); }
+  .sl-clear { border: 1px solid var(--border); background: transparent; color: var(--text-secondary); flex: 0 0 auto; padding: 0 16px; }
+  .sl-clear:hover { color: var(--red); border-color: var(--red-border); }
+
+  /* ===================== FAMILY PROFILE FORM OVERLAY ===================== */
+  .form-overlay { position: fixed; inset: 0; z-index: 60; display: none; }
+  .form-overlay.open { display: block; }
+  .form-scrim { position: absolute; inset: 0; background: var(--overlay); opacity: 0; transition: opacity var(--dur-panel) var(--ease-out); }
+  .form-overlay.open .form-scrim { opacity: 1; }
+  .form-sheet {
+    position: absolute; top: 0; right: 0; height: 100dvh; width: min(660px, 94vw);
+    background: var(--surface); box-shadow: var(--sh-panel);
+    transform: translateX(100%); transition: transform var(--dur-panel) var(--ease-out);
+  }
+  .form-overlay.open .form-sheet { transform: none; }
+  .form-sheet iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+  @media (max-width: 600px) {
+    .form-sheet { width: 100%; height: 100dvh; }
+  }
+
+  .scrim { display: none; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1024px) {
+    .brief {
+      position: fixed; top: 0; right: 0; height: 100dvh; width: min(360px, 88vw); z-index: 40;
+      transform: translateX(100%); transition: transform var(--dur-panel) var(--ease-out); box-shadow: var(--sh-panel);
+    }
+    .brief.open { transform: none; }
+    .brief-close { display: grid; place-items: center; position: absolute; top: 18px; right: 18px; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--text-secondary); }
+    .brief-close svg { width: 16px; height: 16px; }
+    .brief-toggle { display: inline-flex; }
+    .scrim.show { display: block; position: fixed; inset: 0; background: var(--overlay); z-index: 35; }
+  }
+  @media (max-width: 600px) {
+    .topbar { height: 56px; padding: 0 16px; }
+    .ghost-btn .lbl { display: none; } .ghost-btn { padding: 0 11px; }
+    .stream-inner { padding: 20px 16px 8px; }
+    .msg.user .bubble { max-width: 85%; }
+    .form-offer { flex-direction: column; align-items: flex-start; margin-left: 0; }
+    .researching { margin-left: 0; }
+    .composer-zone { padding: 8px 14px 14px; }
+    .composer-foot .hint .enter-text { display: none; }
+    .toppick .hero { height: 220px; }
+    .toppick .h-name { font-size: 24px; }
+    .std-card .hero { height: 160px; }
+    .card-body, .std-body { padding: 16px; }
+    .cats-grid { grid-template-columns: 1fr; gap: 15px; }
+    .rec-ctas, .std-ctas { flex-direction: column; }
+    .rec-ctas .hz-btn, .std-ctas .hz-btn { flex: none; width: 100%; }
+    .verdict-text { font-size: 16.5px; }
+    .actionbar { padding: 10px 14px; }
+    .actionbar-inner { overflow-x: auto; gap: 8px; }
+    .ab-btn.escape { margin-left: 0; }
+    .shortlist { width: 100%; max-width: 100%; height: 86dvh; top: auto; bottom: 0; border-left: 0; border-top-left-radius: var(--r-panel); border-top-right-radius: var(--r-panel); transform: translateY(100%); }
+    .shortlist.open { transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark"></span><span class="name">Hotel<b>Zippo</b></span></div>
+    <div class="topbar-actions">
+      <button class="ghost-btn brief-toggle" id="briefToggle"><i data-lucide="notebook-pen"></i><span class="lbl">Brief</span><span class="count" id="briefCount">0</span></button>
+      <button class="ghost-btn" id="replayTop"><i data-lucide="rotate-ccw"></i><span class="lbl">Replay</span></button>
+      <button class="ghost-btn" id="shortlistBtn" aria-label="Shortlist"><i data-lucide="bookmark"></i><span class="lbl">Shortlist</span><span class="count" id="shortlistCount">0</span></button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- CHAT -->
+    <div class="chat-col">
+      <main class="stream" id="stream">
+        <div class="stream-inner"><div id="thread"></div></div>
+      </main>
+      <div class="actionbar" id="actionbar">
+        <div class="actionbar-inner">
+          <button class="ab-btn" id="abSave"><span class="ico"><i data-lucide="bookmark"></i></span> Save shortlist</button>
+          <button class="ab-btn" id="abShare"><span class="ico"><i data-lucide="share-2"></i></span> Share with partner</button>
+          <button class="ab-btn primary" id="abBook"><span class="ico"><i data-lucide="calendar-check"></i></span> Proceed to book</button>
+          <button class="ab-btn escape" id="abTell"><span class="ico"><i data-lucide="messages-square"></i></span> Tell me what you want to do</button>
+        </div>
+      </div>
+      <div class="composer-zone">
+        <div class="composer">
+          <div class="input-shell">
+            <textarea id="ta" rows="1" placeholder="Message your concierge…"></textarea>
+            <button class="send-btn" id="send" disabled aria-label="Send"><i data-lucide="arrow-up"></i></button>
+          </div>
+          <div class="composer-foot">
+            <span class="hint"><span class="enter-text">Press </span><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for new line</span>
+            <button class="replay" id="replayFoot"><i data-lucide="play"></i> Replay conversation</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BRIEF RAIL -->
+    <aside class="brief" id="brief">
+      <button class="brief-close" id="briefClose" aria-label="Close"><i data-lucide="x"></i></button>
+      <div class="brief-head">
+        <div class="eyebrow"><i data-lucide="notebook-pen"></i> Trip brief</div>
+        <h2>What I'm gathering</h2>
+        <p class="sub">I take notes as we talk. Once the essentials are in, I'll start the research.</p>
+      </div>
+      <div class="brief-body" id="briefBody">
+        <div class="bf" data-key="destination">
+          <div class="bf-ic"><i data-lucide="map-pin"></i></div>
+          <div class="bf-main"><div class="bf-label">Destination</div><div class="bf-pending">Where to?</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="dates">
+          <div class="bf-ic"><i data-lucide="calendar-days"></i></div>
+          <div class="bf-main"><div class="bf-label">When</div><div class="bf-pending">Travel dates</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="type">
+          <div class="bf-ic"><i data-lucide="umbrella"></i></div>
+          <div class="bf-main"><div class="bf-label">Trip type</div><div class="bf-pending">What kind of stay</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="who">
+          <div class="bf-ic"><i data-lucide="users"></i></div>
+          <div class="bf-main"><div class="bf-label">Who's travelling</div><div class="bf-pending">Your crew</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="budget">
+          <div class="bf-ic"><i data-lucide="wallet"></i></div>
+          <div class="bf-main"><div class="bf-label">Budget</div><div class="bf-pending">Comfort level</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="bf" data-key="food">
+          <div class="bf-ic"><i data-lucide="utensils"></i></div>
+          <div class="bf-main"><div class="bf-label">Food</div><div class="bf-pending">Dietary needs</div><div class="bf-value" hidden></div></div>
+          <div class="bf-check"><i data-lucide="check"></i></div>
+        </div>
+        <div class="brief-divider"></div>
+        <div class="prefs-head"><i data-lucide="sparkles"></i> Personal preferences</div>
+        <div class="prefs" id="prefs"></div>
+        <p class="prefs-empty" id="prefsEmpty">I'll note anything special you mention — favourite spots, must-haves, things to avoid.</p>
+      </div>
+      <div class="brief-foot">
+        <div class="meter"><span class="track"><i id="meterFill"></i></span><span class="pct" id="meterPct">0 / 6</span></div>
+        <button class="find-btn" id="findBtn" disabled><i data-lucide="search"></i> Find hotels</button>
+        <p class="foot-hint" id="footHint">A few more details and I'll begin.</p>
+      </div>
+    </aside>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <!-- SHORTLIST PANEL -->
+  <div class="sl-scrim" id="slScrim"></div>
+  <aside class="shortlist" id="shortlist" aria-label="Your shortlist">
+    <div class="sl-head">
+      <h2>Your shortlist <span class="sl-count" id="slCount">0</span></h2>
+      <button class="sl-close" id="slClose" aria-label="Close"><span class="ico"><i data-lucide="x"></i></span></button>
+    </div>
+    <div class="sl-body" id="slBody">
+      <div class="sl-empty" id="slEmpty"><span class="ico"><i data-lucide="bookmark"></i></span>You haven't saved any hotels yet. They'll appear here as you shortlist them.</div>
+    </div>
+    <div class="sl-foot">
+      <button class="sl-share" id="slShare"><span class="ico"><i data-lucide="link"></i></span> Share shortlist</button>
+      <button class="sl-clear" id="slClear">Clear all</button>
+    </div>
+  </aside>
+</div>
+
+<!-- FAMILY PROFILE FORM — slide-over overlay -->
+<div class="form-overlay" id="formOverlay" aria-hidden="true">
+  <div class="form-scrim" id="formScrim"></div>
+  <div class="form-sheet">
+    <iframe id="formFrame" title="Family profile form"></iframe>
+  </div>
+</div>
+
+<script>
+lucide.createIcons();
+const thread = document.getElementById('thread');
+const stream = document.getElementById('stream');
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+const toBottom = () => { stream.scrollTop = stream.scrollHeight; };
+
+const TOTAL = 6;
+const CORE = ['destination', 'dates', 'type', 'who'];
+let filled = 0;
+let prefCount = 0;
+
+function updateBadge() { document.getElementById('briefCount').textContent = filled + prefCount; }
+function coreReady() { return CORE.every(k => document.querySelector(`.bf[data-key="${k}"]`).classList.contains('filled')); }
+function refreshFoot() {
+  const find = document.getElementById('findBtn'), hint = document.getElementById('footHint');
+  if (coreReady()) {
+    find.disabled = false;
+    hint.textContent = "Ready — the more you share, the sharper the match.";
+  } else if (filled >= 3) {
+    hint.textContent = "Almost there — just the essentials left.";
+  } else {
+    hint.textContent = "A few more details and I'll begin.";
+  }
+}
+
+function setField(key, value) {
+  const el = document.querySelector(`.bf[data-key="${key}"]`);
+  if (!el || el.classList.contains('filled')) return;
+  const val = el.querySelector('.bf-value');
+  val.textContent = value; val.hidden = false;
+  el.classList.add('filled', 'just-filled');
+  setTimeout(() => el.classList.remove('just-filled'), 600);
+  filled++;
+  const pct = Math.round(filled / TOTAL * 100);
+  document.getElementById('meterFill').style.width = pct + '%';
+  document.getElementById('meterPct').textContent = `${filled} / ${TOTAL}`;
+  updateBadge();
+  refreshFoot();
+}
+
+function addPref(text, icon) {
+  document.getElementById('prefsEmpty').style.display = 'none';
+  const chip = document.createElement('span');
+  chip.className = 'pref-chip just-added';
+  chip.innerHTML = `<svg data-lucide="${icon}"></svg> ${text}`;
+  document.getElementById('prefs').appendChild(chip);
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+  setTimeout(() => chip.classList.remove('just-added'), 500);
+  prefCount++;
+  updateBadge();
+}
+
+const script = [
+  { type: 'assistant',
+    html: `<p>I'll do the deep research so you don't have to. First, let's get to know your crew.</p><p class="q">Who's travelling on this trip — and are there any little ones I should plan around?</p>` },
+  { type: 'user', text: "Me, my wife, our two kids — 2 and 7 — and my parents." },
+  { type: 'assistant', after: () => setField('who', "6 guests · 2 adults, kids aged 2 & 7, 2 grandparents"),
+    html: `<p class="ack">A full house across three generations — I'll make sure everyone's looked after, from the toddler to the grandparents.</p><p class="q">Any food preferences I should keep front of mind?</p>` },
+  { type: 'user', text: "We're vegetarian. My parents really prefer Indian food." },
+  { type: 'assistant', offer: true, after: () => setField('food', "Vegetarian · Indian options important"),
+    html: `<p class="ack">Noted — vegetarian throughout, with reliable Indian options so your parents feel at home. That's a detail I weigh heavily.</p><p class="q">Now, where are you dreaming of heading?</p>` },
+  { type: 'user', text: "Somewhere nice and warm, on a beach." },
+  { type: 'assistant',
+    html: `<p>I need a little more to work with before I can recommend honestly — "warm and beachy" covers half the map.</p><p class="q">Which country or city are you leaning toward, and roughly when are you travelling?</p>` },
+  { type: 'user', text: "Phuket, Thailand — last two weeks of December. Beach resort, ideally." },
+  { type: 'assistant',
+    after: () => { setField('destination', "Phuket, Thailand"); setField('dates', "Late December · ~2 weeks"); setField('type', "Beach resort"); },
+    html: `<p class="ack">Perfect — Phuket in late December, a beach resort.</p><p class="q">What kind of budget are we working with — value, comfort, or happy to splurge for the right place?</p>` },
+  { type: 'user', text: "Comfort as a baseline, but I'll happily pay more for the right resort." },
+  { type: 'assistant', after: () => setField('budget', "Comfort · open to luxury"),
+    html: `<p class="ack">Understood — comfort as your floor, with room to step up when a place truly earns it.</p><p class="q">Last thing: anything that would make this trip special, or anything you'd want to avoid?</p>` },
+  { type: 'user', text: "We'd love to be near the main attractions and night markets, a calm beach for our 2-year-old, and a kids' club would be a real bonus." },
+  { type: 'assistant', researching: true,
+    after: () => {
+      addPref("Near main attractions & night markets", "map");
+      addPref("Calm, shallow beach for toddler", "waves");
+      addPref("Kids' club a plus", "baby");
+    },
+    html: `<p class="ack">Wonderful — I'll prioritise a calm, shallow beach for your little one, easy reach to Phuket's main attractions and night markets, and a proper kids' club.</p><p>Give me a moment. I'm reading through recent family reviews and checking for anything you'd want flagged before booking.</p>` },
+];
+
+function addUser(text) {
+  const row = document.createElement('div');
+  row.className = 'msg user enter';
+  row.innerHTML = `<div class="bubble"></div>`;
+  row.querySelector('.bubble').textContent = text;
+  thread.appendChild(row); toBottom();
+}
+function showTyping() {
+  const row = document.createElement('div');
+  row.className = 'typing-row'; row.id = 'typing';
+  row.innerHTML = `<div class="ava"><i data-lucide="concierge-bell"></i></div><div class="typing"><i></i><i></i><i></i></div>`;
+  thread.appendChild(row); lucide.createIcons({ nameAttr: 'data-lucide' }); toBottom();
+}
+function hideTyping() { const t = document.getElementById('typing'); if (t) t.remove(); }
+
+async function addAssistant(step) {
+  const row = document.createElement('div');
+  row.className = 'msg assistant enter';
+  row.innerHTML = `<div class="ava"><i data-lucide="concierge-bell"></i></div><div class="body-wrap"><div class="who">Concierge</div><div class="content"></div></div>`;
+  thread.appendChild(row);
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+  const content = row.querySelector('.content');
+  const tmp = document.createElement('div'); tmp.innerHTML = step.html;
+  const paras = [...tmp.children];
+  for (const p of paras) {
+    const dest = document.createElement('p'); dest.className = p.className; content.appendChild(dest);
+    const tokens = tokenize(p);
+    const cur = document.createElement('span'); cur.className = 'cursor'; dest.appendChild(cur);
+    for (const tk of tokens) {
+      cur.insertAdjacentHTML('beforebegin', tk); toBottom();
+      await wait(tk.trim().length > 0 ? (22 + Math.random()*34) : 0);
+    }
+    cur.remove();
+  }
+}
+function tokenize(node) {
+  const out = [];
+  node.childNodes.forEach(n => {
+    if (n.nodeType === 3) { n.textContent.split(/(\s+)/).forEach(w => { if (w.length) out.push(w); }); }
+    else if (n.nodeType === 1) { out.push(n.outerHTML); }
+  });
+  return out;
+}
+function addFormOffer() {
+  const el = document.createElement('div');
+  el.className = 'form-offer enter';
+  el.innerHTML = `<svg class="lead" data-lucide="clipboard-list"></svg><span class="fo-text">Prefer to fill everything at once? You can switch to a quick family-profile form anytime.</span><button onclick="openProfileForm()"><svg data-lucide="arrow-right"></svg> Switch to form</button>`;
+  thread.appendChild(el); lucide.createIcons({ nameAttr: 'data-lucide' }); toBottom();
+}
+function addResearching() {
+  const el = document.createElement('div');
+  el.className = 'researching enter';
+  el.innerHTML = `<span class="spin"></span> Researching Phuket hotels for your family…`;
+  thread.appendChild(el); toBottom();
+}
+
+function resetBrief() {
+  filled = 0; prefCount = 0;
+  document.querySelectorAll('.bf').forEach(el => {
+    el.classList.remove('filled', 'just-filled');
+    const v = el.querySelector('.bf-value'); v.hidden = true; v.textContent = '';
+  });
+  document.getElementById('prefs').innerHTML = '';
+  document.getElementById('prefsEmpty').style.display = '';
+  document.getElementById('meterFill').style.width = '0%';
+  document.getElementById('meterPct').textContent = '0 / 6';
+  document.getElementById('briefCount').textContent = '0';
+  document.getElementById('findBtn').disabled = true;
+  document.getElementById('footHint').textContent = "A few more details and I'll begin.";
+}
+
+let playToken = 0;
+async function play() {
+  const mine = ++playToken;
+  thread.innerHTML = ''; resetBrief(); resetPrototype();
+  await wait(400);
+  for (const step of script) {
+    if (mine !== playToken) return;
+    if (step.type === 'user') {
+      addUser(step.text); await wait(650);
+    } else {
+      showTyping(); await wait(820);
+      if (mine !== playToken) return;
+      hideTyping();
+      await addAssistant(step);
+      if (step.after) step.after();
+      if (step.offer) addFormOffer();
+      if (step.researching) addResearching();
+      await wait(550);
+    }
+  }
+  if (mine !== playToken) return;
+  await streamRecommendations(mine);
+}
+
+/* ===================== RECOMMENDATIONS ===================== */
+const HOTELS = {
+  jw:      { name: 'JW Marriott Phuket Resort & Spa', area: 'Mai Khao Beach, Phuket', tier: 'Luxury', flag: 'amber' },
+  angsana: { name: 'Angsana Laguna Phuket', area: 'Bang Tao Beach, Phuket', tier: 'Comfort', flag: null },
+  karon:   { name: 'Holiday Inn Resort Karon Beach', area: 'Karon Beach, Phuket', tier: 'Comfort', flag: 'red' },
+};
+const saved = new Set();
+
+function stars(n) { let s = ''; for (let i = 0; i < n; i++) s += '<span class="ico star-f"><i data-lucide="star"></i></span>'; return `<span class="stars">${s}</span>`; }
+
+function buildRecHTML() {
+  return `
+  <article class="toppick">
+    <div class="hero">
+      <div class="photo-slot" data-label="resort hero · pool &amp; beach"></div>
+      <div class="hero-scrim"></div>
+      <div class="hero-top">
+        <span class="tp-badge"><span class="ico"><i data-lucide="award"></i></span> Top Pick</span>
+        <span class="loyalty"><span class="ico"><i data-lucide="badge-check"></i></span> Marriott Bonvoy</span>
+      </div>
+      <div class="hero-bottom">
+        <div class="h-name">JW Marriott Phuket Resort &amp; Spa</div>
+        <div class="rec-meta">${stars(5)}<span class="dot">·</span><span>Mai Khao Beach, Phuket</span><span class="dot">·</span><span class="meta-tier">Luxury</span></div>
+      </div>
+    </div>
+    <div class="flag-bar sev-amber">
+      <span class="fic"><span class="ico"><i data-lucide="triangle-alert"></i></span></span>
+      <div><div class="flag-label">Minor refurbishment</div><div class="flag-text">The main lobby restaurant is being refreshed through December. Two alternative restaurants stay open throughout your dates.</div><div class="flag-src"><span class="ico"><i data-lucide="message-square-quote"></i></span> Based on recent guest reviews</div></div>
+    </div>
+    <div class="card-body">
+      <div class="verdict">
+        <div class="verdict-head"><span class="verdict-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></span><span class="verdict-label">Why this one</span></div>
+        <p class="verdict-text">For your family of six, this is the one I'd book. The two-bedroom suites take the grandparents and a toddler without anyone feeling on top of each other, the buffet runs a dedicated Indian counter your parents will return to every morning, and Mai Khao's beach is calm and shallow — exactly right for a 2-year-old. It sits a touch above your comfort baseline, but for a resort-anchored December trip, it earns the stretch.</p>
+      </div>
+      <div class="cats-grid">
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="bed-double"></i></span></span><div><div class="cat-lab">Rooms</div><p class="cat-txt">Two-bedroom family suites sleep six, with a separate kids' room; cots and bed rails on request.</p></div></div>
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="waves"></i></span></span><div><div class="cat-lab">Facilities</div><p class="cat-txt">Three pools including a shaded kids' pool, a kids' club for ages 4+, and a quiet spa for the grandparents.</p></div></div>
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="utensils"></i></span></span><div><div class="cat-lab">Food</div><p class="cat-txt">A dedicated Indian and vegetarian breakfast counter, confirmed across recent reviews from Indian families.</p></div></div>
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="map-pin"></i></span></span><div><div class="cat-lab">Location</div><p class="cat-txt">20 minutes from the airport on calm Mai Khao beachfront; night markets a short drive south.</p></div></div>
+      </div>
+      <div class="rec-ctas">
+        <button class="hz-btn hz-btn-secondary" data-hotel="jw" onclick="saveHotel('jw')"><span class="ico"><i data-lucide="bookmark"></i></span> <span class="save-label">Save to shortlist</span></button>
+        <button class="hz-btn hz-btn-primary"><span class="save-label">Proceed to book</span> <span class="ico"><i data-lucide="arrow-right"></i></span></button>
+      </div>
+    </div>
+  </article>
+
+  <div class="alt-head"><span class="lbl">Two more worth a look</span><span class="rule"></span></div>
+
+  <article class="std-card">
+    <div class="hero">
+      <div class="photo-slot" data-label="resort hero · lagoon pool"></div>
+      <div class="hero-scrim"></div>
+      <div class="hero-top"><span class="std-rank"><span class="ico"><i data-lucide="medal"></i></span> Runner-up</span></div>
+      <div class="hero-bottom"><div class="h-name">Angsana Laguna Phuket</div><div class="rec-meta">${stars(5)}<span class="dot">·</span><span>Bang Tao Beach, Phuket</span><span class="dot">·</span><span class="meta-tier">Comfort</span></div></div>
+    </div>
+    <div class="std-body">
+      <p class="std-blurb">Built around the island's <b>biggest lagoon pool</b> — the one kids never want to leave — with free shuttle boats around the resort. A strong comfort-tier choice; the main thing holding it second is a lighter Indian-food spread than your top pick.</p>
+      <div class="std-detail">
+        <div class="verdict"><div class="verdict-head"><span class="verdict-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></span><span class="verdict-label">Why it's second</span></div><p class="verdict-text">A genuinely lovely family resort — the lagoon pools are the best on the island for young children, and the shuttle boats are a hit with 7-year-olds. I've placed it just behind because the Indian breakfast options are smaller, and the beach shelves a little more steeply than Mai Khao. Both manageable with a 2-year-old, but worth knowing.</p></div>
+        <div class="cats-grid">
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="bed-double"></i></span></span><div><div class="cat-lab">Rooms</div><p class="cat-txt">Interconnecting rooms and loft suites; cots provided, plenty of space for six.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="waves"></i></span></span><div><div class="cat-lab">Facilities</div><p class="cat-txt">Vast lagoon pool, daily kids' club, and free shuttle boats around the grounds.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="utensils"></i></span></span><div><div class="cat-lab">Food</div><p class="cat-txt">Broad international buffet; vegetarian well covered, Indian options lighter.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="map-pin"></i></span></span><div><div class="cat-lab">Location</div><p class="cat-txt">Bang Tao Beach, a short walk to the Boat Avenue restaurants and market.</p></div></div>
+        </div>
+      </div>
+      <div class="std-foot">
+        <button class="see-details" onclick="toggleCard(this)"><span>See full details</span> <span class="ico chev"><i data-lucide="chevron-down"></i></span></button>
+        <button class="icon-save" data-hotel="angsana" onclick="saveHotel('angsana')" aria-label="Save to shortlist"><span class="ico"><i data-lucide="bookmark"></i></span></button>
+      </div>
+      <div class="std-ctas">
+        <button class="hz-btn hz-btn-secondary" onclick="toggleCard(this)"><span class="ico"><i data-lucide="chevron-up"></i></span> Show less</button>
+        <button class="hz-btn hz-btn-primary">Proceed to book <span class="ico"><i data-lucide="arrow-right"></i></span></button>
+      </div>
+    </div>
+  </article>
+
+  <article class="std-card">
+    <div class="hero">
+      <div class="photo-slot" data-label="resort hero · beachfront"></div>
+      <div class="hero-scrim"></div>
+      <div class="hero-top"><span class="loyalty"><span class="ico"><i data-lucide="badge-check"></i></span> IHG One Rewards</span></div>
+      <div class="hero-bottom"><div class="h-name">Holiday Inn Resort Karon Beach</div><div class="rec-meta">${stars(4)}<span class="dot">·</span><span>Karon Beach, Phuket</span><span class="dot">·</span><span class="meta-tier">Comfort</span></div></div>
+    </div>
+    <div class="flag-bar sev-red">
+      <span class="fic"><span class="ico"><i data-lucide="octagon-alert"></i></span></span>
+      <div><div class="flag-label">Active refurbishment — avoid for now</div><div class="flag-text">Major construction is underway across the main pool and several room blocks through your dates. Recent guests report jackhammering from early morning and the main pool fenced off.</div><div class="flag-src"><span class="ico"><i data-lucide="message-square-quote"></i></span> Based on recent guest reviews</div></div>
+    </div>
+    <div class="std-body">
+      <p class="std-blurb">On paper a solid, lively-beach family option with great kids' facilities — but <b>recent stays have been disrupted by ongoing construction</b>. I'd revisit this one once the work wraps.</p>
+      <div class="std-detail">
+        <div class="verdict"><div class="verdict-head"><span class="verdict-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></span><span class="verdict-label">Why I'd wait</span></div><p class="verdict-text">I'd normally rank this higher — the location is lively and the kids' facilities are good. But I can't recommend it for your dates in good conscience: multiple recent families reported early-morning jackhammering and the main pool fenced off. That's exactly the kind of surprise that derails a trip with a toddler and grandparents. Genuinely worth another look once the refurbishment finishes.</p></div>
+        <div class="cats-grid">
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="bed-double"></i></span></span><div><div class="cat-lab">Rooms</div><p class="cat-txt">Family rooms sleep four comfortably; some blocks currently affected by works.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="waves"></i></span></span><div><div class="cat-lab">Facilities</div><p class="cat-txt">Normally strong — kids' pool and club — but the main pool is closed during works.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="utensils"></i></span></span><div><div class="cat-lab">Food</div><p class="cat-txt">Buffet with some Indian dishes; vegetarian options available daily.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="map-pin"></i></span></span><div><div class="cat-lab">Location</div><p class="cat-txt">Karon Beach, walkable to shops and dining — the busiest of the three areas.</p></div></div>
+        </div>
+      </div>
+      <div class="std-foot">
+        <button class="see-details" onclick="toggleCard(this)"><span>See full details</span> <span class="ico chev"><i data-lucide="chevron-down"></i></span></button>
+        <button class="icon-save" data-hotel="karon" onclick="saveHotel('karon')" aria-label="Save to shortlist"><span class="ico"><i data-lucide="bookmark"></i></span></button>
+      </div>
+      <div class="std-ctas">
+        <button class="hz-btn hz-btn-secondary" onclick="toggleCard(this)"><span class="ico"><i data-lucide="chevron-up"></i></span> Show less</button>
+        <button class="hz-btn hz-btn-primary">Proceed to book <span class="ico"><i data-lucide="arrow-right"></i></span></button>
+      </div>
+    </div>
+  </article>`;
+}
+
+async function streamRecommendations(mine) {
+  await wait(1500);
+  if (mine !== playToken) return;
+  const r = document.querySelector('.researching'); if (r) r.remove();
+  await addAssistant({ html: `<p class="ack">Here's what I found across Phuket for your dates — <em>a clear top pick</em>, plus two alternatives worth a look (including one I'd steer you away from for now, and why).</p>` });
+  if (mine !== playToken) return;
+  const block = document.createElement('div');
+  block.className = 'rec-block enter';
+  block.innerHTML = buildRecHTML();
+  thread.appendChild(block);
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+  document.getElementById('actionbar').classList.add('show');
+  toBottom();
+}
+
+function toggleCard(btn) { btn.closest('.std-card').classList.toggle('open'); }
+
+function updateSaveButtons(id) {
+  const on = saved.has(id);
+  document.querySelectorAll(`[data-hotel="${id}"]`).forEach(b => {
+    b.classList.toggle('saved', on);
+    const lbl = b.querySelector('.save-label');
+    if (lbl) lbl.textContent = on ? 'Saved to shortlist' : 'Save to shortlist';
+  });
+}
+function saveHotel(id) {
+  if (saved.has(id)) { saved.delete(id); } else { saved.add(id); openShortlist(); }
+  updateSaveButtons(id);
+  renderShortlist();
+}
+function removeHotel(id) {
+  const body = document.getElementById('slBody');
+  const item = body.querySelector(`.sl-remove[data-id="${id}"]`)?.closest('.sl-item');
+  saved.delete(id); updateSaveButtons(id);
+  if (item) { item.classList.add('removing'); setTimeout(renderShortlist, 200); } else { renderShortlist(); }
+}
+function renderShortlist() {
+  const body = document.getElementById('slBody'), empty = document.getElementById('slEmpty');
+  body.querySelectorAll('.sl-item').forEach(e => e.remove());
+  if (saved.size === 0) { empty.style.display = ''; }
+  else {
+    empty.style.display = 'none';
+    saved.forEach(id => {
+      const h = HOTELS[id];
+      const flagHTML = h.flag ? `<span class="sl-flagdot ${h.flag}"><span class="d"></span>${h.flag === 'red' ? 'Flagged' : 'Note'}</span>` : '';
+      const item = document.createElement('div');
+      item.className = 'sl-item';
+      item.innerHTML = `<div class="sl-thumb photo-slot" data-label=""></div>
+        <div class="sl-info"><div class="sl-name">${h.name}</div>
+          <div class="sl-meta"><span>${h.area}</span><span class="dot">·</span><span>${h.tier}</span>${flagHTML}</div>
+          <button class="sl-item-book"><span class="ico"><i data-lucide="calendar-check"></i></span> Proceed to book</button>
+        </div>
+        <button class="sl-remove" data-id="${id}" aria-label="Remove"><span class="ico"><i data-lucide="x"></i></span></button>`;
+      body.appendChild(item);
+      item.querySelector('.sl-remove').addEventListener('click', () => removeHotel(id));
+    });
+  }
+  document.getElementById('slCount').textContent = saved.size;
+  document.getElementById('shortlistCount').textContent = saved.size;
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+}
+
+const shortlist = document.getElementById('shortlist'), slScrim = document.getElementById('slScrim');
+function openShortlist() { shortlist.classList.add('open'); slScrim.classList.add('show'); }
+function closeShortlist() { shortlist.classList.remove('open'); slScrim.classList.remove('show'); }
+document.getElementById('shortlistBtn').addEventListener('click', () => { shortlist.classList.contains('open') ? closeShortlist() : openShortlist(); });
+document.getElementById('slClose').addEventListener('click', closeShortlist);
+slScrim.addEventListener('click', closeShortlist);
+document.getElementById('slClear').addEventListener('click', () => { saved.forEach(id => updateSaveButtons(id)); saved.clear(); renderShortlist(); });
+document.getElementById('slShare').addEventListener('click', (e) => {
+  const btn = e.currentTarget;
+  btn.innerHTML = '<span class="ico"><i data-lucide="check"></i></span> Link copied';
+  btn.classList.add('copied'); lucide.createIcons({ nameAttr: 'data-lucide' });
+  setTimeout(() => { btn.innerHTML = '<span class="ico"><i data-lucide="link"></i></span> Share shortlist'; btn.classList.remove('copied'); lucide.createIcons({ nameAttr: 'data-lucide' }); }, 1900);
+});
+
+// action bar
+document.getElementById('abSave').addEventListener('click', openShortlist);
+document.getElementById('abShare').addEventListener('click', () => { openShortlist(); document.getElementById('slShare').click(); });
+document.getElementById('abBook').addEventListener('click', openShortlist);
+document.getElementById('abTell').addEventListener('click', () => { closeShortlist(); const t = document.getElementById('ta'); t.focus(); });
+
+function resetPrototype() {
+  saved.clear(); renderShortlist(); closeShortlist();
+  document.getElementById('actionbar').classList.remove('show');
+}
+
+document.getElementById('replayTop').addEventListener('click', play);
+document.getElementById('replayFoot').addEventListener('click', play);
+
+// brief panel toggle (mobile/tablet)
+const brief = document.getElementById('brief'), scrim = document.getElementById('scrim');
+const openBrief = () => { brief.classList.add('open'); scrim.classList.add('show'); };
+const closeBrief = () => { brief.classList.remove('open'); scrim.classList.remove('show'); };
+document.getElementById('briefToggle').addEventListener('click', openBrief);
+document.getElementById('briefClose').addEventListener('click', closeBrief);
+scrim.addEventListener('click', closeBrief);
+
+// composer niceties
+const ta = document.getElementById('ta'), send = document.getElementById('send');
+const grow = () => { ta.style.height='auto'; ta.style.height = Math.min(ta.scrollHeight,160)+'px'; };
+ta.addEventListener('input', () => { grow(); send.disabled = ta.value.trim()===''; });
+ta.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); } });
+
+// ===================== PROFILE FORM OVERLAY =====================
+const formOverlay = document.getElementById('formOverlay');
+const formFrame = document.getElementById('formFrame');
+let formFrameLoaded = false;
+function openProfileForm() {
+  if (!formFrameLoaded) { formFrame.src = 'Family Profile Form.html'; formFrameLoaded = true; }
+  formOverlay.classList.add('open');
+  formOverlay.setAttribute('aria-hidden', 'false');
+}
+function closeProfileForm() {
+  formOverlay.classList.remove('open');
+  formOverlay.setAttribute('aria-hidden', 'true');
+}
+function onProfileSaved(d) {
+  closeProfileForm();
+  if (d.who)    setField('who', d.who);
+  if (d.food)   setField('food', d.food);
+  if (d.budget) setField('budget', d.budget);
+  const name = (d.name || '').trim();
+  const row = document.createElement('div');
+  row.className = 'msg assistant enter';
+  row.innerHTML = `<div class="ava"><i data-lucide="concierge-bell"></i></div><div class="body-wrap"><div class="who">Concierge</div><div class="content"><p class="ack">${name ? 'Thanks, ' + name + ' — ' : 'Perfect — '}I've saved your family profile. I've got your crew, dietary needs, and budget noted, so we can skip straight to the fun part.</p><p class="q">Where are you dreaming of heading?</p></div></div>`;
+  thread.appendChild(row);
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+  toBottom();
+  const t = document.getElementById('ta'); if (t) t.focus();
+}
+document.getElementById('formScrim').addEventListener('click', closeProfileForm);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && formOverlay.classList.contains('open')) closeProfileForm(); });
+window.addEventListener('message', e => {
+  const d = e.data || {};
+  if (d.type === 'hz-close-form') closeProfileForm();
+  else if (d.type === 'hz-form-saved') onProfileSaved(d);
+});
+
+play();
+</script>
+</body>
+</html>

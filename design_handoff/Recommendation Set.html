@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo · Recommendation Set</title>
+<link rel="stylesheet" href="tokens.css" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  body { background: var(--bg); }
+  .stage { width: 100%; max-width: 680px; margin: 0 auto; padding: 44px 24px 80px; }
+
+  .ico svg { width: 1em; height: 1em; stroke-width: 1.75; }
+  .star-f svg { fill: var(--star); stroke: var(--star); }
+
+  /* concierge lead-in */
+  .lead { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 22px; }
+  .lead .ava { flex: none; width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(150deg, var(--primary-400), var(--primary-600)); display: grid; place-items: center; color: #fff; box-shadow: var(--sh-sm); }
+  .lead .ava .ico { font-size: 18px; }
+  .lead .who { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+  .lead p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text); max-width: 54ch; }
+  .lead em { font-family: var(--font-serif); font-style: italic; }
+
+  /* ===== shared card pieces ===== */
+  .hero { position: relative; }
+  .hero .photo-slot { position: absolute; inset: 0; }
+  .hero-scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(20,15,12,0.82) 0%, rgba(20,15,12,0.14) 46%, rgba(20,15,12,0.04) 100%); }
+  .hero-top { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .hero-bottom { position: absolute; left: 22px; right: 22px; bottom: 18px; }
+
+  .tp-badge { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px 8px 12px; border-radius: 999px; white-space: nowrap; background: var(--primary-500); color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; box-shadow: var(--sh-md); }
+  .tp-badge .ico { font-size: 15px; }
+  .loyalty { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; white-space: nowrap; font-weight: 600; font-size: 12px; background: rgba(255,255,255,0.16); color: #fff; border: 1px solid rgba(255,255,255,0.28); backdrop-filter: blur(6px); }
+  .loyalty .ico { font-size: 14px; }
+
+  .h-name { font-family: var(--font-serif); font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; color: #fff; }
+  .meta-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 13.5px; color: rgba(255,255,255,0.92); margin-top: 9px; }
+  .meta-row .dot { opacity: 0.5; }
+  .stars { display: inline-flex; gap: 2px; color: #fff; }
+  .stars .ico { font-size: 13px; }
+  .meta-tier { color: #fff; background: rgba(255,255,255,0.18); padding: 2px 11px; border-radius: 999px; font-weight: 600; font-size: 12.5px; backdrop-filter: blur(4px); }
+
+  /* flag */
+  .flag-bar { display: flex; gap: 13px; align-items: flex-start; padding: 15px 22px; background: var(--amber-bg); border-bottom: 1px solid var(--amber-border); }
+  .flag-bar.sev-red { background: var(--red-bg); border-bottom-color: var(--red-border); }
+  .fic { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--amber); color: #fff; }
+  .sev-red .fic { background: var(--red); }
+  .fic .ico { font-size: 18px; }
+  .flag-label { font-weight: 700; font-size: 13px; color: var(--amber-text); }
+  .sev-red .flag-label { color: var(--red-text); }
+  .flag-text { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); margin-top: 3px; }
+  .flag-src { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 7px; }
+  .flag-src .ico { font-size: 12px; }
+
+  /* verdict */
+  .verdict { background: var(--primary-50); border: 1px solid var(--primary-100); border-radius: 14px; padding: 20px 22px; }
+  .verdict-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .verdict-ava { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(150deg, var(--primary-400), var(--primary-600)); display: grid; place-items: center; color: #fff; box-shadow: var(--sh-sm); }
+  .verdict-ava .ico { font-size: 17px; }
+  .verdict-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary-600); }
+  .verdict-text { font-family: var(--font-serif); font-style: italic; font-weight: 400; font-size: 18px; line-height: 1.55; color: var(--text); margin: 0; }
+
+  /* categories */
+  .cats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .cat { display: flex; gap: 12px; align-items: flex-start; }
+  .cat-ic { flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--primary-50); color: var(--primary-600); display: grid; place-items: center; }
+  .cat-ic .ico { font-size: 17px; }
+  .cat-lab { font-weight: 600; font-size: 13.5px; margin-bottom: 3px; }
+  .cat-txt { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin: 0; }
+
+  /* CTAs */
+  .ctas { display: flex; gap: 12px; }
+  .hz-btn { flex: 1; height: 48px; border-radius: var(--r-btn); font-family: var(--font-sans); font-weight: 600; font-size: 14.5px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; cursor: pointer; border: 1px solid transparent; transition: background var(--dur-fast), border-color var(--dur-fast), transform var(--dur-fast); }
+  .hz-btn .ico { font-size: 16px; }
+  .hz-btn:active { transform: scale(0.99); }
+  .hz-btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .hz-btn-secondary:hover { background: var(--surface-2); }
+  .hz-btn-primary { background: var(--primary-500); color: #fff; }
+  .hz-btn-primary:hover { background: var(--primary-600); }
+
+  /* ===== TOP PICK ===== */
+  .hz-card { background: var(--surface); border: 1px solid var(--primary-200); border-radius: var(--r-card); box-shadow: var(--sh-lg); overflow: hidden; }
+  .hz-card .hero { height: 290px; }
+  .hz-card .h-name { font-size: 31px; }
+  .hz-card .body { padding: 24px; display: flex; flex-direction: column; gap: 22px; }
+
+  /* ===== section divider ===== */
+  .alt-head { display: flex; align-items: center; gap: 12px; margin: 34px 2px 18px; }
+  .alt-head .lbl { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary); white-space: nowrap; }
+  .alt-head .rule { flex: 1; height: 1px; background: var(--border); }
+
+  /* ===== STANDARD CARD ===== */
+  .std-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--sh-sm); overflow: hidden; margin-bottom: 16px; transition: box-shadow var(--dur-base); }
+  .std-card:hover { box-shadow: var(--sh-md); }
+  .std-card .hero { height: 188px; }
+  .std-card .h-name { font-size: 22px; }
+  .std-rank { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.28); color: #fff; font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; backdrop-filter: blur(6px); white-space: nowrap; }
+
+  .std-body { padding: 18px 22px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .std-blurb { font-size: 15px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+  .std-blurb b { color: var(--text); font-weight: 600; }
+
+  .std-detail { display: none; flex-direction: column; gap: 20px; }
+  .std-card.open .std-detail { display: flex; animation: detailIn var(--dur-slow) var(--ease-out); }
+  @media (prefers-reduced-motion: no-preference) { @keyframes detailIn { from { transform: translateY(-5px); } to { transform: none; } } }
+  .std-card.open .std-blurb { display: none; }
+
+  .std-foot { display: flex; align-items: center; gap: 12px; }
+  .see-details { flex: 1; height: 46px; border-radius: var(--r-btn); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-family: var(--font-sans); font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: background var(--dur-fast); }
+  .see-details:hover { background: var(--surface-2); }
+  .see-details .ico { font-size: 16px; transition: transform var(--dur-base); }
+  .std-card.open .see-details .chev { transform: rotate(180deg); }
+  .icon-save { flex: none; width: 46px; height: 46px; border-radius: var(--r-btn); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; transition: all var(--dur-fast); }
+  .icon-save:hover { background: var(--primary-50); border-color: var(--primary-300); color: var(--primary-600); }
+  .icon-save.saved { background: var(--primary-500); border-color: var(--primary-500); color: #fff; }
+  .icon-save .ico { font-size: 18px; }
+  /* when expanded, show full CTAs instead of the compact footer */
+  .std-card.open .std-foot { display: none; }
+  .std-ctas { display: none; }
+  .std-card.open .std-ctas { display: flex; gap: 12px; }
+
+  @media (max-width: 560px) {
+    .stage { padding: 24px 14px 60px; }
+    .hz-card .hero { height: 230px; }
+    .hz-card .h-name { font-size: 25px; }
+    .std-card .hero { height: 170px; }
+    .body, .std-body { padding: 18px; }
+    .cats-grid { grid-template-columns: 1fr; gap: 15px; }
+    .ctas, .std-ctas { flex-direction: column; }
+    .verdict-text { font-size: 16.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="lead">
+    <div class="ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></div>
+    <div>
+      <div class="who">Concierge</div>
+      <p>I read through recent family reviews across Phuket's resorts. Here's <em>the one I'd book</em>, plus two alternatives worth a look — including one I'd steer you away from for now, and why.</p>
+    </div>
+  </div>
+
+  <!-- ===== TOP PICK ===== -->
+  <article class="hz-card">
+    <div class="hero">
+      <div class="photo-slot" data-label="resort hero · pool &amp; beach"></div>
+      <div class="hero-scrim"></div>
+      <div class="hero-top">
+        <span class="tp-badge"><span class="ico"><i data-lucide="award"></i></span> Top Pick</span>
+        <span class="loyalty"><span class="ico"><i data-lucide="badge-check"></i></span> Marriott Bonvoy</span>
+      </div>
+      <div class="hero-bottom">
+        <div class="h-name">JW Marriott Phuket Resort &amp; Spa</div>
+        <div class="meta-row">
+          <span class="stars"><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span></span>
+          <span class="dot">·</span><span>Mai Khao Beach, Phuket</span><span class="dot">·</span><span class="meta-tier">Luxury</span>
+        </div>
+      </div>
+    </div>
+    <div class="flag-bar sev-amber">
+      <span class="fic"><span class="ico"><i data-lucide="triangle-alert"></i></span></span>
+      <div>
+        <div class="flag-label">Minor refurbishment</div>
+        <div class="flag-text">The main lobby restaurant is being refreshed through December. Two alternative restaurants stay open throughout your dates.</div>
+        <div class="flag-src"><span class="ico"><i data-lucide="message-square-quote"></i></span> Based on recent guest reviews</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="verdict">
+        <div class="verdict-head"><span class="verdict-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></span><span class="verdict-label">Why this one</span></div>
+        <p class="verdict-text">For your family of six, this is the one I'd book. The two-bedroom suites take the grandparents and a toddler without anyone feeling on top of each other, the buffet runs a dedicated Indian counter your parents will return to every morning, and Mai Khao's beach is calm and shallow — exactly right for a 2-year-old. It sits a touch above your comfort baseline, but for a resort-anchored December trip, it earns the stretch.</p>
+      </div>
+      <div class="cats-grid">
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="bed-double"></i></span></span><div><div class="cat-lab">Rooms</div><p class="cat-txt">Two-bedroom family suites sleep six, with a separate kids' room; cots and bed rails on request.</p></div></div>
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="waves"></i></span></span><div><div class="cat-lab">Facilities</div><p class="cat-txt">Three pools including a shaded kids' pool, a kids' club for ages 4+, and a quiet spa for the grandparents.</p></div></div>
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="utensils"></i></span></span><div><div class="cat-lab">Food</div><p class="cat-txt">A dedicated Indian and vegetarian breakfast counter, confirmed across recent reviews from Indian families.</p></div></div>
+        <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="map-pin"></i></span></span><div><div class="cat-lab">Location</div><p class="cat-txt">20 minutes from the airport on calm Mai Khao beachfront; night markets a short drive south.</p></div></div>
+      </div>
+      <div class="ctas">
+        <button class="hz-btn hz-btn-secondary"><span class="ico"><i data-lucide="bookmark"></i></span> Save to shortlist</button>
+        <button class="hz-btn hz-btn-primary">Proceed to book <span class="ico"><i data-lucide="arrow-right"></i></span></button>
+      </div>
+    </div>
+  </article>
+
+  <!-- ===== ALTERNATIVES ===== -->
+  <div class="alt-head"><span class="lbl">Two more worth a look</span><span class="rule"></span></div>
+
+  <!-- ALT 1 · clean -->
+  <article class="std-card">
+    <div class="hero">
+      <div class="photo-slot" data-label="resort hero · lagoon pool"></div>
+      <div class="hero-scrim"></div>
+      <div class="hero-top"><span class="std-rank"><span class="ico"><i data-lucide="medal"></i></span> Runner-up</span></div>
+      <div class="hero-bottom">
+        <div class="h-name">Angsana Laguna Phuket</div>
+        <div class="meta-row">
+          <span class="stars"><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span></span>
+          <span class="dot">·</span><span>Bang Tao Beach, Phuket</span><span class="dot">·</span><span class="meta-tier">Comfort</span>
+        </div>
+      </div>
+    </div>
+    <div class="std-body">
+      <p class="std-blurb">Built around the island's <b>biggest lagoon pool</b> — the one kids never want to leave — with free shuttle boats around the resort. A strong comfort-tier choice; the main thing holding it second is a lighter Indian-food spread than your top pick.</p>
+
+      <div class="std-detail">
+        <div class="verdict">
+          <div class="verdict-head"><span class="verdict-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></span><span class="verdict-label">Why it's second</span></div>
+          <p class="verdict-text">A genuinely lovely family resort — the lagoon pools are the best on the island for young children, and the shuttle boats are a hit with 7-year-olds. I've placed it just behind because the Indian breakfast options are smaller, and the beach shelves a little more steeply than Mai Khao. Both manageable with a 2-year-old, but worth knowing before you choose.</p>
+        </div>
+        <div class="cats-grid">
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="bed-double"></i></span></span><div><div class="cat-lab">Rooms</div><p class="cat-txt">Interconnecting rooms and loft suites; cots provided, plenty of space for six.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="waves"></i></span></span><div><div class="cat-lab">Facilities</div><p class="cat-txt">Vast lagoon pool, daily kids' club, and free shuttle boats around the grounds.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="utensils"></i></span></span><div><div class="cat-lab">Food</div><p class="cat-txt">Broad international buffet; vegetarian is well covered, Indian options lighter.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="map-pin"></i></span></span><div><div class="cat-lab">Location</div><p class="cat-txt">Bang Tao Beach, a short walk to the Boat Avenue restaurants and weekend market.</p></div></div>
+        </div>
+      </div>
+
+      <div class="std-foot">
+        <button class="see-details" onclick="toggleCard(this)"><span>See full details</span> <span class="ico chev"><i data-lucide="chevron-down"></i></span></button>
+        <button class="icon-save" onclick="toggleSave(this)" aria-label="Save to shortlist"><span class="ico"><i data-lucide="bookmark"></i></span></button>
+      </div>
+      <div class="std-ctas">
+        <button class="hz-btn hz-btn-secondary" onclick="toggleCard(this)"><span class="ico"><i data-lucide="chevron-up"></i></span> Show less</button>
+        <button class="hz-btn hz-btn-primary">Proceed to book <span class="ico"><i data-lucide="arrow-right"></i></span></button>
+      </div>
+    </div>
+  </article>
+
+  <!-- ALT 2 · red flag (the Karon failure case) -->
+  <article class="std-card">
+    <div class="hero">
+      <div class="photo-slot" data-label="resort hero · beachfront"></div>
+      <div class="hero-scrim"></div>
+      <div class="hero-top"><span class="loyalty"><span class="ico"><i data-lucide="badge-check"></i></span> IHG One Rewards</span></div>
+      <div class="hero-bottom">
+        <div class="h-name">Holiday Inn Resort Karon Beach</div>
+        <div class="meta-row">
+          <span class="stars"><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span><span class="ico star-f"><i data-lucide="star"></i></span></span>
+          <span class="dot">·</span><span>Karon Beach, Phuket</span><span class="dot">·</span><span class="meta-tier">Comfort</span>
+        </div>
+      </div>
+    </div>
+    <div class="flag-bar sev-red">
+      <span class="fic"><span class="ico"><i data-lucide="octagon-alert"></i></span></span>
+      <div>
+        <div class="flag-label">Active refurbishment — avoid for now</div>
+        <div class="flag-text">Major construction is underway across the main pool and several room blocks through your dates. Recent guests report jackhammering from early morning and the main pool fenced off.</div>
+        <div class="flag-src"><span class="ico"><i data-lucide="message-square-quote"></i></span> Based on recent guest reviews</div>
+      </div>
+    </div>
+    <div class="std-body">
+      <p class="std-blurb">On paper a solid, lively-beach family option with great kids' facilities — but <b>recent stays have been disrupted by ongoing construction</b>. I'd revisit this one once the work wraps.</p>
+
+      <div class="std-detail">
+        <div class="verdict">
+          <div class="verdict-head"><span class="verdict-ava"><span class="ico"><i data-lucide="concierge-bell"></i></span></span><span class="verdict-label">Why I'd wait</span></div>
+          <p class="verdict-text">I'd normally rank this higher — the location is lively and the kids' facilities are good. But I can't recommend it for your dates in good conscience: multiple recent families reported early-morning jackhammering and the main pool fenced off. That's exactly the kind of surprise that derails a trip with a toddler and grandparents. Genuinely worth another look once the refurbishment finishes.</p>
+        </div>
+        <div class="cats-grid">
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="bed-double"></i></span></span><div><div class="cat-lab">Rooms</div><p class="cat-txt">Family rooms sleep four comfortably; some blocks currently affected by works.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="waves"></i></span></span><div><div class="cat-lab">Facilities</div><p class="cat-txt">Normally strong — kids' pool and club — but the main pool is closed during works.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="utensils"></i></span></span><div><div class="cat-lab">Food</div><p class="cat-txt">Buffet with some Indian dishes; vegetarian options available daily.</p></div></div>
+          <div class="cat"><span class="cat-ic"><span class="ico"><i data-lucide="map-pin"></i></span></span><div><div class="cat-lab">Location</div><p class="cat-txt">Karon Beach, walkable to shops and dining — the busiest of the three areas.</p></div></div>
+        </div>
+      </div>
+
+      <div class="std-foot">
+        <button class="see-details" onclick="toggleCard(this)"><span>See full details</span> <span class="ico chev"><i data-lucide="chevron-down"></i></span></button>
+        <button class="icon-save" onclick="toggleSave(this)" aria-label="Save to shortlist"><span class="ico"><i data-lucide="bookmark"></i></span></button>
+      </div>
+      <div class="std-ctas">
+        <button class="hz-btn hz-btn-secondary" onclick="toggleCard(this)"><span class="ico"><i data-lucide="chevron-up"></i></span> Show less</button>
+        <button class="hz-btn hz-btn-primary">Proceed to book <span class="ico"><i data-lucide="arrow-right"></i></span></button>
+      </div>
+    </div>
+  </article>
+
+</div>
+
+<script>
+  function toggleCard(btn) {
+    const card = btn.closest('.std-card');
+    card.classList.toggle('open');
+    if (card.classList.contains('open')) {
+      card.scrollIntoView ? null : null; // avoid scrollIntoView per guidelines
+    }
+  }
+  function toggleSave(btn) { btn.classList.toggle('saved'); }
+  lucide.createIcons();
+</script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo · Chat — Empty State</title>
+<link rel="stylesheet" href="tokens.css" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { background: var(--bg); overflow: hidden; }
+
+  .app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    flex: none;
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklch, var(--bg) 86%, transparent);
+    backdrop-filter: blur(10px);
+    position: relative; z-index: 5;
+  }
+  .brand { display: flex; align-items: baseline; gap: 9px; }
+  .brand .mark { width: 12px; height: 12px; border-radius: 3px; background: var(--primary-500); transform: rotate(45deg); }
+  .brand .name { font-family: var(--font-serif); font-size: 21px; font-weight: 600; letter-spacing: -0.02em; }
+  .brand .name b { color: var(--primary-600); font-weight: 600; }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 38px; padding: 0 14px; border-radius: var(--r-btn);
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-family: var(--font-sans); font-size: 14px; font-weight: 500;
+    cursor: pointer; box-shadow: var(--sh-xs); transition: all var(--dur-fast) var(--ease-standard);
+  }
+  .ghost-btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .ghost-btn svg { width: 16px; height: 16px; }
+  .ghost-btn .count {
+    min-width: 19px; height: 19px; padding: 0 5px; border-radius: var(--r-pill);
+    background: var(--surface-3); color: var(--text-secondary);
+    font-size: 11px; font-weight: 600; display: grid; place-items: center;
+    font-family: var(--font-sans);
+  }
+
+  /* ---------- conversation scroll region ---------- */
+  .stream {
+    flex: 1; min-height: 0;
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .stream-inner {
+    width: 100%; max-width: 760px;
+    margin: 0 auto; padding: 24px;
+    flex: 1; display: flex; flex-direction: column;
+  }
+
+  /* ---------- empty / welcome ---------- */
+  .welcome {
+    margin: auto 0;
+    padding: 24px 0 8px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .welcome { animation: rise var(--dur-slow) var(--ease-out); }
+    @keyframes rise { from { transform: translateY(10px); } to { transform: none; } }
+  }
+
+  .avatar {
+    width: 46px; height: 46px; border-radius: 13px;
+    background: linear-gradient(150deg, var(--primary-400), var(--primary-600));
+    display: grid; place-items: center; color: #fff;
+    box-shadow: var(--sh-md);
+    margin-bottom: 22px;
+  }
+  .avatar svg { width: 23px; height: 23px; }
+
+  .welcome .greeting {
+    font-family: var(--font-serif);
+    font-size: clamp(30px, 4.6vw, 42px);
+    line-height: 1.1; letter-spacing: -0.02em; font-weight: 500;
+    margin: 0 0 16px; max-width: 17ch;
+  }
+  .welcome .greeting em { font-style: italic; color: var(--primary-600); }
+  .welcome .intro {
+    font-size: 17px; line-height: 1.62; color: var(--text-secondary);
+    max-width: 54ch; margin: 0 0 28px;
+  }
+  .welcome .intro strong { color: var(--text); font-weight: 600; }
+
+  /* trust micro-row */
+  .trustrow { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 34px; }
+  .trustrow .ti { display: flex; align-items: center; gap: 9px; color: var(--text-secondary); font-size: 13.5px; white-space: nowrap; }
+  .trustrow .ti svg { width: 16px; height: 16px; color: var(--primary-500); flex: none; }
+
+  /* suggestion chips */
+  .suggest-label {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 14px;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 11px 16px 11px 13px; border-radius: var(--r-pill);
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-size: 14.5px; font-weight: 500; cursor: pointer;
+    box-shadow: var(--sh-xs); transition: all var(--dur-base) var(--ease-out);
+    text-align: left;
+  }
+  .chip:hover { border-color: var(--primary-300); background: var(--primary-50); transform: translateY(-1px); box-shadow: var(--sh-sm); }
+  .chip .cic { width: 30px; height: 30px; border-radius: 8px; background: var(--surface-2); color: var(--primary-600); display: grid; place-items: center; flex: none; transition: background var(--dur-base); }
+  .chip:hover .cic { background: var(--surface); }
+  .chip .cic svg { width: 16px; height: 16px; }
+  .chip .ct { display: flex; flex-direction: column; line-height: 1.25; }
+  .chip .ct small { font-family: var(--font-sans); font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
+
+  /* ---------- composer ---------- */
+  .composer-zone {
+    flex: none;
+    background: linear-gradient(to top, var(--bg) 62%, transparent);
+    padding: 12px 24px 18px;
+    position: relative; z-index: 4;
+  }
+  .composer {
+    max-width: 760px; margin: 0 auto;
+  }
+  .input-shell {
+    display: flex; align-items: flex-end; gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 18px;
+    padding: 10px 10px 10px 18px;
+    box-shadow: var(--sh-md);
+    transition: border-color var(--dur-base), box-shadow var(--dur-base);
+  }
+  .input-shell:focus-within { border-color: var(--primary-400); box-shadow: var(--sh-md), var(--ring-primary); }
+  .input-shell textarea {
+    flex: 1; border: 0; outline: 0; resize: none;
+    background: transparent; color: var(--text);
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.5;
+    padding: 9px 0; max-height: 160px;
+  }
+  .input-shell textarea::placeholder { color: var(--text-tertiary); }
+  .send-btn {
+    flex: none; width: 42px; height: 42px; border-radius: 12px;
+    border: 0; background: var(--primary-500); color: #fff;
+    display: grid; place-items: center; cursor: pointer;
+    transition: background var(--dur-fast), transform var(--dur-fast);
+  }
+  .send-btn:hover { background: var(--primary-600); }
+  .send-btn:active { transform: scale(0.94); }
+  .send-btn:disabled { background: var(--surface-3); color: var(--text-tertiary); cursor: default; }
+  .send-btn svg { width: 19px; height: 19px; }
+
+  .composer-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 10px; padding: 0 4px;
+  }
+  .composer-foot .hint { font-size: 12.5px; color: var(--text-tertiary); }
+  .composer-foot .hint kbd {
+    font-family: var(--font-mono); font-size: 11px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--text-secondary);
+  }
+  .composer-foot .form-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; color: var(--text-secondary); text-decoration: none;
+    border-bottom: 1px dashed var(--border-strong); padding-bottom: 1px;
+  }
+  .composer-foot .form-link:hover { color: var(--primary-600); border-color: var(--primary-400); }
+  .composer-foot .form-link svg { width: 13px; height: 13px; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 600px) {
+    .topbar { height: 56px; padding: 0 16px; }
+    .ghost-btn .lbl { display: none; }
+    .ghost-btn { padding: 0 11px; }
+    .stream-inner { padding: 16px; }
+    .welcome { padding: 8px 0; }
+    .avatar { width: 42px; height: 42px; margin-bottom: 18px; }
+    .welcome .intro { font-size: 16px; }
+    .trustrow { gap: 10px 16px; margin-bottom: 26px; }
+    .chips { flex-direction: column; }
+    .chip { width: 100%; }
+    .composer-zone { padding: 8px 14px 14px; }
+    .composer-foot .hint .enter-text { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"></span>
+      <span class="name">Hotel<b>Zippo</b></span>
+    </div>
+    <div class="topbar-actions">
+      <button class="ghost-btn" aria-label="Your shortlist">
+        <i data-lucide="bookmark"></i>
+        <span class="lbl">Shortlist</span>
+        <span class="count">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- CONVERSATION STREAM (empty) -->
+  <main class="stream">
+    <div class="stream-inner">
+      <section class="welcome" aria-label="Welcome">
+        <div class="avatar"><i data-lucide="concierge-bell"></i></div>
+        <h1 class="greeting">Hi, I'm your <em>family travel concierge.</em></h1>
+        <p class="intro">Finding the right hotel for a family trip can mean <strong>30 to 40 hours</strong> across reviews, maps, and videos. Tell me about your family and where you're headed — I'll do that research and come back with a confident recommendation, the honest trade-offs, and anything you'd want flagged before you book.</p>
+
+        <div class="trustrow">
+          <span class="ti"><i data-lucide="search-check"></i> Synthesised from real reviews</span>
+          <span class="ti"><i data-lucide="triangle-alert"></i> Surfaces hidden red flags</span>
+          <span class="ti"><i data-lucide="users"></i> Built for families with kids</span>
+        </div>
+
+        <p class="suggest-label">Start with</p>
+        <div class="chips">
+          <button class="chip">
+            <span class="cic"><i data-lucide="sparkles"></i></span>
+            <span class="ct">Help me plan from scratch<small>I'll ask a few quick questions</small></span>
+          </button>
+          <button class="chip">
+            <span class="cic"><i data-lucide="palmtree"></i></span>
+            <span class="ct">A beach resort in Phuket<small>Family of 6, two young kids</small></span>
+          </button>
+          <button class="chip">
+            <span class="cic"><i data-lucide="building-2"></i></span>
+            <span class="ct">Family-friendly Singapore<small>Easy with grandparents</small></span>
+          </button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- COMPOSER -->
+  <div class="composer-zone">
+    <div class="composer">
+      <div class="input-shell">
+        <textarea id="ta" rows="1" placeholder="Tell me about your trip — who's travelling, and where to?"></textarea>
+        <button class="send-btn" id="send" disabled aria-label="Send">
+          <i data-lucide="arrow-up"></i>
+        </button>
+      </div>
+      <div class="composer-foot">
+        <span class="hint"><span class="enter-text">Press </span><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</span>
+        <a class="form-link" href="#"><i data-lucide="clipboard-list"></i> Prefer a form? Fill your family profile</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  lucide.createIcons();
+  const ta = document.getElementById('ta');
+  const send = document.getElementById('send');
+  const autoGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'; };
+  ta.addEventListener('input', () => { autoGrow(); send.disabled = ta.value.trim() === ''; });
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    ta.value = c.querySelector('.ct').childNodes[0].textContent.trim();
+    ta.focus(); autoGrow(); send.disabled = false;
+  }));
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!send.disabled) { /* would send */ } }
+  });
+</script>
+</body>
+</html>

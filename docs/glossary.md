@@ -1,0 +1,24 @@
+# Glossary
+
+Shared vocabulary for HotelZippo. Terms here are used precisely across specs, prompts, and code.
+
+| Term | Definition |
+|---|---|
+| **Hard flag** | A structural review issue — refurbishment, construction, maintenance, pest, closures, room-quality deterioration — that can ruin a family's stay. Stored in `hotel_intelligence.hard_flags` (array of `{category, description, severity}`). **Must survive end-to-end** (synthesis 08a-1 → consumption 08a-5 → assembly 08b-2 → card 05) and render prominently, above the fold, never collapsed/dismissed. Reference failure: *Holiday Inn Karon*. |
+| **Severity (moderate / severe)** | Hard-flag levels mapped to colour. `moderate` → **amber**, `severe` → **red**. These two hues are reserved exclusively for hard flags — never used for any other UI purpose. |
+| **Family signal** | How much family-specific evidence backs a category, per `hotel_intelligence.family_signal_strength` (`strong` / `thin` / `none`). Drives the verdict language ("Families consistently report…" vs "Fewer family reviews on this…" vs "No family reviews found for this category…"). A hotel whose family signal is `none` across *all four* categories is dropped by the candidate query. |
+| **`low_confidence`** | Boolean on `hotel_intelligence`. `true` when synthesis confidence is low. **Such hotels are never recommended** — excluded by the consumption contract (08a-5) before the assembly LLM ever sees them. |
+| **`evaluate_only`** | Boolean on `trip_briefs`. `true` → the user wants only their `pre_shortlisted_hotels` evaluated; the engine restricts candidates to those named hotels and introduces no alternatives. The assembly output reports `evaluate_only_applied` and `alternatives_introduced`. |
+| **Trip type** | The shape of the trip, weighting the 7 evaluation parameters: **resort-anchored** (hotel is the experience — Maldives, Phuket), **city/activity** (hotel is a functional base — Hong Kong, Singapore), **multi-city/mixed** (brief base — Bali). One of the two hard-gate fields. |
+| **Hard gate** | A required field the concierge will not proceed without — **destination** and **trip type**. If the user is vague, the concierge pushes back firmly-but-warmly in *normal* text (never amber/red — those are reserved for hard flags). |
+| **Trip brief** | Per-trip input (`trip_briefs`): destination, dates, trip type, focus areas, pre-shortlist, evaluate_only. Collected conversationally, one question per message. |
+| **Family profile** | One-time per-user input (`family_profiles`): name, hometown, family members + ages, food preferences, budget tier, brand preferences, notes. Collected at onboarding; reusable across trips. |
+| **Consumption contract** | The deterministic candidate-query rules (08a-5) the Conversation Agent uses to read `hotel_intelligence`: exclude `review_count_total = 0` and `low_confidence`; branch on `evaluate_only`; budget→price_tier map; drop all-`none` family signal; sort by `review_count_family` desc; take top 15. Implemented in `/lib/review-intelligence/query.ts`. |
+| **Budget tier → price tier map** | `value` → {mid-range}; `comfort` → {mid-range, luxury}; `luxury` → {luxury, ultra-luxury}. A mismatch (no hotels in tier) yields a `budget_mismatch` signal, not a silent expansion. |
+| **Brand preference (tiebreaker)** | `family_profiles.brand_preferences` (e.g. Marriott Bonvoy, Hilton Honors). Used **only** as a tiebreaker between near-equal candidates — never a trump card over stronger review signals. IHG properties rank lower unless signals are exceptional. |
+| **Card contract** | The exact mapping from assembly JSON (08b-2) to the UI card fields (05), defined in 08b-6. Display-only hotel metadata (name area, price tier, stars, hero image) is hydrated from `hotels` by `hotel_id`. |
+| **Top pick** | The single, unambiguous best match in a recommendation set. Always present, visually unmistakable from standard cards (border, shadow, badge). The product never presents all options equally. |
+| **Publish to Hotels** | The direct-upsert action (12a) that moves approved `curation_hotels` rows into the live `hotels` table on `(name, destination)`. CSV export is retired. |
+| **Demo intelligence** | 10 hand-authored `hotel_intelligence` records (5 Phuket, 5 Bali) that power the Phase 2–3 vertical slice before the real pipeline (Phase 6). Structure defined in 12d; content authored post-curation. |
+| **Escape hatch** | The "Tell me what you want to do" action in the post-recommendation bar — must always be accessible so users never feel trapped. |
+| **Pipeline run** | One execution of the Review Intelligence worker (Phase 6), tracked in `pipeline_runs` / `pipeline_run_hotels`. Manual admin trigger for v1; only one active run at a time (`one_active_run` index). |

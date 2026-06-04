@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HotelZippo · Family Profile Form</title>
+<link rel="stylesheet" href="tokens.css" />
+<script src="https://unpkg.com/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { background: var(--bg); }
+  .app { min-height: 100dvh; display: flex; flex-direction: column; }
+
+  /* top bar (consistent with chat) */
+  .topbar { flex: none; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--bg) 86%, transparent); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 5; }
+  .brand { display: flex; align-items: baseline; gap: 9px; }
+  .brand .mark { width: 12px; height: 12px; border-radius: 3px; background: var(--primary-500); transform: rotate(45deg); }
+  .brand .name { font-family: var(--font-serif); font-size: 21px; font-weight: 600; letter-spacing: -0.02em; }
+  .brand .name b { color: var(--primary-600); font-weight: 600; }
+  .back-link { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: var(--r-btn); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: var(--sh-xs); }
+  .back-link:hover { background: var(--surface-2); }
+  .back-link .ico { font-size: 16px; display: inline-flex; }
+  .ico svg { width: 1em; height: 1em; stroke-width: 1.75; }
+
+  /* page */
+  .wrap { flex: 1; width: 100%; max-width: 660px; margin: 0 auto; padding: 40px 24px 64px; }
+  .page-head { margin-bottom: 34px; }
+  .page-head .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary-600); margin-bottom: 14px; }
+  .page-head .eyebrow .ico { font-size: 14px; display: inline-flex; }
+  .page-head h1 { font-family: var(--font-serif); font-weight: 500; font-size: 36px; line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .page-head p { font-size: 16px; line-height: 1.6; color: var(--text-secondary); margin: 0; max-width: 52ch; }
+  .page-head p a { color: var(--primary-600); text-decoration: none; border-bottom: 1px solid var(--primary-200); }
+
+  /* form sections */
+  .section { margin-bottom: 30px; }
+  .section-title { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--text); margin-bottom: 16px; white-space: nowrap; }
+  .section-title .opt { white-space: nowrap; }
+  .section-title .si { width: 28px; height: 28px; border-radius: 8px; background: var(--primary-50); color: var(--primary-600); display: grid; place-items: center; flex: none; }
+  .section-title .si .ico { font-size: 15px; display: inline-flex; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 22px; box-shadow: var(--sh-sm); }
+
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  .field > label { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .field .req { color: var(--primary-500); }
+  .field .opt { font-weight: 400; color: var(--text-tertiary); font-size: 12px; }
+  .hint { font-size: 12.5px; color: var(--text-tertiary); margin-top: 7px; line-height: 1.45; }
+
+  .input, .textarea {
+    width: 100%; font-family: var(--font-sans); font-size: 15px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-input);
+    padding: 12px 14px; transition: border-color var(--dur-fast), box-shadow var(--dur-fast); outline: none;
+  }
+  .input::placeholder, .textarea::placeholder { color: var(--text-tertiary); }
+  .input:focus, .textarea:focus { border-color: var(--primary-400); box-shadow: var(--ring-primary); }
+  .textarea { resize: vertical; min-height: 92px; line-height: 1.55; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* validation */
+  .field.invalid .input, .field.invalid .textarea { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-bg); }
+  .err { display: none; align-items: center; gap: 6px; font-size: 12.5px; color: var(--red-text); margin-top: 7px; }
+  .field.invalid .err { display: flex; }
+  .err .ico { font-size: 14px; display: inline-flex; }
+  .field.valid .input { border-color: var(--success); }
+  .check-ok { display: none; }
+
+  /* family members repeater */
+  .members { display: flex; flex-direction: column; gap: 12px; }
+  .member { display: flex; gap: 12px; align-items: flex-end; }
+  .member .grow { flex: 1; }
+  .member-age { width: 96px; flex: none; }
+  .member .small-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 7px; display: block; }
+  .member-remove { flex: none; width: 44px; height: 44px; border-radius: var(--r-input); border: 1px solid var(--border); background: var(--surface); color: var(--text-tertiary); cursor: pointer; display: grid; place-items: center; transition: all var(--dur-fast); }
+  .member-remove:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
+  .member-remove .ico { font-size: 17px; display: inline-flex; }
+  .add-member { margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 16px; border-radius: var(--r-btn); border: 1px dashed var(--border-strong); background: var(--surface); color: var(--text); font-family: var(--font-sans); font-size: 14px; font-weight: 600; cursor: pointer; transition: all var(--dur-fast); }
+  .add-member:hover { border-color: var(--primary-300); color: var(--primary-700); background: var(--primary-50); }
+  .add-member .ico { font-size: 16px; display: inline-flex; }
+  .spouse-toggle { display: flex; align-items: center; gap: 11px; padding: 13px 15px; border: 1px solid var(--border-strong); border-radius: var(--r-input); cursor: pointer; }
+  .spouse-toggle:hover { background: var(--surface-2); }
+
+  /* toggles (food) */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; border-bottom: 1px solid var(--border); }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-row .tr-label { font-size: 14.5px; font-weight: 500; }
+  .toggle-row .tr-sub { font-size: 12.5px; color: var(--text-tertiary); margin-top: 2px; }
+  .switch { position: relative; width: 46px; height: 27px; flex: none; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 2; }
+  .switch .slider { position: absolute; inset: 0; background: var(--surface-3); border-radius: 999px; transition: background var(--dur-base); }
+  .switch .slider::before { content: ''; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%; background: #fff; box-shadow: var(--sh-sm); transition: transform var(--dur-base) var(--ease-out); }
+  .switch input:checked + .slider { background: var(--primary-500); }
+  .switch input:checked + .slider::before { transform: translateX(19px); }
+  .switch input:focus-visible + .slider { box-shadow: var(--ring-primary); }
+
+  /* budget segmented */
+  .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .seg { position: relative; cursor: pointer; }
+  .seg input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+  .seg .seg-box { border: 1px solid var(--border-strong); border-radius: var(--r-input); padding: 15px 14px; text-align: left; transition: all var(--dur-fast); height: 100%; }
+  .seg .seg-name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14.5px; margin-bottom: 4px; }
+  .seg .seg-name .ico { font-size: 16px; color: var(--text-tertiary); display: inline-flex; transition: color var(--dur-fast); }
+  .seg .seg-desc { font-size: 12px; color: var(--text-tertiary); line-height: 1.4; }
+  .seg input:checked + .seg-box { border-color: var(--primary-500); background: var(--primary-50); box-shadow: var(--ring-primary); }
+  .seg input:checked + .seg-box .seg-name .ico { color: var(--primary-600); }
+  .seg input:focus-visible + .seg-box { box-shadow: var(--ring-primary); }
+  .seg:hover .seg-box { border-color: var(--border-strong); background: var(--surface-2); }
+  .seg input:checked + .seg-box:hover { background: var(--primary-50); }
+
+  /* brand multi-select chips */
+  .brand-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .bchip { position: relative; cursor: pointer; }
+  .bchip input { position: absolute; opacity: 0; }
+  .bchip .bc-box { display: inline-flex; align-items: center; gap: 9px; padding: 10px 15px; border: 1px solid var(--border-strong); border-radius: var(--r-pill); font-size: 14px; font-weight: 500; transition: all var(--dur-fast); white-space: nowrap; }
+  .bchip .bc-box .tick { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; transition: all var(--dur-fast); }
+  .bchip .bc-box .tick .ico { font-size: 11px; color: #fff; opacity: 0; display: inline-flex; }
+  .bchip input:checked + .bc-box { border-color: var(--primary-500); background: var(--primary-50); color: var(--primary-800); }
+  .bchip input:checked + .bc-box .tick { background: var(--primary-500); border-color: var(--primary-500); }
+  .bchip input:checked + .bc-box .tick .ico { opacity: 1; }
+  .bchip input:focus-visible + .bc-box { box-shadow: var(--ring-primary); }
+  .bchip:hover .bc-box { border-color: var(--border-strong); background: var(--surface-2); }
+  .bchip input:checked:hover + .bc-box { background: var(--primary-50); }
+
+  /* submit */
+  .form-foot { display: flex; align-items: center; gap: 16px; margin-top: 32px; }
+  .submit-btn { flex: none; display: inline-flex; align-items: center; gap: 9px; height: 52px; padding: 0 28px; border-radius: var(--r-btn); border: 0; background: var(--primary-500); color: #fff; font-family: var(--font-sans); font-weight: 600; font-size: 15.5px; cursor: pointer; box-shadow: var(--sh-md); transition: background var(--dur-fast), transform var(--dur-fast); }
+  .submit-btn:hover { background: var(--primary-600); }
+  .submit-btn:active { transform: scale(0.99); }
+  .submit-btn .ico { font-size: 18px; display: inline-flex; }
+  .foot-note { font-size: 13px; color: var(--text-tertiary); line-height: 1.45; }
+
+  /* success toast */
+  .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(140%); background: var(--text); color: var(--text-on-dark); padding: 14px 20px; border-radius: var(--r-btn); box-shadow: var(--sh-lg); display: flex; align-items: center; gap: 11px; font-size: 14.5px; font-weight: 500; z-index: 60; transition: transform var(--dur-slow) var(--ease-out); max-width: 90vw; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast .ico { font-size: 18px; color: var(--primary-300); display: inline-flex; }
+
+  @media (max-width: 560px) {
+    .topbar { height: 56px; padding: 0 16px; }
+    .back-link .lbl { display: none; } .back-link { padding: 0 11px; }
+    .wrap { padding: 26px 16px 56px; }
+    .page-head h1 { font-size: 28px; }
+    .row2 { grid-template-columns: 1fr; }
+    .segmented { grid-template-columns: 1fr; }
+    .member { flex-wrap: wrap; gap: 10px; }
+    .member .grow { flex: 1 1 100%; }
+    .member-age { flex: 1; }
+    .form-foot { flex-direction: column; align-items: stretch; }
+    .submit-btn { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark"></span><span class="name">Hotel<b>Zippo</b></span></div>
+    <button class="back-link" onclick="window.location.href='HotelZippo Prototype.html'"><span class="ico"><i data-lucide="message-circle"></i></span> <span class="lbl">Back to chat</span></button>
+  </header>
+
+  <main class="wrap">
+    <div class="page-head">
+      <div class="eyebrow"><span class="ico"><i data-lucide="clipboard-list"></i></span> Family profile</div>
+      <h1>Tell me about your family, once.</h1>
+      <p>Fill this in and I'll remember it for every trip — no need to repeat yourself. Prefer to chat instead? <a href="HotelZippo Prototype.html">Go back to the conversation.</a></p>
+    </div>
+
+    <form id="profileForm" novalidate>
+
+      <!-- ABOUT YOU -->
+      <div class="section">
+        <div class="section-title"><span class="si"><span class="ico"><i data-lucide="user"></i></span></span> About you</div>
+        <div class="card">
+          <div class="row2">
+            <div class="field" data-validate="required">
+              <label for="name">Your name <span class="req">*</span></label>
+              <input class="input" id="name" type="text" placeholder="e.g. Varun Mehta" />
+              <div class="err"><span class="ico"><i data-lucide="alert-circle"></i></span> Please enter your name</div>
+            </div>
+            <div class="field" data-validate="required">
+              <label for="home">Hometown <span class="req">*</span></label>
+              <input class="input" id="home" type="text" placeholder="e.g. Mumbai" />
+              <div class="err"><span class="ico"><i data-lucide="alert-circle"></i></span> Please enter your hometown</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WHO'S TRAVELLING -->
+      <div class="section">
+        <div class="section-title"><span class="si"><span class="ico"><i data-lucide="users"></i></span></span> Who usually travels</div>
+        <div class="card">
+          <div class="field">
+            <label class="spouse-toggle" style="margin:0">
+              <span class="switch"><input type="checkbox" id="spouse" checked /><span class="slider"></span></span>
+              <span><span class="tr-label" style="display:block">Travelling with a partner / spouse</span><span class="tr-sub">Counts toward room and occupancy planning</span></span>
+            </label>
+          </div>
+
+          <div class="field" style="margin-top:18px">
+            <label>Children <span class="opt">— ages help me plan pools, clubs &amp; cots</span></label>
+            <div class="members" id="members">
+              <div class="member">
+                <div class="grow"><span class="small-label">Child</span><input class="input" type="text" placeholder="Name or nickname (optional)" /></div>
+                <div class="member-age"><span class="small-label">Age</span><input class="input" type="number" min="0" max="17" placeholder="7" /></div>
+                <button type="button" class="member-remove" aria-label="Remove"><span class="ico"><i data-lucide="trash-2"></i></span></button>
+              </div>
+              <div class="member">
+                <div class="grow"><span class="small-label">Child</span><input class="input" type="text" placeholder="Name or nickname (optional)" /></div>
+                <div class="member-age"><span class="small-label">Age</span><input class="input" type="number" min="0" max="17" placeholder="2" /></div>
+                <button type="button" class="member-remove" aria-label="Remove"><span class="ico"><i data-lucide="trash-2"></i></span></button>
+              </div>
+            </div>
+            <button type="button" class="add-member" id="addMember"><span class="ico"><i data-lucide="plus"></i></span> Add a child</button>
+          </div>
+
+          <div class="field" style="margin-top:18px;margin-bottom:0">
+            <label for="others">Anyone else <span class="opt">— grandparents, extended family</span></label>
+            <input class="input" id="others" type="text" placeholder="e.g. 2 grandparents" />
+            <div class="hint">I'll factor in accessibility, quieter rooms, and dietary needs for older travellers.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FOOD -->
+      <div class="section">
+        <div class="section-title"><span class="si"><span class="ico"><i data-lucide="utensils"></i></span></span> Food preferences</div>
+        <div class="card">
+          <div class="toggle-row">
+            <div><div class="tr-label">Vegetarian</div><div class="tr-sub">Prioritise reliable vegetarian options</div></div>
+            <label class="switch"><input type="checkbox" id="veg" checked /><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div><div class="tr-label">Vegan</div><div class="tr-sub">Stricter — no dairy or animal products</div></div>
+            <label class="switch"><input type="checkbox" id="vegan" /><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div><div class="tr-label">Indian food matters</div><div class="tr-sub">Weight hotels with a strong Indian spread</div></div>
+            <label class="switch"><input type="checkbox" id="indian" checked /><span class="slider"></span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- BUDGET -->
+      <div class="section">
+        <div class="section-title"><span class="si"><span class="ico"><i data-lucide="wallet"></i></span></span> Budget tier</div>
+        <div class="segmented">
+          <label class="seg"><input type="radio" name="budget" value="value" />
+            <div class="seg-box"><div class="seg-name"><span class="ico"><i data-lucide="circle-dollar-sign"></i></span> Value</div><div class="seg-desc">Smart, dependable stays</div></div></label>
+          <label class="seg"><input type="radio" name="budget" value="comfort" checked />
+            <div class="seg-box"><div class="seg-name"><span class="ico"><i data-lucide="gem"></i></span> Comfort</div><div class="seg-desc">A step up, room to relax</div></div></label>
+          <label class="seg"><input type="radio" name="budget" value="luxury" />
+            <div class="seg-box"><div class="seg-name"><span class="ico"><i data-lucide="crown"></i></span> Luxury</div><div class="seg-desc">The best the place offers</div></div></label>
+        </div>
+      </div>
+
+      <!-- BRANDS -->
+      <div class="section">
+        <div class="section-title"><span class="si"><span class="ico"><i data-lucide="badge-check"></i></span></span> Loyalty programmes <span class="opt" style="font-weight:400;color:var(--text-tertiary)">— optional</span></div>
+        <div class="brand-chips">
+          <label class="bchip"><input type="checkbox" value="bonvoy" checked /><span class="bc-box"><span class="tick"><span class="ico"><i data-lucide="check"></i></span></span> Marriott Bonvoy</span></label>
+          <label class="bchip"><input type="checkbox" value="hilton" /><span class="bc-box"><span class="tick"><span class="ico"><i data-lucide="check"></i></span></span> Hilton Honors</span></label>
+          <label class="bchip"><input type="checkbox" value="ihg" /><span class="bc-box"><span class="tick"><span class="ico"><i data-lucide="check"></i></span></span> IHG One Rewards</span></label>
+          <label class="bchip"><input type="checkbox" value="none" /><span class="bc-box"><span class="tick"><span class="ico"><i data-lucide="check"></i></span></span> No preference</span></label>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="section">
+        <div class="section-title"><span class="si"><span class="ico"><i data-lucide="sparkles"></i></span></span> Anything else <span class="opt" style="font-weight:400;color:var(--text-tertiary)">— optional</span></div>
+        <div class="card">
+          <div class="field" style="margin:0">
+            <label for="notes">Freestyle notes</label>
+            <textarea class="textarea" id="notes" placeholder="e.g. We love being near night markets and main attractions. A calm, shallow beach for our 2-year-old is a big plus, and a kids' club is a bonus."></textarea>
+            <div class="hint">The little things that make a trip yours — favourite spots, must-haves, or things to avoid.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-foot">
+        <button type="submit" class="submit-btn"><span class="ico"><i data-lucide="check"></i></span> Save my profile</button>
+        <span class="foot-note">You can edit any of this later, or just tell me in chat.</span>
+      </div>
+    </form>
+  </main>
+</div>
+
+<div class="toast" id="toast"><span class="ico"><i data-lucide="check-circle-2"></i></span> Profile saved — I'll remember this for every trip.</div>
+
+<script>
+  lucide.createIcons();
+
+  // inline validation on blur (not on submit)
+  function validateField(field) {
+    const input = field.querySelector('.input');
+    const ok = input.value.trim() !== '';
+    field.classList.toggle('invalid', !ok);
+    field.classList.toggle('valid', ok);
+    return ok;
+  }
+  document.querySelectorAll('.field[data-validate="required"]').forEach(field => {
+    const input = field.querySelector('.input');
+    input.addEventListener('blur', () => validateField(field));
+    input.addEventListener('input', () => { if (field.classList.contains('invalid')) validateField(field); });
+  });
+
+  // family members repeater
+  const members = document.getElementById('members');
+  document.getElementById('addMember').addEventListener('click', () => {
+    const m = document.createElement('div');
+    m.className = 'member';
+    m.innerHTML = `<div class="grow"><span class="small-label">Child</span><input class="input" type="text" placeholder="Name or nickname (optional)" /></div>
+      <div class="member-age"><span class="small-label">Age</span><input class="input" type="number" min="0" max="17" placeholder="Age" /></div>
+      <button type="button" class="member-remove" aria-label="Remove"><span class="ico"><i data-lucide="trash-2"></i></span></button>`;
+    members.appendChild(m);
+    lucide.createIcons();
+    m.querySelector('input').focus();
+  });
+  members.addEventListener('click', (e) => {
+    const btn = e.target.closest('.member-remove');
+    if (btn && members.children.length > 1) btn.closest('.member').remove();
+  });
+
+  // "no preference" clears other brand chips
+  const brandChips = [...document.querySelectorAll('.brand-chips input')];
+  brandChips.forEach(cb => cb.addEventListener('change', () => {
+    if (cb.value === 'none' && cb.checked) brandChips.forEach(o => { if (o.value !== 'none') o.checked = false; });
+    else if (cb.value !== 'none' && cb.checked) { const none = brandChips.find(o => o.value === 'none'); if (none) none.checked = false; }
+  }));
+
+  // vegan implies vegetarian
+  document.getElementById('vegan').addEventListener('change', (e) => { if (e.target.checked) document.getElementById('veg').checked = true; });
+
+  // ===== embedded-overlay bridge =====
+  const embedded = window.parent && window.parent !== window;
+  function closeForm() {
+    if (embedded) window.parent.postMessage({ type: 'hz-close-form' }, '*');
+    else window.location.href = 'HotelZippo Prototype.html';
+  }
+  document.querySelector('.back-link').addEventListener('click', closeForm);
+  const introLink = document.querySelector('.page-head a');
+  if (introLink) introLink.addEventListener('click', (e) => { e.preventDefault(); closeForm(); });
+
+  function buildSummary() {
+    const adults = document.getElementById('spouse').checked ? 2 : 1;
+    const kids = [...document.querySelectorAll('#members .member')].length;
+    const others = document.getElementById('others').value.trim();
+    const total = adults + kids;
+    let who = `${total} guest${total !== 1 ? 's' : ''}`;
+    const parts = [`${adults} adult${adults !== 1 ? 's' : ''}`];
+    if (kids) parts.push(`${kids} kid${kids !== 1 ? 's' : ''}`);
+    if (others) parts.push(others);
+    who += ' · ' + parts.join(', ');
+
+    const veg = document.getElementById('veg').checked;
+    const vegan = document.getElementById('vegan').checked;
+    const indian = document.getElementById('indian').checked;
+    const foodBits = [vegan ? 'Vegan' : (veg ? 'Vegetarian' : null), indian ? 'Indian important' : null].filter(Boolean);
+    const food = foodBits.length ? foodBits.join(' · ') : 'No special needs';
+
+    const budgetMap = { value: 'Value', comfort: 'Comfort', luxury: 'Luxury' };
+    const budgetEl = document.querySelector('input[name="budget"]:checked');
+    const budget = budgetEl ? budgetMap[budgetEl.value] : 'Comfort';
+
+    return { name: document.getElementById('name').value.trim(), who, food, budget };
+  }
+
+  // submit
+  document.getElementById('profileForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    let allOk = true;
+    document.querySelectorAll('.field[data-validate="required"]').forEach(f => { if (!validateField(f)) allOk = false; });
+    if (!allOk) { const first = document.querySelector('.field.invalid .input'); if (first) first.focus(); return; }
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    if (embedded) {
+      setTimeout(() => window.parent.postMessage(Object.assign({ type: 'hz-form-saved' }, buildSummary()), '*'), 950);
+    } else {
+      setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+  });
+</script>
+</body>
+</html>
