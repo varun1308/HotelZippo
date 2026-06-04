@@ -1,0 +1,37 @@
+{
+  "hotel_name": "Holiday Inn Resort Phuket Karon Beach",
+  "destination": "Phuket",
+  "rooms_summary": "The Kids Suites with bunk beds and a separate children's zone are the reason most families book here, and when they get one in the renovated block reviews are warm. However, a large and growing share of recent reviews report being placed in rooms adjoining or above an active refurbishment, with noise, dust, and a chemical smell — this is the dominant recent theme (see hard flags).",
+  "facilities_summary": "Two pools, a kids' pool, and a children's activity programme are well regarded, and the location next to Karon Beach is convenient. Facilities themselves are not the problem; the issue families raise is that parts of the resort have been fenced off during works.",
+  "food_summary": "Breakfast is described as adequate and child-friendly with a decent spread, though without the standout praise the higher-end resorts get. A few reviews mention limited evening variety.",
+  "location_summary": "Directly opposite Karon Beach with shops and restaurants in easy walking distance — families value being able to walk to dinner and the beach without a taxi. The flip side is more road noise and a busier, less resort-cocooned feel than the Mai Khao properties.",
+  "hard_flags": [
+    {
+      "category": "refurbishment",
+      "description": "A major, resort-wide refurbishment is ongoing and dominates recent reviews: families report being assigned rooms beside active construction with sustained daytime noise, dust, paint fumes, and fenced-off pool and grounds areas. Multiple reviewers say they were not warned at booking and that room moves were refused due to full occupancy. This is severe and current.",
+      "severity": "severe",
+      "review_evidence_count": 47
+    }
+  ],
+  "conflicting_signals": {
+    "rooms": "Kids Suites are loved when renovated, but a large share report construction-adjacent rooms — a sharp split driven entirely by which block you are given.",
+    "facilities": "Pools and kids' programme rated well; undercut by sections closed for works.",
+    "food": "Broadly fine; no strong signal either way.",
+    "location": "Praised for walkability; criticised for road noise."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "thin",
+    "food": "thin",
+    "location": "strong"
+  },
+  "supporting_phrases": {
+    "rooms": ["the kids loved their bunk-bed suite", "we were put next to the building works and couldn't sleep"],
+    "facilities": ["kids' pool was great when it was open", "half the grounds were fenced off"],
+    "food": ["breakfast was fine for the children"],
+    "location": ["walked to the beach and dinner every night", "some traffic noise at the front"]
+  },
+  "indian_food_signal": "Thin. Little specific mention of Indian or vegetarian provision in reviews; one family noted they ate out given the nearby Karon restaurants.",
+  "review_count_family": 356,
+  "review_count_total": 1800
+}

@@ -1,0 +1,37 @@
+{
+  "hotel_name": "JW Marriott Phuket Resort & Spa",
+  "destination": "Phuket",
+  "rooms_summary": "Families consistently call the rooms spacious and well-suited to travelling with young children — most reviews mention easily fitting a rollaway or sharing a king with toddlers, and the ground-floor garden rooms get repeated praise for letting kids run straight out to the lawn. A minority note that the older wing rooms feel tired, which ties into the partial refurbishment underway (see hard flags).",
+  "facilities_summary": "The standout for families is the large free-form pool with a dedicated shallow kids' section and the supervised kids' club, which parents describe as genuinely engaging for ages 3-10. The kids' club hours and the daily activity programme come up often as the reason a second visit happened. Stroller-friendly paths and a quiet beach are repeatedly noted.",
+  "food_summary": "Buffet breakfast is praised for variety and for handling fussy young eaters; staff are described as proactive about allergies and child portions. A recurring positive is that the kitchen will prepare plain rice, dal, and mild curries on request even though they are not on the standard menu.",
+  "location_summary": "Set on quiet Mai Khao Beach, well away from Patong nightlife — reviewers with young children specifically value the calm, the long flat beach, and that it feels safe to let children play. The trade-off, mentioned by some, is that it is far from town and you are reliant on the resort or taxis for variety.",
+  "hard_flags": [
+    {
+      "category": "refurbishment",
+      "description": "A partial wing refurbishment is in progress; a moderate number of recent reviews mention daytime construction noise and a closed section of the grounds. Not resort-wide, and reception reportedly reassigns rooms away from the works on request.",
+      "severity": "moderate",
+      "review_evidence_count": 14
+    }
+  ],
+  "conflicting_signals": {
+    "rooms": "Most call the rooms spacious and family-friendly; a minority describe the un-renovated wing as dated and worn.",
+    "facilities": "Broad agreement that facilities are excellent; isolated complaints that the kids' club books up in peak season.",
+    "food": "Strongly positive overall; a few find the buffet repetitive across a long stay.",
+    "location": "Loved for its calm by families; criticised as too remote by those wanting nightlife or shopping."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "strong",
+    "food": "strong",
+    "location": "strong"
+  },
+  "supporting_phrases": {
+    "rooms": ["garden rooms were perfect for our toddler", "plenty of space for the travel cot"],
+    "facilities": ["kids' club kept our two entertained all day", "shallow pool section was ideal for the little ones"],
+    "food": ["they made mild dal for our daughter without being asked twice", "breakfast had something for every fussy eater"],
+    "location": ["beach was calm and safe for the children", "loved being away from the Patong chaos"]
+  },
+  "indian_food_signal": "Strong. Multiple Indian families note the kitchen prepares plain rice, dal, and mild curries on request, and that breakfast reliably includes vegetarian options; one review mentions the chef came out to discuss Jain requirements.",
+  "review_count_family": 412,
+  "review_count_total": 4200
+}

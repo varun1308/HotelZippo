@@ -1,0 +1,37 @@
+{
+  "hotel_name": "Hilton Bali Resort",
+  "destination": "Bali",
+  "rooms_summary": "Rooms are described as spacious and recently updated, with large balconies and clifftop ocean views that family reviewers love. Family rooms and connecting options are noted as generous, and condition complaints are uncommon.",
+  "facilities_summary": "Families rate the multi-level pools, the kids' club, and the on-site activities highly, and several mention the bowling alley and games room as wet-weather saviours. The resort sits on a clifftop, so beach access is via an inclined lift or stairs — see hard flags.",
+  "food_summary": "Breakfast is large and varied with good children's options; multiple outlets cover different cuisines. Staff are described as friendly and quick to accommodate young children. A few reviews find dinner prices high.",
+  "location_summary": "On the Nusa Dua clifftop above a quiet cove beach. Families value the views and the calm, protected beach below, but repeatedly note the descent matters with young children and prams (see hard flags).",
+  "hard_flags": [
+    {
+      "category": "accessibility",
+      "description": "The resort is on a clifftop with the beach reached by an inclined lift and steps. A moderate number of families with prams and young children report queues for the lift at peak times and difficulty when it is under maintenance, making spontaneous trips to the sand harder than at a beachfront resort.",
+      "severity": "moderate",
+      "review_evidence_count": 18
+    }
+  ],
+  "conflicting_signals": {
+    "rooms": "Consistently rated spacious and updated.",
+    "facilities": "Strongly positive; the clifftop beach access is the recurring qualifier.",
+    "food": "Broadly praised; some find dinner pricey.",
+    "location": "Stunning views and a calm cove versus the effort of the cliff descent with children."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "strong",
+    "food": "strong",
+    "location": "thin"
+  },
+  "supporting_phrases": {
+    "rooms": ["huge room with an incredible clifftop view", "connecting rooms were perfect for the family"],
+    "facilities": ["the bowling alley saved us on a rainy afternoon", "kids' club was excellent"],
+    "food": ["plenty of breakfast choice for the children", "dinner was a touch expensive"],
+    "location": ["the cove beach was calm and lovely", "the lift down to the beach got busy and was a faff with the pram"]
+  },
+  "indian_food_signal": "Moderate. Reviews note dependable vegetarian breakfast options and willingness to adjust spice for children; specific Indian dishes are mentioned occasionally.",
+  "review_count_family": 342,
+  "review_count_total": 3800
+}

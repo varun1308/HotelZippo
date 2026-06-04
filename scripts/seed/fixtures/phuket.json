@@ -36,6 +36,30 @@
     "images": ["https://example.test/holiday-inn-karon-hero.jpg"]
   },
   {
+    "name": "Hilton Phuket Arcadia Resort & Spa",
+    "destination": "Phuket",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Hilton-Phuket-Arcadia",
+    "tripadvisor_rank": 18,
+    "review_count": 5200,
+    "google_place_id": "ChIJexample_hiltonarcadia",
+    "brand": "Hilton",
+    "price_tier": "mid-range",
+    "star_rating": 5,
+    "images": ["https://example.test/hilton-arcadia-hero.jpg"]
+  },
+  {
+    "name": "Sri Panwa Phuket Luxury Pool Villa Hotel",
+    "destination": "Phuket",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Sri-Panwa-Phuket",
+    "tripadvisor_rank": 9,
+    "review_count": 1500,
+    "google_place_id": "ChIJexample_sripanwa",
+    "brand": "Independent",
+    "price_tier": "ultra-luxury",
+    "star_rating": 5,
+    "images": ["https://example.test/sri-panwa-hero.jpg"]
+  },
+  {
     "name": "Low Review Beach Hut",
     "destination": "Phuket",
     "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Low-Review-Hut",

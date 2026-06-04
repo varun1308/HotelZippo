@@ -1,0 +1,30 @@
+{
+  "hotel_name": "Angsana Laguna Phuket",
+  "destination": "Phuket",
+  "rooms_summary": "Rooms are described as bright, modern, and large enough for a family of four, with the loft and two-bedroom layouts singled out by parents travelling with two children. Reviewers consistently report the rooms are well-maintained with no dating or maintenance complaints of note.",
+  "facilities_summary": "The headline for families is the enormous lagoon pool system with waterslides and a separate toddler pool, plus a well-run kids' club and complimentary non-motorised watersports. Parents repeatedly say the sheer amount of free, on-site activity meant they never needed to leave. Pram access throughout is described as easy.",
+  "food_summary": "Multiple dining outlets get consistent praise; the breakfast spread is called one of the best on the island and is noted as accommodating to children, with a kids' buffet height counter that parents found thoughtful. No recurring complaints.",
+  "location_summary": "Part of the integrated Laguna complex on Bang Tao Beach, with a free shuttle and shared facilities across neighbouring resorts. Families value the safe, gated, walkable layout and the calm beach; a few note the beach itself is pleasant rather than spectacular.",
+  "hard_flags": [],
+  "conflicting_signals": {
+    "rooms": "Uniformly positive — no meaningful conflict in the reviews.",
+    "facilities": "Strong consensus the facilities are a highlight; the only friction is peak-season crowding at the main slide.",
+    "food": "Consistently praised across outlets and breakfast.",
+    "location": "Valued for safety and the shuttle; a minority find the beach unremarkable."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "strong",
+    "food": "strong",
+    "location": "strong"
+  },
+  "supporting_phrases": {
+    "rooms": ["the two-bedroom loft was ideal for us and the kids", "spotless and modern"],
+    "facilities": ["the waterslides alone made the holiday for our two boys", "free watersports kept everyone busy"],
+    "food": ["best breakfast we had in Thailand", "the kids' counter at their height was a lovely touch"],
+    "location": ["safe and gated, we let the children walk ahead", "shuttle made the whole complex easy with a pram"]
+  },
+  "indian_food_signal": "Moderate. Reviews note good vegetarian breakfast availability and that staff accommodate spice-level requests, though specific Indian dishes are mentioned less often than at the JW Marriott.",
+  "review_count_family": 298,
+  "review_count_total": 3100
+}

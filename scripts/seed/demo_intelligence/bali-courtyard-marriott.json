@@ -1,0 +1,30 @@
+{
+  "hotel_name": "Courtyard by Marriott Bali Nusa Dua",
+  "destination": "Bali",
+  "rooms_summary": "Rooms are described as modern, clean, and a sensible size for families on a mid-range budget, with the family rooms and connecting options called out as good value. Some reviewers note the rooms are functional rather than luxurious, which matches the price point, but maintenance is consistently fine.",
+  "facilities_summary": "The lagoon-style pool with a children's area and waterslide is the family favourite, alongside an active kids' programme. Families repeatedly frame this as strong value-for-money in Nusa Dua. It is not beachfront — the beach is a short shuttle or walk — which a few reviewers flag.",
+  "food_summary": "Breakfast is well rated for variety and children's options, and — most distinctively — the kitchen is repeatedly praised by Indian guests. Reviews mention a dedicated Indian section at breakfast on busier days, reliable dal and curries, and staff who understand vegetarian and Jain requirements without fuss.",
+  "location_summary": "In central Nusa Dua, a short walk or shuttle from the beach and close to the Bali Collection shopping and dining. Families value the easy access to restaurants and a supermarket for baby supplies; the trade-off is it is not directly on the sand.",
+  "hard_flags": [],
+  "conflicting_signals": {
+    "rooms": "Rated clean and good value; described as functional rather than plush — consistent with the brand.",
+    "facilities": "Pool and kids' programme praised; the lack of direct beachfront is the main caveat.",
+    "food": "Strongly positive, especially among Indian guests; a few find the dinner menu limited.",
+    "location": "Convenient for shops and dining; not on the beach itself."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "strong",
+    "food": "strong",
+    "location": "thin"
+  },
+  "supporting_phrases": {
+    "rooms": ["clean, modern and great value for a family", "connecting rooms worked well for us"],
+    "facilities": ["the kids loved the slide and pool", "brilliant value compared to the five-stars"],
+    "food": ["as an Indian family we were so well looked after at breakfast", "they made fresh dal and mild curry for the children every day"],
+    "location": ["handy for the shops and a supermarket", "wish it were right on the beach"]
+  },
+  "indian_food_signal": "Strong. This is the standout property for Indian families in the demo set — repeated reviews cite a dedicated Indian breakfast section, reliable dal and mild curries for children, and staff fluent in vegetarian and Jain requirements. Several Indian families name it as the reason they booked.",
+  "review_count_family": 274,
+  "review_count_total": 2900
+}

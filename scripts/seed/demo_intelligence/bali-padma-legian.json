@@ -1,0 +1,30 @@
+{
+  "hotel_name": "Padma Resort Legian",
+  "destination": "Bali",
+  "rooms_summary": "Rooms are described as comfortable, well-kept, and a good size for families, with garden and pool views that reviewers like. The deluxe rooms are noted as fitting a family of four without feeling cramped, and condition complaints are rare.",
+  "facilities_summary": "Families rate the large pool with a children's section and waterslide, the well-run kids' club, and the direct beach access highly. The tropical garden setting and the daily kids' programme are repeatedly cited as reasons families return. Grounds are pram-friendly.",
+  "food_summary": "Breakfast is praised for variety and for children's options, and the all-day dining is considered solid. Staff are described as warm and good with children. No recurring food complaints.",
+  "location_summary": "On Legian Beach, walkable to shops and restaurants while still set in its own gardens — families value being able to step out for dinner yet retreat to a quiet resort. Legian's beach surf is noted by some as stronger than the calm Nusa Dua bays, so supervision is advised.",
+  "hard_flags": [],
+  "conflicting_signals": {
+    "rooms": "Consistently rated comfortable and well-maintained.",
+    "facilities": "Strong agreement the pool and kids' club are excellent.",
+    "food": "Broadly praised; no notable conflict.",
+    "location": "Loved for walkability; the open-ocean surf is flagged by some as needing care with young swimmers."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "strong",
+    "food": "strong",
+    "location": "strong"
+  },
+  "supporting_phrases": {
+    "rooms": ["roomy and well looked after", "the deluxe was great for the four of us"],
+    "facilities": ["the kids' club and slide were a hit", "loved walking straight onto the beach"],
+    "food": ["breakfast kept the children happy every morning", "staff were lovely with our kids"],
+    "location": ["easy to walk out for dinner", "the surf was a bit strong so we watched the kids closely"]
+  },
+  "indian_food_signal": "Moderate. Reviews mention good vegetarian availability and spice-level flexibility; some Indian families note they were comfortable, without it being a marquee feature.",
+  "review_count_family": 351,
+  "review_count_total": 4100
+}
