@@ -1,0 +1,37 @@
+{
+  "hotel_name": "Sri Panwa Phuket Luxury Pool Villa Hotel",
+  "destination": "Phuket",
+  "rooms_summary": "The pool villas are described as stunning, private, and spacious, with the private pool being the most-praised single feature. For families this cuts both ways: the space is ample, but reviewers note the hillside villas have steps, level changes, and unfenced private pools that several parents of toddlers flagged as a supervision concern.",
+  "facilities_summary": "Reviews skew towards couples and honeymooners; the spa, the cliff-top bar, and the infinity views dominate. There is a small kids' offering but families report it is limited compared with the big beach resorts, and the property is not primarily set up around children.",
+  "food_summary": "Dining is rated highly for quality and setting, particularly the views, though it is positioned as a romantic, premium experience rather than a family buffet operation. Limited mention of dedicated children's menus.",
+  "location_summary": "Perched on Cape Panwa with dramatic sea views, but set on a steep headland away from a swimmable resort beach — families note a lot of buggy rides up and down the hill and that there is no easy flat beach for young children to play on.",
+  "hard_flags": [
+    {
+      "category": "child-safety",
+      "description": "A moderate number of reviews from parents of young children note unfenced private villa pools combined with steps and steep paths around the hillside villas, calling for constant supervision. Not a maintenance fault, but a layout consideration for under-5s.",
+      "severity": "moderate",
+      "review_evidence_count": 11
+    }
+  ],
+  "conflicting_signals": {
+    "rooms": "Villas are universally admired for luxury and space, yet the same features (private pool, steps) are raised as toddler risks.",
+    "facilities": "Superb for couples; described as thin for children.",
+    "food": "High quality; not oriented to family dining.",
+    "location": "Spectacular views versus a steep, beach-light setting for small children."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "thin",
+    "food": "thin",
+    "location": "none"
+  },
+  "supporting_phrases": {
+    "rooms": ["the private pool villa was breathtaking", "lovely space but the pool wasn't fenced for our toddler"],
+    "facilities": ["perfect for a couple, less so with young kids", "limited for children compared to the beach resorts"],
+    "food": ["incredible dinner with a view", "not really set up for fussy little ones"],
+    "location": ["the views are unreal", "no proper beach for the children and lots of hills"]
+  },
+  "indian_food_signal": "Thin. Few reviews reference Indian or vegetarian provision; the property's dining is positioned as fine-dining rather than buffet, so requests are handled à la carte.",
+  "review_count_family": 96,
+  "review_count_total": 1500
+}

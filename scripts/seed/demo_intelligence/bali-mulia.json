@@ -1,0 +1,30 @@
+{
+  "hotel_name": "The Mulia Bali",
+  "destination": "Bali",
+  "rooms_summary": "Rooms and suites are described as exceptionally large, immaculate, and modern, with marble bathrooms and big balconies that family reviewers love. The entry-level rooms are noted as comfortably fitting a family with two children, and maintenance complaints are essentially absent.",
+  "facilities_summary": "The headline for families is the multiple oceanfront pools — including a long, shallow lagoon pool that parents say is ideal for children — plus an extensive daily activity programme. The beachfront is calm and the grounds are flat and very stroller-friendly. Reviewers consistently call the facilities best-in-class for Nusa Dua.",
+  "food_summary": "The breakfast at Soleil is repeatedly singled out as one of the best in Bali, with enormous variety and strong handling of children's and dietary needs. Multiple outlets cater to different tastes, and staff are described as attentive to young children.",
+  "location_summary": "On the calm, protected Nusa Dua beach — families specifically value the gentle water, the flat walkable grounds, and the safe, gated setting. The trade-off is that Nusa Dua is a resort enclave, so reviewers note you travel out for Balinese culture and atmosphere.",
+  "hard_flags": [],
+  "conflicting_signals": {
+    "rooms": "Uniform praise for size and condition; no meaningful conflict.",
+    "facilities": "Strong consensus the pools and beach are excellent; peak-season sun-lounger competition is the only gripe.",
+    "food": "Breakfast near-universally praised; a few find à la carte dinners pricey.",
+    "location": "Loved for calm and safety; criticised as an enclave lacking local character."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "strong",
+    "food": "strong",
+    "location": "strong"
+  },
+  "supporting_phrases": {
+    "rooms": ["the room was enormous and spotless", "plenty of space for our two children"],
+    "facilities": ["the lagoon pool was perfect for the kids", "flat grounds made the pram so easy"],
+    "food": ["breakfast was the best we've ever had", "they looked after our toddler beautifully"],
+    "location": ["calm, safe beach for the children", "very much a resort bubble, but a lovely one"]
+  },
+  "indian_food_signal": "Moderate. Reviews note strong vegetarian breakfast variety and accommodating staff; specific Indian dishes mentioned occasionally rather than as a standout.",
+  "review_count_family": 487,
+  "review_count_total": 5600
+}

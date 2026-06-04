@@ -1,0 +1,30 @@
+{
+  "hotel_name": "Komaneka at Bisma Ubud",
+  "destination": "Bali",
+  "rooms_summary": "Rooms and pool suites are described as beautiful, calm, and immaculately kept, with valley views over the Bisma rice terraces that reviewers adore. The space is generous, but the property's appeal skews to couples and culture-focused travellers, and family-specific room feedback is sparse.",
+  "facilities_summary": "The infinity pool over the valley, the spa, and the serene jungle setting dominate reviews. There is no kids' club or children's programme, and very few reviews discuss facilities for young children — the property is not oriented around family activity.",
+  "food_summary": "Dining is rated highly for quality and the terrace setting, framed as a romantic, scenic experience. Children's menus and family buffet provision are barely mentioned.",
+  "location_summary": "On Jalan Bisma in central Ubud, inland with no beach — surrounded by rice fields and a short walk from Ubud's galleries, cafes, and the Monkey Forest. Families note it suits an older-children culture trip rather than a beach-and-pool holiday with toddlers, and that the steep valley walk back up is tiring.",
+  "hard_flags": [],
+  "conflicting_signals": {
+    "rooms": "Universally admired for beauty and calm; little signal on family suitability either way.",
+    "facilities": "Superb for couples and relaxation; effectively no children's facilities.",
+    "food": "High quality and scenic; not framed around family dining.",
+    "location": "Idyllic Ubud setting versus no beach and a steep valley walk for young children."
+  },
+  "family_signal_strength": {
+    "rooms": "thin",
+    "facilities": "none",
+    "food": "none",
+    "location": "none"
+  },
+  "supporting_phrases": {
+    "rooms": ["the pool suite over the valley was magical", "beautifully kept and peaceful"],
+    "facilities": ["perfect for a relaxing couples' break", "there's nothing here aimed at young children"],
+    "food": ["stunning breakfast over the rice fields", "very much a grown-up, romantic spot"],
+    "location": ["loved being walkable to Ubud's galleries", "no beach and a steep climb back up — not ideal with a toddler"]
+  },
+  "indian_food_signal": "Thin. Reviews rarely reference Indian or vegetarian-specific provision; the kitchen is à la carte and would handle requests individually rather than at a buffet.",
+  "review_count_family": 58,
+  "review_count_total": 1200
+}

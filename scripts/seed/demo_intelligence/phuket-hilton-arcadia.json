@@ -1,0 +1,30 @@
+{
+  "hotel_name": "Hilton Phuket Arcadia Resort & Spa",
+  "destination": "Phuket",
+  "rooms_summary": "Rooms are described as large and comfortable in two big towers; family reviewers like the connecting-room options and the sea-view balconies. Some note the property is large and the walk from the far tower to the pools is long with a tired toddler, but the rooms themselves draw few complaints.",
+  "facilities_summary": "The big draw is the cluster of seven pools, including a long lagoon pool and a children's pool with a small slide, plus a kids' club and a wide daily activity schedule. Families repeatedly describe it as good value for the breadth of facilities. The scale of the resort is both the selling point and the most common mild gripe.",
+  "food_summary": "Breakfast is large and varied with consistent praise for catering to children; staff are noted as friendly and accommodating. A few reviews say the main restaurant gets busy at peak breakfast.",
+  "location_summary": "On Karon Beach, walkable to the beach and to some restaurants, with a more convenient position than the remote north-coast resorts while still feeling like a self-contained resort. Some road noise is mentioned by front-facing rooms.",
+  "hard_flags": [],
+  "conflicting_signals": {
+    "rooms": "Comfortable and spacious by consensus; the only friction is the long internal distances for families with prams.",
+    "facilities": "Strongly positive on the pools; some find the resort's size impersonal.",
+    "food": "Consistently good; busy at peak times.",
+    "location": "Convenient and walkable; minor road noise for some rooms."
+  },
+  "family_signal_strength": {
+    "rooms": "strong",
+    "facilities": "strong",
+    "food": "strong",
+    "location": "strong"
+  },
+  "supporting_phrases": {
+    "rooms": ["connecting rooms were perfect for us and the grandparents", "huge room with a great balcony"],
+    "facilities": ["seven pools meant the kids never got bored", "fantastic value for what you get"],
+    "food": ["breakfast had endless choice for the children", "staff were so kind to our little one"],
+    "location": ["easy walk to Karon beach", "a bit of traffic noise from the front rooms"]
+  },
+  "indian_food_signal": "Moderate. Reviews mention reliable vegetarian options at the buffet and willingness to adjust spice; specific Indian dishes are noted occasionally rather than as a highlight.",
+  "review_count_family": 503,
+  "review_count_total": 5200
+}

@@ -50,7 +50,7 @@
 
 ≥1 with populated `hard_flags`; ≥1 Marriott/Hilton; ≥1 independent; ≥1 with rich `indian_food_signal`; ≥1 with `family_signal_strength` = thin/none in one+ category.
 
-> ⚠️ **Open item — owner assigned (2026-06-05):** the **founder authors** the 10 files' content post-curation. Claude's scope is to wire this route + the Zod validation and wait for the content; do not draft the records. The seed route must **fail loudly** if a demo file names a hotel not yet in `hotels` (not silently skip). The canonical reference scenario (JW Marriott Phuket amber refurb; Angsana Laguna clean; Holiday Inn Karon red severe refurb) should anchor at least the Phuket set.
+> ✅ **Resolved (2026-06-05):** the founder reassigned authoring to Claude. Claude drafted all 10 records as **fabricated demo placeholders** (invented summaries/flags/counts — NOT synthesised from real reviews, since none have been curated). They anchor the canonical reference scenario (JW Marriott Phuket amber refurb; Angsana Laguna clean; Holiday Inn Karon red severe refurb) and hit every selection rule. **The founder still owns the final content** and may revise/replace these wholesale. Files live in `scripts/seed/demo_intelligence/` (5 Phuket, 5 Bali); the fixtures in `scripts/seed/fixtures/{phuket,bali}.json` were expanded to 5+5 publishable hotels so the named hotels publish before seeding. Verified end-to-end on local Supabase: publish → seed = 10 written, 0 skipped, idempotent. Fail-loud behaviour (missing hotel → 409, no writes) is unchanged.
 
 ## Action items (from Notion)
 

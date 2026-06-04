@@ -34,5 +34,29 @@
     "price_tier": "mid-range",
     "star_rating": 4,
     "images": ["https://example.test/courtyard-nusa-dua-hero.jpg"]
+  },
+  {
+    "name": "Hilton Bali Resort",
+    "destination": "Bali",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Hilton-Bali-Resort",
+    "tripadvisor_rank": 11,
+    "review_count": 3800,
+    "google_place_id": "ChIJexample_hiltonbali",
+    "brand": "Hilton",
+    "price_tier": "luxury",
+    "star_rating": 5,
+    "images": ["https://example.test/hilton-bali-hero.jpg"]
+  },
+  {
+    "name": "Komaneka at Bisma Ubud",
+    "destination": "Bali",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Komaneka-Bisma-Ubud",
+    "tripadvisor_rank": 4,
+    "review_count": 1200,
+    "google_place_id": "ChIJexample_komaneka",
+    "brand": "Independent",
+    "price_tier": "luxury",
+    "star_rating": 5,
+    "images": ["https://example.test/komaneka-bisma-hero.jpg"]
   }
 ]
