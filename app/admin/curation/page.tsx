@@ -90,11 +90,21 @@ export default function CurationPage() {
     setNotice('');
     const res = await fetch('/api/admin/seed-intelligence', { method: 'POST' });
     const json = await res.json().catch(() => ({}));
-    setNotice(
-      res.ok
-        ? `Seeded ${json.written ?? 0} intelligence records; skipped ${json.skipped ?? 0}.`
-        : `Seed not ready: ${json.error ?? res.status}`,
-    );
+    if (res.ok) {
+      setNotice(
+        `Seeded ${json.written ?? 0} intelligence records; skipped ${json.skipped ?? 0}.`,
+      );
+    } else {
+      // Fail-loud: surface the message + the per-file reasons (which hotels to publish).
+      const fileReasons = (json.details ?? [])
+        .map((d: { file: string; reason: string }) => `${d.file}: ${d.reason}`)
+        .join(' · ');
+      setNotice(
+        `Seed failed (${json.error ?? res.status}): ${json.message ?? ''}${
+          fileReasons ? ` — ${fileReasons}` : ''
+        }`,
+      );
+    }
     setBusy(null);
   }
 
