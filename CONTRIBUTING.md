@@ -29,16 +29,16 @@ Commit/push only when the work is ready for review. Never commit secrets — `.e
 
 1. Open a PR into `main` using the PR template; link the `/specs` file + Notion page.
 2. **CI must pass** (`.github/workflows/ci.yml`: typecheck → lint → Jest → build, plus Playwright once present). This is the "checks pass" half.
-3. **1 human approval required** (branch protection). The founder is the reviewer of record.
-4. **Auto-merge (squash)** is enabled on the PR by the author — GitHub merges automatically the moment approval + green CI are both satisfied. The branch is auto-deleted on merge.
+3. **Founder review.** Claude opens the PR with green CI and **stops**; the founder reviews and **merges manually**. Claude never merges (see constraint below).
+4. **Squash merge**, delete the branch on merge.
 
 **Merge style:** **squash** — each PR becomes one clean commit on `main`. History stays linear and phase-readable.
 
-## Branch protection (configure once on GitHub)
+## Branch protection — constraint (2026-06-05)
 
-On `main`: require a PR before merging · require 1 approving review · require status checks to pass (`build-and-test`, and `e2e` once it runs) · require branches up to date · dismiss stale approvals on new commits · allow auto-merge · auto-delete head branches. Squash is the only enabled merge button.
+This repo is **private on GitHub Free**, where branch protection / required reviews / enforced auto-merge are **unavailable** (`gh api .../protection` → 403 "Upgrade to GitHub Pro or make this repository public"). So the review gate is a **convention, not an enforced rule**: Claude always waits for the founder's explicit merge. Do **not** enable unguarded `--auto` merge.
 
-> These rules require the repo to exist on GitHub and `gh auth login` to be complete. Claude can apply them via `gh api` once authenticated, or you can set them in **Settings → Branches**.
+When the repo goes **public** or upgrades to **Pro/Team**, enable on `main`: require a PR · 1 approving review · status checks (`build-and-test`, `e2e`) · up-to-date branches · dismiss stale approvals · allow auto-merge · auto-delete branches · squash-only. Claude can apply these via `gh api` at that point.
 
 ## The spec→code change protocol (CLAUDE.md rule 7)
 
