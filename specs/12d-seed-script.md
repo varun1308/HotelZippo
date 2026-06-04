@@ -1,9 +1,11 @@
 # 12d · Seed Script (Demo Intelligence Seeding)
 
 - **Notion:** https://app.notion.com/p/3754958429ac81d39d5ee28ca7b33a63
-- **Phase:** 1 · **Status:** specced (v1.0.0)
+- **Phase:** 1 · **Status:** BUILT (phase-1-seed) — plumbing + Zod + fail-loud wired; awaits founder-authored records.
 
 **Not a Python/CSV script.** A Next.js API route reads 10 hand-crafted demo intelligence JSON files and upserts to `hotel_intelligence`. Triggered by the **Seed Demo Intelligence** button on `/admin/curation`.
+
+> Built: route `app/api/admin/seed-intelligence/route.ts` (POST); lib `lib/seed/{types,seed-intelligence}.ts`. Records dir `scripts/seed/demo_intelligence/` (`.gitkeep` + `README.md`; **founder authors the 10 JSON files** — see ⚠️ below). Tests: `tests/unit/seed-intelligence.test.ts` + `tests/integration/seed-intelligence.test.ts`. Button already present in `/admin/curation`. Fail-loud is all-or-nothing: a missing hotel → HTTP 409 (no rows written) with per-file diagnostics; bad JSON / schema → 422; empty dir → 404.
 
 ## Files
 
