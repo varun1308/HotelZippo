@@ -1,7 +1,9 @@
 # 12a · Hotel Curation Tool
 
 - **Notion:** https://app.notion.com/p/3754958429ac81d3afc3db0f1ead3748
-- **Phase:** 1 · **Status:** specced (v1.0.0)
+- **Phase:** 1 · **Status:** BUILT (phase-1-curation) — mock-mode-first; live Apify path wired but exercised once a token is provided
+
+> Built: `/app/admin/curation/page.tsx` + routes `fetch-hotels`, `hotels` (list/PATCH), `publish-hotels`. Lib: `lib/curation/{types,validator,fetch,images,publish}.ts`. Mock fixtures: `scripts/seed/fixtures/{phuket,bali}.json`. Hero images stored to the `hotel-images` bucket on publish (12g). Tests: `tests/unit/curation-validator.test.ts` + `tests/integration/curation.test.ts`. The `seed-intelligence` route + its button are Phase 1c.
 
 Web-based internal admin tool at `/admin/curation` (Next.js App Router). **No auth in v1.** Fully resumable (state persisted to `curation_hotels`).
 

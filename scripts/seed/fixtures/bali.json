@@ -1,0 +1,38 @@
+[
+  {
+    "name": "The Mulia Bali",
+    "destination": "Bali",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Mulia-Bali",
+    "tripadvisor_rank": 2,
+    "review_count": 5600,
+    "google_place_id": "ChIJexample_mulia",
+    "brand": "Independent",
+    "price_tier": "ultra-luxury",
+    "star_rating": 5,
+    "images": ["https://example.test/mulia-bali-hero.jpg"]
+  },
+  {
+    "name": "Padma Resort Legian",
+    "destination": "Bali",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Padma-Legian",
+    "tripadvisor_rank": 6,
+    "review_count": 4100,
+    "google_place_id": "ChIJexample_padma",
+    "brand": "Padma",
+    "price_tier": "luxury",
+    "star_rating": 5,
+    "images": ["https://example.test/padma-legian-hero.jpg"]
+  },
+  {
+    "name": "Courtyard by Marriott Bali Nusa Dua",
+    "destination": "Bali",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Courtyard-Nusa-Dua",
+    "tripadvisor_rank": 14,
+    "review_count": 2900,
+    "google_place_id": "ChIJexample_courtyard",
+    "brand": "Marriott",
+    "price_tier": "mid-range",
+    "star_rating": 4,
+    "images": ["https://example.test/courtyard-nusa-dua-hero.jpg"]
+  }
+]
