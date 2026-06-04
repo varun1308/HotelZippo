@@ -1,0 +1,4 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": ["design_handoff/**", "node_modules/**", ".next/**"]
+}
