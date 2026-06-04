@@ -1,0 +1,49 @@
+[
+  {
+    "name": "JW Marriott Phuket Resort & Spa",
+    "destination": "Phuket",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-JW-Marriott-Phuket",
+    "tripadvisor_rank": 3,
+    "review_count": 4200,
+    "google_place_id": "ChIJexample_jwmarriott",
+    "brand": "Marriott",
+    "price_tier": "luxury",
+    "star_rating": 5,
+    "images": ["https://example.test/jw-marriott-phuket-hero.jpg"]
+  },
+  {
+    "name": "Angsana Laguna Phuket",
+    "destination": "Phuket",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Angsana-Laguna-Phuket",
+    "tripadvisor_rank": 7,
+    "review_count": 3100,
+    "google_place_id": "ChIJexample_angsana",
+    "brand": "Banyan Tree",
+    "price_tier": "luxury",
+    "star_rating": 5,
+    "images": ["https://example.test/angsana-laguna-hero.jpg"]
+  },
+  {
+    "name": "Holiday Inn Resort Phuket Karon Beach",
+    "destination": "Phuket",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Holiday-Inn-Karon",
+    "tripadvisor_rank": 41,
+    "review_count": 1800,
+    "google_place_id": "ChIJexample_hikaron",
+    "brand": "IHG",
+    "price_tier": "mid-range",
+    "star_rating": 4,
+    "images": ["https://example.test/holiday-inn-karon-hero.jpg"]
+  },
+  {
+    "name": "Low Review Beach Hut",
+    "destination": "Phuket",
+    "tripadvisor_url": "https://www.tripadvisor.com/Hotel_Review-Low-Review-Hut",
+    "tripadvisor_rank": 220,
+    "review_count": 42,
+    "brand": "Independent",
+    "price_tier": "mid-range",
+    "star_rating": 3,
+    "images": ["https://example.test/beach-hut-hero.jpg"]
+  }
+]
