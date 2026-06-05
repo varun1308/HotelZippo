@@ -2,7 +2,7 @@
  * profile + trip brief in /tests/fixtures/). These back the SP-* structural tests
  * (Phase 3d) and are reusable by future E2E. Content is illustrative, not asserted
  * for prose — tests validate STRUCTURE/CONTRACT only (spec 15). Anchored to the
- * 12d reference scenario: Varun, Mumbai, vegetarian family, Phuket, December. */
+ * 12d reference scenario: Raj, Mumbai, vegetarian family, Phuket, December. */
 
 export interface FixtureChild {
   name: string;
@@ -32,7 +32,7 @@ export interface FixtureTripBrief {
 
 /** The canonical "standard family" — used wherever a complete profile is needed. */
 export const STANDARD_FAMILY_PROFILE: FixtureFamilyProfile = {
-  name: 'Varun',
+  name: 'Raj',
   hometown: 'Mumbai',
   spouse: true,
   children: [

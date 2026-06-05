@@ -14,7 +14,7 @@ Structured fixtures for the three Conversation Agent prompts. Tests validate **s
 - **SP-05** Out-of-scope destination (Bangkok) — decline warmly, list the 5 covered destinations, no hotel names.
 
 ## Recommendation Assembly (RA-01…RA-05)
-- **RA-01** Resort-anchored (Varun, Phuket; Anantara / JW Marriott / Holiday Inn). Anantara = confirmed Indian food + strong family signal; JW Marriott = preferred brand but no Indian guest reviews; Holiday Inn = hard flag. Expect: Anantara top pick; JW Marriott in `other_picks` with explicit Indian-food gap; `why_top_pick` references vegetarian grandparents + kids-club need.
+- **RA-01** Resort-anchored (Raj, Phuket; Anantara / JW Marriott / Holiday Inn). Anantara = confirmed Indian food + strong family signal; JW Marriott = preferred brand but no Indian guest reviews; Holiday Inn = hard flag. Expect: Anantara top pick; JW Marriott in `other_picks` with explicit Indian-food gap; `why_top_pick` references vegetarian grandparents + kids-club need.
 - **RA-02** Low-confidence filter — Marina Bay Sands (`low_confidence: true`) excluded; Shangri-La top pick; `other_picks = []`.
 - **RA-03** Evaluate-only — Soneva Fushi + Six Senses Laamu with `evaluate_only: true`; Gili Lankanfushi (stronger but not shortlisted) excluded; `evaluate_only_applied = true`, `alternatives_introduced = false`.
 - **RA-04** Budget mismatch — `value` tier, all Maldives `ultra-luxury` → error object, `available_tiers = ["ultra-luxury"]`.

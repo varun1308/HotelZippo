@@ -1,6 +1,6 @@
 /* Seed a LOCAL dev user for email/password sign-in (LOCAL DEVELOPMENT ONLY).
  *
- *   npm run dev:user                          # dev@hotelzippo.local / dev-password-123! / "Varun"
+ *   npm run dev:user                          # dev@hotelzippo.local / dev-password-123! / "Raj"
  *   npm run dev:user -- me@x.test secret Asha  # custom email + password + display name
  *
  * Production auth is Google-only; this exists so you can reach the hard-gated /chat locally
@@ -15,7 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 const DEFAULT_EMAIL = 'dev@hotelzippo.local';
 const DEFAULT_PASSWORD = 'dev-password-123!';
 
-const DEFAULT_NAME = 'Varun';
+const DEFAULT_NAME = 'Raj';
 
 async function main() {
   const email = process.argv[2] ?? DEFAULT_EMAIL;

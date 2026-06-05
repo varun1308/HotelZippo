@@ -55,7 +55,7 @@ export const SP_FIXTURES: SystemPromptFixture[] = [
     title: 'Returning user — complete profile + partial brief; do not re-ask confirmed fields',
     familyProfile: STANDARD_FAMILY_PROFILE,
     sessionSnapshot:
-      'Returning user Varun (Mumbai). Vegetarian family of four + grandparents. ' +
+      'Returning user Raj (Mumbai). Vegetarian family of four + grandparents. ' +
       'Comfort budget. Destination Phuket confirmed; trip type not yet captured.',
     messages: [{ role: 'user', text: 'Back again — where were we?' }],
     expectBehaviours: ['never-reask-known-fields', 'one-question-at-a-time'],

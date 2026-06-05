@@ -8,8 +8,8 @@ import userEvent from '@testing-library/user-event';
 import { AccountMenu } from '@/components/account';
 
 const USER = {
-  name: 'Varun Jain',
-  email: 'varun@example.com',
+  name: 'Raj Mehta',
+  email: 'raj@example.com',
   avatarUrl: null as string | null,
 };
 
@@ -33,7 +33,7 @@ describe('AccountMenu', () => {
   it('renders the trigger with the user name', () => {
     setup();
     expect(trigger()).toBeInTheDocument();
-    expect(screen.getByText('Varun Jain')).toBeInTheDocument();
+    expect(screen.getByText('Raj Mehta')).toBeInTheDocument();
   });
 
   it('is closed initially and opens on click revealing email + items', async () => {
@@ -48,7 +48,7 @@ describe('AccountMenu', () => {
 
     const menu = screen.getByRole('menu');
     expect(trigger()).toHaveAttribute('aria-expanded', 'true');
-    expect(within(menu).getByText('varun@example.com')).toBeInTheDocument();
+    expect(within(menu).getByText('raj@example.com')).toBeInTheDocument();
     expect(
       screen.getByRole('menuitem', { name: /edit profile/i }),
     ).toBeInTheDocument();
@@ -101,8 +101,8 @@ describe('AccountMenu', () => {
     fireEvent.error(img!);
 
     expect(document.querySelector('img')).toBeNull();
-    // Fallback initials are derived from the name "Varun Jain" → "VJ".
-    expect(screen.getAllByText('VJ').length).toBeGreaterThan(0);
+    // Fallback initials are derived from the name "Raj Mehta" → "RM".
+    expect(screen.getAllByText('RM').length).toBeGreaterThan(0);
 
     // The menu still works after the fallback.
     await user.click(trigger());

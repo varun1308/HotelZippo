@@ -100,7 +100,7 @@ describe('chatHttpStream adapter', () => {
   it('sends the family profile + session snapshot in the request body when provided', async () => {
     const spy = fetchSpy();
     global.fetch = spy as unknown as typeof fetch;
-    const profile = { name: 'Varun', children: [], food: 'none' };
+    const profile = { name: 'Raj', children: [], food: 'none' };
     for await (const _ of chatHttpStream('hi', [], 'prior summary', profile)) void _;
 
     const body = sentBody(spy);
