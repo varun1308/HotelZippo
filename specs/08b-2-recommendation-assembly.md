@@ -86,6 +86,7 @@ Score eligible hotels holistically across weighted parameters → strongest = to
 
 ## Action items
 
-- Author the prompt at `/prompts/conversation-agent/recommendation-assembly.md`.
-- Encode the output schema as a Zod schema; contract-test against 08b-4 RA-01…RA-05 (use `prompt-contract-test`).
-- `hard-flag-audit`: assert every source hard flag survives into output.
+- ✅ Author the prompt at `/prompts/conversation-agent/recommendation-assembly.md`. **BUILT (phase-2-assemble).**
+- ✅ Encode the output schema as a Zod schema (`lib/contracts/recommendation-assembly.ts` — union of success + `no_eligible_hotels`/`budget_mismatch`); contract-test against 08b-4 RA-01…RA-05 (`tests/contract/recommendation-assembly.test.ts`, fixtures in `tests/fixtures/recommendation-assembly.ts`).
+- ✅ `hard-flag-audit`: every source hard flag survives into output (asserted for RA-01 + RA-05).
+- Assembler: `lib/recommendations/assemble.ts` — injectable `callModel` (default = Anthropic `claude-sonnet-4-20250514`, ANTHROPIC_API_KEY server-side only); malformed output → `AssemblyError`, never a partial (spec 14). Tests inject a fake model so CI runs with no key.

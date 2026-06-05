@@ -41,7 +41,7 @@ Assembly prompt can return `{ "error": "no_eligible_hotels" | "budget_mismatch",
 
 ## Action items (from Notion, verbatim)
 
-1. Implement `/app/api/recommendations/assemble/route.ts`: run the 08a-5 query (`/lib/review-intelligence/query.ts`) → call the 08b-2 prompt → return parsed JSON.
+1. ✅ Implement `/app/api/recommendations/assemble/route.ts`: run the 08a-5 query (`/lib/review-intelligence/query.ts`) → call the 08b-2 prompt → return parsed JSON. **BUILT (phase-2-assemble):** POST {family_profile, trip_brief} → queryCandidates → assembleRecommendations → assembly JSON. Zero candidates → `no_eligible_hotels`; malformed assembly → 502 warm error, no partial (spec 14). Steps 2–5 (agent tool wiring, frontend cards) are Phase 3.
 2. Define the `assemble_recommendations` tool in the Conversation Agent's tool set; inputs = resolved `family_profile` + `trip_brief`.
 3. Frontend card component hydrates display metadata from `hotels` by `hotel_id` (single batched query); applies the mapping above; honours the 05 placeholder fallback for missing images.
 4. Contract-test the assembly JSON **and** the hydrated card props against the 05 required fields (Zod, per 15) — use the `prompt-contract-test` + `hard-flag-audit` skills.
