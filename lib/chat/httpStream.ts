@@ -5,13 +5,15 @@
  * client, no wire-format coupling. */
 import type { ChatMessage, StreamChunk } from './types';
 
-/** Body the /api/chat route expects: the prior thread + the new user turn. */
-function toRequestBody(input: string, history: ChatMessage[]) {
+/** Body the /api/chat route expects: the prior thread + the new user turn, plus the
+ *  resumed session snapshot (Phase 5) when one was loaded for the signed-in user. */
+function toRequestBody(input: string, history: ChatMessage[], sessionSnapshot?: string | null) {
   return {
     messages: [
       ...history,
       { id: `u${history.length}`, role: 'user' as const, parts: [{ type: 'text' as const, text: input }] },
     ],
+    ...(sessionSnapshot ? { sessionSnapshot } : {}),
   };
 }
 
@@ -22,13 +24,14 @@ function isStreamChunk(v: unknown): v is StreamChunk {
 export async function* chatHttpStream(
   input: string,
   history: ChatMessage[],
+  sessionSnapshot?: string | null,
 ): AsyncIterable<StreamChunk> {
   let res: Response;
   try {
     res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(toRequestBody(input, history)),
+      body: JSON.stringify(toRequestBody(input, history, sessionSnapshot)),
     });
   } catch {
     yield { type: 'text-delta', delta: "I couldn't reach my notes just now — try me again in a moment?" };

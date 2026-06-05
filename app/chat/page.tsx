@@ -37,6 +37,10 @@ import { useUser } from '@/lib/auth/useUser';
 import { signOut } from '@/lib/auth/signIn';
 import { loadFamilyProfile, saveFamilyProfile } from '@/lib/db/persistence/family-profiles';
 import { saveShortlist } from '@/lib/db/persistence/shortlists';
+import { loadLatestSnapshot } from '@/lib/db/persistence/sessions';
+import { createSupabaseBrowserClient } from '@/lib/db/ssr';
+import { useSessionSnapshot } from '@/lib/chat/useSessionSnapshot';
+import type { ChatMessage } from '@/lib/chat/types';
 
 /** What the agent tool's recommendation component carries (per map-recommendation). */
 interface RecoProps {
@@ -52,8 +56,34 @@ export default function ChatPage() {
   // The saved family profile (Phase 4) — loaded once on mount, used to prefill the
   // Edit-profile form. null until loaded or if the user has none yet.
   const [savedProfile, setSavedProfile] = useState<FamilyProfile | null>(null);
+  // The resumed session snapshot (Phase 5) — the latest session_summary for the user,
+  // injected into the agent so the concierge picks up where they left off. A ref (not
+  // state) because it only needs to be read when a turn is sent, not to trigger a render.
+  const sessionSnapshotRef = useRef<string | null>(null);
+  // Latest conversation, kept for the snapshot trigger hook (read at trigger time).
+  const messagesRef = useRef<ChatMessage[]>([]);
 
   const { applyUserText, applyRecommendationGates, applyProfile } = brief;
+
+  // Phase 5: silent auto-resume — load the user's most recent session snapshot on mount.
+  // No picker, no UI prompt (locked v1 default); the agent injects it on the next turn.
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    loadLatestSnapshot(createSupabaseBrowserClient())
+      .then((s) => {
+        if (active) sessionSnapshotRef.current = s;
+      })
+      .catch(() => {
+        /* no prior session / no env → fresh onboarding */
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  // Fire a snapshot at the trigger points (session end / inactivity / navigation away).
+  useSessionSnapshot({ getMessages: () => messagesRef.current, enabled: !!user });
 
   // Load the signed-in user's saved profile once (Edit-profile prefill + brief seed).
   useEffect(() => {
@@ -81,7 +111,9 @@ export default function ChatPage() {
   const source: StreamSource = useCallback(
     (input, history) => {
       applyUserText(input);
-      const inner = chatHttpStream(input, history);
+      // Resume context (Phase 5): pass the loaded snapshot so the agent injects
+      // <session_snapshot> and continues without repetition. Empty ⇒ fresh onboarding.
+      const inner = chatHttpStream(input, history, sessionSnapshotRef.current);
       return (async function* tap(): AsyncIterable<StreamChunk> {
         for await (const chunk of inner) {
           if (chunk.type === 'component' && chunk.component === 'recommendation-set') {
@@ -176,6 +208,9 @@ export default function ChatPage() {
         shortlistCount={shortlist.count}
         onSwitchToForm={() => setFormOpen(true)}
         onOpenShortlist={() => setShortlistOpen(true)}
+        onMessages={(m) => {
+          messagesRef.current = m;
+        }}
         accountMenu={
           user ? (
             <AccountMenu
