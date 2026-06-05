@@ -1,0 +1,16 @@
+[
+  {
+    "source": "tripadvisor",
+    "review_date": "2026-05-18",
+    "reviewer_name": "Meera Iyer",
+    "review_text": "Wonderful family stay — the kids club and shallow pool were perfect for our two little ones.",
+    "rating": 5
+  },
+  {
+    "source": "google",
+    "review_date": "2026-04-22",
+    "reviewer_name": "David Lee",
+    "review_text": "Spacious, clean rooms and an excellent breakfast. Grounds were well maintained throughout.",
+    "rating": 4
+  }
+]
