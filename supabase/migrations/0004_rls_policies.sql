@@ -21,7 +21,7 @@ alter table public.curation_hotels     enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- users — a user may read/update only their own profile row.
--- (Row creation is handled server-side / by an auth trigger, not by clients.)
+-- (Row creation is handled by the on_auth_user_created trigger on auth.users — see migration 0006 — not by clients.)
 -- ---------------------------------------------------------------------------
 create policy users_select_own on public.users
   for select to authenticated using (auth.uid() = id);

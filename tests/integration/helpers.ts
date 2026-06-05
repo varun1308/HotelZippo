@@ -34,9 +34,8 @@ export async function createTestUser(label: string): Promise<TestUser> {
   if (createErr || !created.user) throw createErr ?? new Error('createUser failed');
   const id = created.user.id;
 
-  // public.users row (service role bypasses RLS).
-  const { error: insErr } = await admin.from('users').insert({ id, email });
-  if (insErr) throw insErr;
+  // The public.users row is created by the on_auth_user_created trigger (migration 0006),
+  // exactly as it will be on a real first sign-in — no manual insert needed here.
 
   const client = createClient(url, anonKey);
   const { error: signInErr } = await client.auth.signInWithPassword({ email, password });
