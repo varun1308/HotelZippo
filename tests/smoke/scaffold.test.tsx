@@ -4,6 +4,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { render, screen } from '@testing-library/react';
+
+// The landing page (app/page.tsx) is a client component that reads
+// useSearchParams; outside a router it returns null, so mock next/navigation.
+// signInWithGoogle is mocked so no Supabase browser client is constructed.
+jest.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(''),
+}));
+jest.mock('@/lib/auth/signIn', () => ({
+  signInWithGoogle: jest.fn().mockResolvedValue(undefined),
+  signOut: jest.fn(),
+}));
+
 import Home from '@/app/page';
 
 const root = process.cwd();
@@ -11,7 +23,10 @@ const root = process.cwd();
 describe('Phase 0 scaffold', () => {
   it('renders the home page shell with the brand wordmark', () => {
     render(<Home />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('HotelZippo');
+    // The brand wordmark "HotelZippo" appears in the fixed top nav (split as
+    // "Hotel" + <b>Zippo</b>) and the showcase slide heads.
+    expect(screen.getAllByText('Zippo').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
   });
 
   it('.env.example documents every variable from specs/13-environment.md', () => {

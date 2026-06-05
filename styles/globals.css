@@ -20,3 +20,11 @@
     font-family: var(--font-sans);
   }
 }
+
+@layer utilities {
+  /* Hide the native scrollbar on the landing app-showcase carousel track while
+     keeping it scroll-snap friendly (mirrors .carousel in Home Page.html). */
+  .hz-carousel::-webkit-scrollbar {
+    display: none;
+  }
+}
