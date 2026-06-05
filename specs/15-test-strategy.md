@@ -60,8 +60,21 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - OAuth failure path returns to `/` with a non-blocking error and no broken state.
 - **Test type:** unit/jsdom (landing, account menu), node integration (gating + callback, `public.users` trigger, RLS isolation, persistence round-trip). Live Google sign-in is verified manually once creds land.
 
+### Phase 6 — Review Intelligence Pipeline
+(Source: `specs/02-review-intelligence-pipeline.md`; full case list = 08a-6 TC-P1..P22 + the 7 synthesis cases in 08a-3.)
+- Pipeline runs end-to-end for test hotels without error (scrape → tag → store → synthesise → upsert).
+- Raw reviews written to `raw_reviews` with `pipeline_run_id`; idempotent dedup-append (re-run inserts no duplicates, deletes nothing); permanent retention.
+- Family + Indian tagging correct on a labelled set (canonical 08a-2 keyword list).
+- Segment caps enforced (≤150 family / ≤100 Indian / ≤250 general, ≤500 total, most-recent-first, no redistribution); input lines `[YYYY-MM-DD] [rating/5] {text}` with HTML/management-response strip + <20-char drop + 12-month filter.
+- Synthesised intelligence matches the `hotel_intelligence` schema; malformed JSON → hotel failed, no partial write, logged via OTEL.
+- Confidence gate: `high`→publish, `medium`→publish + review queue, `low`→`low_confidence=true` + Dash0 alert.
+- Hard flags detected correctly (incl. the Holiday Inn Karon case, 08a-3 TC-2).
+- Admin UI / API enforces a single active run (DB-level `one_active_run`) and supports per-hotel retry; live status feed; run history.
+- `low_confidence` / `review_count_total = 0` hotels excluded by the consumption contract; the Conversation Agent never reads `raw_reviews`.
+- **Test type:** unit/jsdom (prompt contract, tagging, format, synthesis call+gate, admin UI), node integration (raw_reviews storage, worker e2e, single-active-run, retry, admin status/history). Live Apify scrape is verified manually once founder actor creds land (mock-fixtures-first in CI).
+
 ## Later phases (reference)
-Phase 5 (session snapshot save/restore + token budget), Phase 6 (pipeline idempotency, tagging, hard-flag detection, single-active-run, low_confidence exclusion), Phase 7 (RouteStack), Phase 8 (shortlist save/share + all 14 error scenarios). See Notion 15.
+Phase 7 (RouteStack), Phase 8 (shortlist save/share + all 14 error scenarios). See Notion 15.
 
 ## Action items
 - Stand up Jest + Playwright + Zod with a dedicated Supabase test project.
