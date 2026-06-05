@@ -13,6 +13,7 @@
     "test:integration": "jest --selectProjects integration"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@opentelemetry/api": "^1.9.0",
     "@supabase/supabase-js": "^2.107.0",
     "@vercel/otel": "^1.10.0",
