@@ -13,7 +13,9 @@
     "test:integration": "jest --selectProjects integration",
     "pipeline:worker": "tsx --env-file=.env.local scripts/pipeline/run-worker.ts",
     "booking:capture": "tsx --env-file=.env.local scripts/booking/capture-rates.ts",
-    "dev:user": "tsx --env-file=.env.local scripts/dev/seed-dev-user.ts"
+    "dev:user": "tsx --env-file=.env.local scripts/dev/seed-dev-user.ts",
+    "dev:gen-seed": "tsx scripts/dev/gen-seed-sql.ts",
+    "dev:db": "npm run dev:gen-seed && supabase db reset"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",
