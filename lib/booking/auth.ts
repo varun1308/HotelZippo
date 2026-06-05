@@ -6,10 +6,12 @@
  *
  * The JWT is CACHED and reused within its TTL — minting per call would be wasteful and slow
  * the booking flow. Env (ROUTESTACK_API_KEY / _SECRET / _URL) is read LAZILY at call time,
- * never at import, so this module imports cleanly with no env (key-free CI). Server-side
- * only — `import 'server-only'` is safe here (the wrapper is request-time / Next-bundled,
- * never run under standalone tsx). */
-import 'server-only';
+ * never at import, so this module imports cleanly with no env (key-free CI).
+ *
+ * No `import 'server-only'`: this module is also imported by the standalone schema-capture
+ * script (scripts/booking/capture-rates.ts, run via tsx), where that guard throws. It is
+ * server-side by construction (uses the HMAC secret) and is never imported by a client
+ * component — the client reaches booking only through the /api/booking/* routes. */
 import crypto from 'node:crypto';
 import { BookingError } from './types';
 

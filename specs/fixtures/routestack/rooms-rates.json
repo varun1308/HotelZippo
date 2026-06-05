@@ -1,0 +1,53 @@
+{
+  "_note": "REPRESENTATIVE PLACEHOLDER — not yet a captured live response. The live get-hotel-details-and-rates payload is trimmed out of specs/openapi.yaml, and the sandbox account is not yet provisioned for hotel search (see memory: routestack-sandbox-blocker / specs/10c-booking-routestack.md). Run `npm run booking:capture` once the founder provisions the account to OVERWRITE this file with the real payload, then reconcile lib/booking/rates.ts aliases against it. This placeholder mirrors the structural shape openapi.yaml + the car-search sample imply (rooms[] each with rate plans carrying recommendationId + roomId + descriptive fields under plausible aliases), so the adaptive mapper has a realistic fixture to test against in the meantime.",
+  "success": true,
+  "message": null,
+  "code": 200,
+  "result": {
+    "hotelId": "39679449",
+    "name": "O Hotel Phuket",
+    "currency": "USD",
+    "rooms": [
+      {
+        "roomType": "Deluxe Twin Room",
+        "bedType": "2 Twin Beds",
+        "maxOccupancy": 3,
+        "rates": [
+          {
+            "recommendationId": "fb970f82-2cc0-461e-8799-e69cef5a8155",
+            "roomId": "ce60cc97-fe95-4692-aa3f-a89e20fbb10c",
+            "total": 482.5,
+            "currency": "USD",
+            "boardBasis": "Breakfast included",
+            "free_cancellation": true,
+            "cancellation": "Free cancellation until 2026-08-28"
+          },
+          {
+            "recommendationId": "aa110f82-2cc0-461e-8799-e69cef5a9911",
+            "roomId": "ce60cc97-fe95-4692-aa3f-a89e20fbb10c",
+            "total": 421.0,
+            "currency": "USD",
+            "boardBasis": "Room only",
+            "free_cancellation": false
+          }
+        ]
+      },
+      {
+        "roomType": "Family Suite",
+        "bedType": "1 King + 1 Sofa Bed",
+        "maxOccupancy": 4,
+        "rates": [
+          {
+            "recommendationId": "bc880f82-2cc0-461e-8799-e69cef5a7722",
+            "roomId": "df71dd08-1a23-4692-bb40-c90f31gcc221",
+            "total": 690.0,
+            "currency": "USD",
+            "boardBasis": "Breakfast included",
+            "free_cancellation": true,
+            "cancellation": "Free cancellation until 2026-08-25"
+          }
+        ]
+      }
+    ]
+  }
+}

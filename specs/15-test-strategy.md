@@ -73,8 +73,20 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - `low_confidence` / `review_count_total = 0` hotels excluded by the consumption contract; the Conversation Agent never reads `raw_reviews`.
 - **Test type:** unit/jsdom (prompt contract, tagging, format, synthesis call+gate, admin UI), node integration (raw_reviews storage, worker e2e, single-active-run, retry, admin status/history). Live Apify scrape is verified manually once founder actor creds land (mock-fixtures-first in CI).
 
+### Phase 7 — Booking (RouteStack)
+(Source: `specs/10c-booking-routestack.md`; built against the real API in `specs/openapi.yaml`.)
+- **Token lifecycle:** the wrapper mints a JWT via `/mcp/auth/partner-token` (HMAC-SHA256 of `apiKey:timestamp:nonce`, base64url) and caches/reuses it within the 24h TTL (no re-mint per call).
+- **Session flow:** destination resolves via `search-destinations` → `search-hotels` matches the chosen hotel by `name` → `correlationId` + `token` are threaded through every later call → `get-hotel-details-and-rates` returns rooms/rates incl. `recommendationId` + `roomId`.
+- **Combined confirm turn:** before any RouteStack call, the flow confirms travellers + room count + exact dates in one step (the modal's first screen); the **confirmed** party (incl. grandparents, captured here — not auto-counted) drives `rooms[]`/`childAges`; month-only dates are collected here, never guessed; currency defaults to USD (changeable currency = future scope).
+- **Room picker:** rooms/rates render in a modal with room type / price+currency / cancellation / board / bed / occupancy (each omitted gracefully when absent); the user's selection drives `revalidate` → `get-payment-url` for that `recommendationId`/`roomId`; the deep-link `booking_url` opens (new tab) **only after** an explicit room choice.
+- **Graceful errors:** the wrapper branches on the `{success}` envelope (not HTTP status); 204 / 5148 / session-expiry map to warm conversational fallbacks per 14 (Try again → confirm / another shortlisted hotel); no broken state, never a dead-end.
+- **Secret hygiene:** `ROUTESTACK_API_KEY` **and** `ROUTESTACK_API_SECRET` stay server-side (the wrapper runs only in `/api/booking/*` + the capture script); never reach the client (hard rules #2, #5).
+- **Observability:** every RouteStack call is OTEL-traced → Dash0 (`hotel_id`, dates, success/failure, latency); the trace id is surfaced on `BookingError`.
+- **Adaptive mapper:** the rooms/rates mapper is reconciled against a captured sandbox fixture (`specs/fixtures/routestack/rooms-rates.json`); the fixture-driven test keeps it honest after the real capture overwrites the placeholder.
+- **Test type:** unit/jsdom (auth HMAC + JWT cache, party inference + rooms builder, adaptive mapper, orchestrator success-envelope branching, flow state machine, room-picker modal, context wiring, fixture mapper) — all against mock fixtures, **key-free**. node integration (**sandbox smoke**, env-gated: skips without `ROUTESTACK_*` and skips gracefully if the account isn't provisioned; **never completes a live booking** — stops before `get-payment-url`). Live capture + the live booking path are verified manually once the founder provisions the sandbox account (member-token / anonymous config — see `specs/10c-booking-routestack.md` founder dependencies).
+
 ## Later phases (reference)
-Phase 7 (RouteStack), Phase 8 (shortlist save/share + all 14 error scenarios). See Notion 15.
+Phase 8 (launch checklist — Notion 18; founder-run, not build work in this campaign). See Notion 15.
 
 ## Action items
 - Stand up Jest + Playwright + Zod with a dedicated Supabase test project.
