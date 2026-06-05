@@ -23,6 +23,7 @@ import { signInWithGoogle } from '@/lib/auth/signIn';
 import { GoogleSignInButton } from '@/components/landing/GoogleSignInButton';
 import { AppShowcase } from '@/components/landing/AppShowcase';
 import { HeroCopy, TrustRow } from '@/components/landing/LandingHero';
+import { DevSignIn } from '@/components/landing/DevSignIn';
 
 /* ---- top nav ------------------------------------------------------------- */
 function Nav({ onSignIn }: { onSignIn: () => void }) {
@@ -105,6 +106,11 @@ function SignInCluster({ showInlineError }: { showInlineError: boolean }) {
       </p>
 
       <TrustRow className="mt-11 max-w-[380px]" />
+
+      {/* Local-dev-only email/password sign-in — renders nothing unless
+          NEXT_PUBLIC_ENABLE_DEV_LOGIN=true (set only in .env.local). Production
+          stays Google-only. */}
+      <DevSignIn />
     </div>
   );
 }
