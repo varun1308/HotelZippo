@@ -1,5 +1,9 @@
 /* Browser Supabase client — anon key, RLS-enforced. Safe for client components.
- * Per specs/10a-supabase.md: used for a user's own reads/writes under RLS. */
+ * Per specs/10a-supabase.md: used for a user's own reads/writes under RLS.
+ *
+ * The env check throws LAZILY — only when this factory is actually called (at request
+ * time), never at import. So pages that don't construct a client still render with no
+ * Supabase env set. See README "Running it locally". */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export function createBrowserClient(): SupabaseClient {

@@ -21,6 +21,11 @@ beforeAll(() => {
         headers: { 'content-type': 'image/jpeg' },
       });
     }
+    // A deliberately unreachable hero host → simulates a hero that cannot be fetched
+    // (the demo fixtures' old example.test URLs behaved this way against the real net).
+    if (url.startsWith('https://unreachable.test/')) {
+      return new Response('not found', { status: 404 });
+    }
     return realFetch(input as never, init);
   }) as typeof fetch;
 });
@@ -29,10 +34,20 @@ afterAll(() => {
 });
 
 const DEST = 'Phuket';
+// Scope cleanup to THIS suite's own hotels (by name) — a destination-wide delete would
+// race with other integration suites that also use Phuket (e.g. seed-intelligence) when
+// Jest runs node test files in parallel against the shared local DB.
+const OWN_HOTELS = [
+  'JW Marriott Phuket Resort & Spa',
+  'No Image Resort',
+  'Pending Resort',
+  'Idempotent Resort',
+  'Unreachable Hero Resort',
+];
 
 async function cleanup() {
-  await admin.from('curation_hotels').delete().eq('destination', DEST);
-  await admin.from('hotels').delete().eq('destination', DEST);
+  await admin.from('curation_hotels').delete().eq('destination', DEST).in('name', OWN_HOTELS);
+  await admin.from('hotels').delete().eq('destination', DEST).in('name', OWN_HOTELS);
 }
 
 beforeEach(cleanup);
@@ -123,6 +138,34 @@ describe('curation → publish', () => {
       .eq('name', payload.name)
       .eq('destination', DEST);
     expect(data).toHaveLength(1);
+  });
+
+  it('an UNREACHABLE hero leaves NO orphaned 0-image hotel (atomicity, 12g)', async () => {
+    // Regression: previously the hotel was upserted BEFORE the image step, so a failed
+    // hero left an image-less hotel committed while reporting "skipped". Now the row must
+    // never be written unless its hero image stores successfully.
+    const name = 'Unreachable Hero Resort';
+    await stage({
+      name,
+      tripadvisor_url: 'https://www.tripadvisor.com/u',
+      review_count: 1200,
+      star_rating: 5 as const,
+      price_tier: 'luxury',
+      images: ['https://unreachable.test/hero.jpg'],
+      status: 'approved',
+    });
+
+    const result = await publishApproved(admin, DEST);
+    expect(result.published).toBe(0);
+    expect(result.skipped[0]?.reasons.join(' ')).toMatch(/hero image store failed/i);
+
+    // The crux: no hotel row was committed.
+    const { data } = await admin
+      .from('hotels')
+      .select('id')
+      .eq('name', name)
+      .eq('destination', DEST);
+    expect(data ?? []).toHaveLength(0);
   });
 
   it('approval rule mirrors DB reality: < 100 reviews cannot be approved', () => {

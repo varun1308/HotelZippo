@@ -1,7 +1,15 @@
 /* Publish-to-Hotels (12a + 12g): take APPROVED curation_hotels rows, store their hero
  * image to Storage, and upsert into public.hotels on (name, destination). Publish is
  * blocked per-row if validation fails (required fields + >=1 image + >=100 reviews).
- * Server-side only; service client. */
+ * Server-side only; service client.
+ *
+ * ATOMICITY INVARIANT (spec 01b/12g — "block publish if a hotel has 0 images"):
+ *   a row is written to public.hotels ONLY when its hero image has been successfully
+ *   stored. The image is fetched+uploaded FIRST; the hotel is then upserted in a single
+ *   write that already carries `images: [storedUrl]`. If the hero fetch/upload fails the
+ *   row is reported as `skipped` and NO row is committed — `published`/`skipped` always
+ *   matches DB reality. (Previously the hotel was upserted before the image step, so a
+ *   failed hero left an orphaned 0-image hotel in the DB while reporting "skipped".) */
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { canPublish } from './validator';
@@ -36,11 +44,37 @@ export async function publishApproved(
       continue;
     }
 
-    // Upsert the hotel first (without image) to obtain a stable id for the Storage path.
+    // Resolve a STABLE hotel id WITHOUT committing a row: reuse the existing hotel's id
+    // (so re-publish overwrites the same Storage object) or mint a fresh UUID. The hotel
+    // row is not written until the hero image is stored — see the atomicity invariant.
+    const { data: existing } = await supabase
+      .from('hotels')
+      .select('id')
+      .eq('name', row.name)
+      .eq('destination', row.destination)
+      .maybeSingle();
+    const hotelId = existing?.id ?? crypto.randomUUID();
+
+    // Store the hero image FIRST. If it fails, skip the row — and crucially, NO hotel
+    // row has been written, so we never leave an orphaned 0-image hotel (12g).
+    let storedUrl: string;
+    try {
+      storedUrl = await storeHeroImage(supabase, hotelId, row.images![0]);
+    } catch (e) {
+      result.skipped.push({
+        name: row.name,
+        destination: row.destination,
+        reasons: [`hero image store failed: ${e instanceof Error ? e.message : String(e)}`],
+      });
+      continue;
+    }
+
+    // Now upsert the COMPLETE hotel (image included) in a single write.
     const { data: upserted, error: upErr } = await supabase
       .from('hotels')
       .upsert(
         {
+          id: hotelId,
           name: row.name,
           destination: row.destination,
           star_rating: row.star_rating ?? null,
@@ -48,6 +82,7 @@ export async function publishApproved(
           tripadvisor_url: row.tripadvisor_url ?? null,
           google_place_id: row.google_place_id ?? null,
           price_tier: row.price_tier ?? null,
+          images: [storedUrl],
         },
         { onConflict: 'name,destination' },
       )
@@ -58,22 +93,6 @@ export async function publishApproved(
         name: row.name,
         destination: row.destination,
         reasons: [`upsert failed: ${upErr?.message ?? 'unknown'}`],
-      });
-      continue;
-    }
-
-    // Store the hero image and write the Storage URL back. Block (skip) if it fails —
-    // a published hotel must have >= 1 image (12g).
-    try {
-      const sourceUrl = row.images![0];
-      const storedUrl = await storeHeroImage(supabase, upserted.id, sourceUrl);
-      await supabase.from('hotels').update({ images: [storedUrl] }).eq('id', upserted.id);
-    } catch (e) {
-      // Roll the row back to skipped state; leave the hotel without an image flagged.
-      result.skipped.push({
-        name: row.name,
-        destination: row.destination,
-        reasons: [`hero image store failed: ${e instanceof Error ? e.message : String(e)}`],
       });
       continue;
     }

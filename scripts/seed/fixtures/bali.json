@@ -9,7 +9,9 @@
     "brand": "Independent",
     "price_tier": "ultra-luxury",
     "star_rating": 5,
-    "images": ["https://example.test/mulia-bali-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/mulia-bali/1200/800"
+    ]
   },
   {
     "name": "Padma Resort Legian",
@@ -21,7 +23,9 @@
     "brand": "Padma",
     "price_tier": "luxury",
     "star_rating": 5,
-    "images": ["https://example.test/padma-legian-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/padma-legian/1200/800"
+    ]
   },
   {
     "name": "Courtyard by Marriott Bali Nusa Dua",
@@ -33,7 +37,9 @@
     "brand": "Marriott",
     "price_tier": "mid-range",
     "star_rating": 4,
-    "images": ["https://example.test/courtyard-nusa-dua-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/courtyard-nusa-dua/1200/800"
+    ]
   },
   {
     "name": "Hilton Bali Resort",
@@ -45,7 +51,9 @@
     "brand": "Hilton",
     "price_tier": "luxury",
     "star_rating": 5,
-    "images": ["https://example.test/hilton-bali-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/hilton-bali/1200/800"
+    ]
   },
   {
     "name": "Komaneka at Bisma Ubud",
@@ -57,6 +65,8 @@
     "brand": "Independent",
     "price_tier": "luxury",
     "star_rating": 5,
-    "images": ["https://example.test/komaneka-bisma-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/komaneka-bisma/1200/800"
+    ]
   }
 ]
