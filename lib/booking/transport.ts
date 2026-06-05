@@ -2,13 +2,16 @@
  *
  * The real `fetch`-based RouteStackFetch plugged into the orchestrator's injectable seam.
  * Tests inject a mock instead (key-free CI); this is used at request time from the booking
- * API routes. Server-side only — reads ROUTESTACK_API_URL lazily (never at import).
+ * API routes. Reads ROUTESTACK_API_URL lazily (never at import).
  *
  * RouteStack returns its business outcomes inside a 200 { success, code, message } envelope,
  * so we DON'T throw on non-2xx alone — we return the parsed body and let the orchestrator
  * branch on the envelope. A genuine network/transport failure (or non-JSON body) throws, and
- * the orchestrator wraps it as a transport BookingError. */
-import 'server-only';
+ * the orchestrator wraps it as a transport BookingError.
+ *
+ * No `import 'server-only'`: like ./auth, this is also imported by the standalone
+ * schema-capture script (run via tsx) where that guard throws. Server-side by construction
+ * (uses fetch + the env base URL); never imported by a client component. */
 import { BookingError } from './types';
 import type { RouteStackFetch } from './auth';
 

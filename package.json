@@ -11,7 +11,8 @@
     "test": "jest",
     "test:unit": "jest --selectProjects jsdom",
     "test:integration": "jest --selectProjects integration",
-    "pipeline:worker": "tsx --env-file=.env.local scripts/pipeline/run-worker.ts"
+    "pipeline:worker": "tsx --env-file=.env.local scripts/pipeline/run-worker.ts",
+    "booking:capture": "tsx --env-file=.env.local scripts/booking/capture-rates.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",
