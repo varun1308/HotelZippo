@@ -9,7 +9,9 @@
     "brand": "Marriott",
     "price_tier": "luxury",
     "star_rating": 5,
-    "images": ["https://example.test/jw-marriott-phuket-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/jw-marriott-phuket/1200/800"
+    ]
   },
   {
     "name": "Angsana Laguna Phuket",
@@ -21,7 +23,9 @@
     "brand": "Banyan Tree",
     "price_tier": "luxury",
     "star_rating": 5,
-    "images": ["https://example.test/angsana-laguna-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/angsana-laguna/1200/800"
+    ]
   },
   {
     "name": "Holiday Inn Resort Phuket Karon Beach",
@@ -33,7 +37,9 @@
     "brand": "IHG",
     "price_tier": "mid-range",
     "star_rating": 4,
-    "images": ["https://example.test/holiday-inn-karon-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/holiday-inn-karon/1200/800"
+    ]
   },
   {
     "name": "Hilton Phuket Arcadia Resort & Spa",
@@ -45,7 +51,9 @@
     "brand": "Hilton",
     "price_tier": "mid-range",
     "star_rating": 5,
-    "images": ["https://example.test/hilton-arcadia-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/hilton-arcadia/1200/800"
+    ]
   },
   {
     "name": "Sri Panwa Phuket Luxury Pool Villa Hotel",
@@ -57,7 +65,9 @@
     "brand": "Independent",
     "price_tier": "ultra-luxury",
     "star_rating": 5,
-    "images": ["https://example.test/sri-panwa-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/sri-panwa/1200/800"
+    ]
   },
   {
     "name": "Low Review Beach Hut",
@@ -68,6 +78,8 @@
     "brand": "Independent",
     "price_tier": "mid-range",
     "star_rating": 3,
-    "images": ["https://example.test/beach-hut-hero.jpg"]
+    "images": [
+      "https://picsum.photos/seed/beach-hut/1200/800"
+    ]
   }
 ]

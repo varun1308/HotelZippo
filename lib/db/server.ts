@@ -1,6 +1,10 @@
 /* Server-side Supabase service client — uses SUPABASE_SERVICE_ROLE_KEY and bypasses RLS.
  * Per specs/10a-supabase.md + 13: server-side ONLY. The `import 'server-only'` guard
- * makes the build fail if this module is ever pulled into a client component. */
+ * makes the build fail if this module is ever pulled into a client component.
+ *
+ * The env check throws LAZILY — only when createServiceClient() is called (e.g. inside
+ * the /api/chat assemble tool at request time), never at import. Missing Supabase env
+ * therefore never breaks page render; it surfaces as a graceful request-time error. */
 import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 

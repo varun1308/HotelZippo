@@ -8,7 +8,14 @@
  *   • useShortlist  — saved hotels; exposed to the inline cards through
  *                     ShortlistProvider (the cards render deep in the stream).
  * The "Find hotels" button injects a chat turn (keeps the agent's wrapper +
- * profile resolution; does not bypass to the assemble route). */
+ * profile resolution; does not bypass to the assemble route).
+ *
+ * RUN REQUIREMENTS: this page (and the whole chat shell) RENDERS with no env, no DB,
+ * and no API key — everything here is client-side. A real recommendation, however,
+ * needs the server side wired up: local/remote Supabase reachable + seeded demo data,
+ * and ANTHROPIC_API_KEY set (server-side only). Without those, sending a message that
+ * triggers `assemble_recommendations` fails gracefully (a warm error; the page never
+ * crashes). See README "Running it locally → Tier 2" for the full setup + seeding. */
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
