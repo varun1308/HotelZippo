@@ -7,6 +7,10 @@ import { createServiceClient } from '@/lib/db/server';
 import { getPipelineStatus, getDestinationCounts } from '@/lib/review-intelligence/admin-status';
 
 export const runtime = 'nodejs';
+// Never prerender: this route reads the live DB (createServiceClient needs runtime env).
+// Without this, `next build` tries to statically generate the GET and throws when no
+// Supabase env is present at build time (e.g. in CI). Build env-safety, per specs/13.
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   const supabase = createServiceClient();
