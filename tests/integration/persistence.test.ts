@@ -24,7 +24,7 @@ afterAll(async () => {
 });
 
 const profile: FamilyProfile = {
-  name: 'Varun',
+  name: 'Raj',
   hometown: 'Mumbai',
   spouse: true,
   children: [

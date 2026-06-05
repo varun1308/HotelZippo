@@ -13,7 +13,7 @@ import type { BookingHotel } from '@/lib/booking/context';
 const HOTEL: BookingHotel = { hotelId: 'H-1', hotelName: 'The Family Beach Resort', destination: 'Phuket' };
 
 const PROFILE: FamilyProfile = {
-  name: 'Varun',
+  name: 'Raj',
   hometown: 'Mumbai',
   spouse: true,
   children: [{ name: 'A', age: 2 }, { name: 'B', age: 7 }],

@@ -59,9 +59,17 @@ Prerequisites: **Docker**, the **Supabase CLI**, and an **Anthropic API key**.
    Restart `npm run dev` (so the `NEXT_PUBLIC_*` flag is picked up), open [`/`](http://localhost:3000), and use the **"Dev sign-in"** box below the trust row → it signs you in and lands on `/chat`. The Google button stays the only auth in production (the dev box renders **nothing** without the flag, and `dev:user` refuses any non-local Supabase URL).
    > Prefer no auth at all? Unset `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` and the gate self-disables (`/chat` renders, but persistence + booking no-op / 401 — UI-only).
 
-5. **Seed demo hotel data.** v1 ships demo intelligence for **Phuket and Bali only** (5 hotels each). The pipeline is fetch → approve → publish → seed. Easiest via the admin UI at [`/admin/curation`](http://localhost:3000/admin/curation), or with curl (replace `$SR` with your service-role key):
+5. **Seed demo hotel data.** v1 ships demo intelligence for **Phuket and Bali only** (5 hotels each). Two ways:
+
+   **Fast (recommended for local dev) — auto-seed on db reset:**
    ```bash
-   SR=<service_role key>; BASE=http://localhost:3000
+   npm run dev:db          # generates supabase/seed.sql from the demo JSON, then `supabase db reset`
+   ```
+   This writes the 10 hotels + their `hotel_intelligence` (incl. the Holiday Inn Karon hard-flag case) straight into the DB. `supabase/seed.sql` is generated (git-ignored) from the canonical sources — `scripts/seed/fixtures/*.json` (hotel rows) + `scripts/seed/demo_intelligence/*.json` (founder-authored intelligence) — so it never drifts. Once generated, **every** `supabase db reset` / `supabase start` re-seeds automatically. (Hero images stay as their source URLs — cards degrade to a placeholder, never a broken image. For real image→Storage hosting, use the admin flow below.)
+
+   **Full pipeline (real image→Storage) — via the admin tool:** the production path is fetch → approve → publish → seed. Use the admin UI at [`/admin/curation`](http://localhost:3000/admin/curation), or curl:
+   ```bash
+   BASE=http://localhost:3000
    # 1. fetch candidates into the curation staging table (mock source = the bundled fixtures)
    curl -s -X POST $BASE/api/admin/fetch-hotels -H 'content-type: application/json' -d '{"destination":"Phuket"}'
    curl -s -X POST $BASE/api/admin/fetch-hotels -H 'content-type: application/json' -d '{"destination":"Bali"}'

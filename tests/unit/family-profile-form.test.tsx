@@ -35,13 +35,13 @@ describe('FamilyProfileForm — validation', () => {
     await user.click(save());
     expect(screen.getByText('Please add your name')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/your name/i), 'Varun');
+    await user.type(screen.getByLabelText(/your name/i), 'Raj');
     expect(screen.queryByText('Please add your name')).not.toBeInTheDocument();
 
     await user.click(save());
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const profile = onSubmit.mock.calls[0][0] as FamilyProfile;
-    expect(profile.name).toBe('Varun');
+    expect(profile.name).toBe('Raj');
     expect(profile.budgetTier).toBe('comfort'); // default pre-selection
   });
 });
@@ -51,7 +51,7 @@ describe('FamilyProfileForm — children', () => {
     const user = userEvent.setup();
     const { onSubmit } = setup();
 
-    await user.type(screen.getByLabelText(/your name/i), 'Varun');
+    await user.type(screen.getByLabelText(/your name/i), 'Raj');
 
     // first child — fully filled
     await user.click(screen.getByRole('button', { name: /add a child/i }));
@@ -79,7 +79,7 @@ describe('FamilyProfileForm — food collapse', () => {
     const user = userEvent.setup();
     const { onSubmit } = setup();
 
-    await user.type(screen.getByLabelText(/your name/i), 'Varun');
+    await user.type(screen.getByLabelText(/your name/i), 'Raj');
     await user.click(screen.getByRole('switch', { name: /^vegan$/i }));
 
     expect(screen.getByRole('switch', { name: /^vegan$/i })).toHaveAttribute(
@@ -99,7 +99,7 @@ describe('FamilyProfileForm — food collapse', () => {
   it('defaults to food:"none" when no diet toggles are on', async () => {
     const user = userEvent.setup();
     const { onSubmit } = setup();
-    await user.type(screen.getByLabelText(/your name/i), 'Varun');
+    await user.type(screen.getByLabelText(/your name/i), 'Raj');
     await user.click(save());
     expect((onSubmit.mock.calls[0][0] as FamilyProfile).food).toBe('none');
   });
@@ -110,7 +110,7 @@ describe('FamilyProfileForm — budget', () => {
     const user = userEvent.setup();
     const { onSubmit } = setup();
 
-    await user.type(screen.getByLabelText(/your name/i), 'Varun');
+    await user.type(screen.getByLabelText(/your name/i), 'Raj');
     await user.click(screen.getByRole('radio', { name: /luxury/i }));
     await user.click(save());
 
@@ -123,7 +123,7 @@ describe('FamilyProfileForm — loyalty programmes', () => {
     const user = userEvent.setup();
     const { onSubmit } = setup();
 
-    await user.type(screen.getByLabelText(/your name/i), 'Varun');
+    await user.type(screen.getByLabelText(/your name/i), 'Raj');
 
     await user.click(screen.getByRole('checkbox', { name: /marriott bonvoy/i }));
     expect(
@@ -145,7 +145,7 @@ describe('FamilyProfileForm — loyalty programmes', () => {
     const user = userEvent.setup();
     const { onSubmit } = setup();
 
-    await user.type(screen.getByLabelText(/your name/i), 'Varun');
+    await user.type(screen.getByLabelText(/your name/i), 'Raj');
     await user.click(screen.getByRole('checkbox', { name: /marriott bonvoy/i }));
     await user.click(save());
 

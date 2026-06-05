@@ -21,6 +21,19 @@ describe('RecommendationSet', () => {
     render(<RecommendationSet topPick={topPick} otherPicks={[]} />);
     expect(screen.queryByText(/Two more worth a look/i)).not.toBeInTheDocument();
   });
+
+  it('says "One more worth a look" when there is exactly one alternative', () => {
+    render(<RecommendationSet topPick={topPick} otherPicks={[standardPick]} />);
+    expect(screen.getByText(/One more worth a look/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Two more worth a look/i)).not.toBeInTheDocument();
+  });
+
+  it('honours an explicit altHeading override', () => {
+    render(
+      <RecommendationSet topPick={topPick} otherPicks={[standardPick]} altHeading="Also consider" />,
+    );
+    expect(screen.getByText('Also consider')).toBeInTheDocument();
+  });
 });
 
 describe('HotelCardSkeleton', () => {

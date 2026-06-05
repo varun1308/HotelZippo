@@ -50,6 +50,21 @@ interface RecoProps {
   topPick?: { destination?: string; priceTierLabel?: string | null };
 }
 
+/** A minimal profile used only to carry the auth name to the agent for a user who hasn't
+ * onboarded yet. Every other field is left at its "unknown" default (empty children, null
+ * hometown, etc.) so the concierge still collects them — only the name is pre-known. */
+const EMPTY_PROFILE: FamilyProfile = {
+  name: '',
+  hometown: null,
+  spouse: false,
+  children: [],
+  food: 'none',
+  indianFoodMatters: false,
+  budgetTier: 'comfort',
+  brandPreferences: [],
+  notes: null,
+};
+
 export default function ChatPage() {
   const brief = useTripBrief();
   const shortlist = useShortlist();
@@ -65,6 +80,11 @@ export default function ChatPage() {
   const sessionSnapshotRef = useRef<string | null>(null);
   // Latest conversation, kept for the snapshot trigger hook (read at trigger time).
   const messagesRef = useRef<ChatMessage[]>([]);
+  // The family profile to hand the agent each turn (so it greets by name + never re-asks
+  // known fields). A ref because it's only read when a turn is sent. Holds the saved profile
+  // when there is one; otherwise a minimal profile seeded with the user's auth name (Google
+  // full_name / dev name) so a signed-in user is never anonymous to the concierge.
+  const profileRef = useRef<FamilyProfile | null>(null);
 
   const { applyUserText, applyRecommendationGates, applyProfile } = brief;
 
@@ -89,14 +109,24 @@ export default function ChatPage() {
   useSessionSnapshot({ getMessages: () => messagesRef.current, enabled: !!user });
 
   // Load the signed-in user's saved profile once (Edit-profile prefill + brief seed).
+  // If they have none yet but signed in with a display name (Google full_name / dev name),
+  // persist a starter profile carrying just that name — so the name is durable across
+  // reloads and reaches the agent, while onboarding still collects the rest.
   useEffect(() => {
     if (!user) return;
     let active = true;
     loadFamilyProfile()
       .then((p) => {
-        if (active && p) {
+        if (!active) return;
+        if (p) {
           setSavedProfile(p);
           applyProfileToBrief(p);
+        } else if (user.name?.trim()) {
+          const starter: FamilyProfile = { ...EMPTY_PROFILE, name: user.name.trim() };
+          setSavedProfile(starter);
+          saveFamilyProfile(starter, user.id).catch(() => {
+            /* best-effort: the in-memory starter still reaches the agent */
+          });
         }
       })
       .catch(() => {
@@ -109,6 +139,22 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Keep the profile we hand the agent current. Prefer the saved profile; if it has no name
+  // yet (or there's no saved profile), seed the name from the auth identity (Google
+  // full_name / dev name) so the concierge can greet a signed-in user immediately. Onboarding
+  // still confirms/overrides the name — this only ensures the agent isn't blind to it.
+  useEffect(() => {
+    const authName = user?.name?.trim() || null;
+    if (savedProfile) {
+      profileRef.current =
+        savedProfile.name?.trim() || !authName ? savedProfile : { ...savedProfile, name: authName };
+    } else if (authName) {
+      profileRef.current = { ...EMPTY_PROFILE, name: authName };
+    } else {
+      profileRef.current = null;
+    }
+  }, [savedProfile, user]);
+
   // Wrap the real source so each USER turn feeds the detector, and each
   // recommendation arrival locks the gate fields (destination/type/budget known).
   const source: StreamSource = useCallback(
@@ -116,7 +162,9 @@ export default function ChatPage() {
       applyUserText(input);
       // Resume context (Phase 5): pass the loaded snapshot so the agent injects
       // <session_snapshot> and continues without repetition. Empty ⇒ fresh onboarding.
-      const inner = chatHttpStream(input, history, sessionSnapshotRef.current);
+      // Also pass the signed-in user's profile (Phase 4) so the agent greets by name and
+      // skips re-asking known fields.
+      const inner = chatHttpStream(input, history, sessionSnapshotRef.current, profileRef.current);
       return (async function* tap(): AsyncIterable<StreamChunk> {
         for await (const chunk of inner) {
           if (chunk.type === 'component' && chunk.component === 'recommendation-set') {

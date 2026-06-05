@@ -20,6 +20,7 @@ export type PromptBehaviour =
   | 'never-reask-known-fields'
   | 'transactional-direct-to-assemble'
   | 'hard-flag-acknowledged-in-wrapper'
+  | 'recommendation-wrapper-one-line-no-restate'
   | 'out-of-scope-decline-names-five';
 
 export interface FixtureTurn {
@@ -54,7 +55,7 @@ export const SP_FIXTURES: SystemPromptFixture[] = [
     title: 'Returning user — complete profile + partial brief; do not re-ask confirmed fields',
     familyProfile: STANDARD_FAMILY_PROFILE,
     sessionSnapshot:
-      'Returning user Varun (Mumbai). Vegetarian family of four + grandparents. ' +
+      'Returning user Raj (Mumbai). Vegetarian family of four + grandparents. ' +
       'Comfort budget. Destination Phuket confirmed; trip type not yet captured.',
     messages: [{ role: 'user', text: 'Back again — where were we?' }],
     expectBehaviours: ['never-reask-known-fields', 'one-question-at-a-time'],
@@ -80,7 +81,10 @@ export const SP_FIXTURES: SystemPromptFixture[] = [
     familyProfile: STANDARD_FAMILY_PROFILE,
     sessionSnapshot: null,
     messages: [{ role: 'user', text: 'Phuket, a beach resort trip. What do you recommend?' }],
-    expectBehaviours: ['hard-flag-acknowledged-in-wrapper'],
+    expectBehaviours: [
+      'hard-flag-acknowledged-in-wrapper',
+      'recommendation-wrapper-one-line-no-restate',
+    ],
   },
   {
     id: 'SP-05',

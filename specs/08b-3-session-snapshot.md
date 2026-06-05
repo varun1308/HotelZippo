@@ -33,7 +33,7 @@ Read the conversation transcript and produce a single plain-text block capturing
 
 Capture the following, **omitting any section for which no information exists**:
 
-1. **Family profile state** — which fields are confirmed, with the **actual values** (not just field names). E.g.: "Name: Varun. Family: spouse + 2 kids (ages 2 and 7) + grandparents. Food: vegetarian. Budget: comfort. Brands: Marriott Bonvoy, Hilton Honors. Freestyle: wants kids club and pool quality confirmed, values vegetarian food for grandparents."
+1. **Family profile state** — which fields are confirmed, with the **actual values** (not just field names). E.g.: "Name: Raj. Family: spouse + 2 kids (ages 2 and 7) + grandparents. Food: vegetarian. Budget: comfort. Brands: Marriott Bonvoy, Hilton Honors. Freestyle: wants kids club and pool quality confirmed, values vegetarian food for grandparents."
 2. **Profile completion status** — state clearly whether the profile is **complete** (all required fields captured) or **partial**. If partial, name the specific fields still outstanding.
 3. **Trip brief state** — which fields are confirmed, with actual values. E.g.: "Destination: Phuket. Trip type: resort-anchored. Dates: not provided. Focus areas: kids club, pool, vegetarian dinner options. Pre-shortlisted: none."
 4. **Trip brief completion status** — state clearly whether the trip brief is **complete** (destination + trip type confirmed) or **partial**. If partial, name what is outstanding.
@@ -56,7 +56,7 @@ Plain text, no formatting. Dense, factual, chronological within each section. St
 Example structure (adapt to what actually occurred):
 
 ```text
-Family profile — complete. Name: Varun. Family: spouse + 2 kids (ages 2 and 7) + grandparents travelling. Food: vegetarian. Budget: comfort tier. Brand preferences: Marriott Bonvoy, Hilton Honors. Freestyle: prioritises kids club quality, pool experience, and vegetarian dinner options for grandparents.
+Family profile — complete. Name: Raj. Family: spouse + 2 kids (ages 2 and 7) + grandparents travelling. Food: vegetarian. Budget: comfort tier. Brand preferences: Marriott Bonvoy, Hilton Honors. Freestyle: prioritises kids club quality, pool experience, and vegetarian dinner options for grandparents.
 
 Trip brief — complete. Destination: Phuket. Trip type: resort-anchored. Dates: not provided. Focus areas: kids club, pool, vegetarian options at dinner. Pre-shortlisted hotels: none. Evaluate-only: false.
 

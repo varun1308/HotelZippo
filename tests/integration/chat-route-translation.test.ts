@@ -129,11 +129,11 @@ describe('buildSystem context injection (08b-1)', () => {
 
   it('injects family_profile + session_snapshot blocks (always present)', () => {
     const out = buildSystem('BASE', {
-      familyProfile: { name: 'Varun', budget_tier: 'comfort' },
+      familyProfile: { name: 'Raj', budget_tier: 'comfort' },
       sessionSnapshot: 'prior summary',
     });
     expect(out).toContain('BASE');
-    expect(out).toMatch(/<family_profile>[\s\S]*Varun[\s\S]*<\/family_profile>/);
+    expect(out).toMatch(/<family_profile>[\s\S]*Raj[\s\S]*<\/family_profile>/);
     expect(out).toMatch(/<session_snapshot>[\s\S]*prior summary[\s\S]*<\/session_snapshot>/);
   });
 
