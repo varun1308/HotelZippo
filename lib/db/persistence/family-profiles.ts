@@ -1,15 +1,20 @@
 /* family_profiles persistence (Phase 4 · specs/04-auth-persistence.md Stage 4 + 5).
- * Client-side, through the cookie-based anon SSR client → RLS scopes every row to the
- * signed-in user (auth.uid() = user_id). Bridges the form's camelCase FamilyProfile
+ * Through the cookie-based anon SSR client → RLS scopes every row to the signed-in user
+ * (auth.uid() = user_id). Bridges the form's camelCase FamilyProfile
  * (components/profile/types.ts) ⇄ the snake_case public.family_profiles columns
  * (canonical: Notion 07 / migration 0001). One profile per user — upsert on user_id.
+ *
+ * NOT a `'use client'` module: it's isomorphic — every function takes an injectable client
+ * and only calls createSupabaseBrowserClient() as a default arg. Client components import it
+ * fine, and the SERVER (the conversation agent's update_profile tool) imports the same named
+ * functions directly. Marking it `'use client'` turned those into non-callable client
+ * reference proxies on the server ("loadFamilyProfile is not a function") — so the directive
+ * is deliberately absent.
  *
  * The columns: name, hometown, family_members (jsonb: spouse + children), food_preferences
  * (text[]), budget_tier, brand_preferences (text[]), freestyle_notes. The form's collapsed
  * `food` enum + `indianFoodMatters` flag map into food_preferences; `spouse`/`children`
  * live in family_members jsonb (the data model keeps members structured, not columns). */
-'use client';
-
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/db/ssr';
 import type { Child, FamilyProfile } from '@/components/profile';
@@ -78,4 +83,74 @@ export async function saveFamilyProfile(
     .from('family_profiles')
     .upsert(toRow(profile, userId), { onConflict: 'user_id' });
   if (error) throw error;
+}
+
+/* ---------------------------------------------------------------------------
+ * Agent-driven profile refinement (Phase 4-fix · agent profile persistence).
+ *
+ * When a signed-in user CONFIRMS a change/addition to an already-known profile while
+ * chatting ("actually, make it luxury", "we're vegetarian now"), the conversation agent's
+ * `update_profile` tool merges just those fields into the existing row. These two PURE
+ * helpers are the merge + change-labelling core — no DB, fully unit-testable. The structured
+ * profile stays durable so the agent never re-states a stale value next session.
+ * ------------------------------------------------------------------------- */
+
+/** The subset of profile fields the agent may patch when the user confirms a change.
+ * Every field optional — the agent fills only what changed. `name` included so a user can
+ * correct it, but the tool never invents one. */
+export type ProfilePatch = Partial<
+  Pick<
+    FamilyProfile,
+    | 'name'
+    | 'hometown'
+    | 'spouse'
+    | 'children'
+    | 'food'
+    | 'indianFoodMatters'
+    | 'budgetTier'
+    | 'brandPreferences'
+    | 'notes'
+  >
+>;
+
+/** Human-readable label per patchable field — what the inline "profile updated" chip shows. */
+const FIELD_LABELS: Record<keyof ProfilePatch, string> = {
+  name: 'name',
+  hometown: 'hometown',
+  spouse: 'travelling party',
+  children: 'children',
+  food: 'food preference',
+  indianFoodMatters: 'Indian food preference',
+  budgetTier: 'budget',
+  brandPreferences: 'hotel brands',
+  notes: 'notes',
+};
+
+/** Merge a confirmed patch over an existing profile. Only keys actually present in the
+ * patch (not `undefined`) override; everything else is carried through unchanged. Pure. */
+export function mergeProfile(existing: FamilyProfile, patch: ProfilePatch): FamilyProfile {
+  const merged: FamilyProfile = { ...existing };
+  for (const k of Object.keys(patch) as (keyof ProfilePatch)[]) {
+    const v = patch[k];
+    if (v !== undefined) (merged as unknown as Record<string, unknown>)[k] = v;
+  }
+  return merged;
+}
+
+/** The human labels for fields the patch ACTUALLY changes (value differs from existing).
+ * A patch that re-states the current value yields no label — so the chip only appears on a
+ * real change. Deep-equal by JSON for the array/object fields (children, brands). */
+export function changedFieldLabels(existing: FamilyProfile, patch: ProfilePatch): string[] {
+  const labels: string[] = [];
+  for (const k of Object.keys(patch) as (keyof ProfilePatch)[]) {
+    const next = patch[k];
+    if (next === undefined) continue;
+    const prev = existing[k];
+    const changed =
+      typeof next === 'object' || typeof prev === 'object'
+        ? JSON.stringify(next) !== JSON.stringify(prev)
+        : next !== prev;
+    if (changed) labels.push(FIELD_LABELS[k]);
+  }
+  return labels;
 }

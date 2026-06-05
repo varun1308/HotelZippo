@@ -100,6 +100,36 @@ describe('/api/chat NDJSON translation', () => {
     expect(comp!.props.topPick.hotelName).toBe('JW Marriott Phuket');
   });
 
+  it('translates an update_profile tool-result into a profile-update component chunk', async () => {
+    mockRunConversation.mockResolvedValue(
+      fullStreamOf([
+        { type: 'tool-result', toolName: 'update_profile', output: { updated: ['budget'] } },
+        { type: 'text-delta', text: 'Done.' },
+        { type: 'finish' },
+      ]),
+    );
+    const res = await POST(req(userMsg));
+    const chunks = await readNdjson(res);
+    const comp = chunks.find((c) => c.type === 'component') as
+      | { type: 'component'; component: string; props: { updated: string[] } }
+      | undefined;
+    expect(comp).toBeTruthy();
+    expect(comp!.component).toBe('profile-update');
+    expect(comp!.props.updated).toEqual(['budget']);
+  });
+
+  it('does NOT emit a chunk for an update_profile no-op (empty updated)', async () => {
+    mockRunConversation.mockResolvedValue(
+      fullStreamOf([
+        { type: 'tool-result', toolName: 'update_profile', output: { updated: [] } },
+        { type: 'finish' },
+      ]),
+    );
+    const res = await POST(req(userMsg));
+    const chunks = await readNdjson(res);
+    expect(chunks.some((c) => c.type === 'component')).toBe(false);
+  });
+
   it('emits a warm error chunk if fullStream throws mid-stream, still ending with done', async () => {
     mockRunConversation.mockResolvedValue({
       fullStream: (async function* () {

@@ -21,7 +21,8 @@ export type PromptBehaviour =
   | 'transactional-direct-to-assemble'
   | 'hard-flag-acknowledged-in-wrapper'
   | 'recommendation-wrapper-one-line-no-restate'
-  | 'out-of-scope-decline-names-five';
+  | 'out-of-scope-decline-names-five'
+  | 'confirmed-change-must-call-update-profile';
 
 export interface FixtureTurn {
   role: 'user' | 'assistant';
@@ -29,7 +30,7 @@ export interface FixtureTurn {
 }
 
 export interface SystemPromptFixture {
-  id: 'SP-01' | 'SP-02' | 'SP-03' | 'SP-04' | 'SP-05';
+  id: 'SP-01' | 'SP-02' | 'SP-03' | 'SP-04' | 'SP-05' | 'SP-06';
   title: string;
   /** Injected <family_profile> content (empty string = new user). */
   familyProfile: FixtureFamilyProfile | null;
@@ -93,6 +94,15 @@ export const SP_FIXTURES: SystemPromptFixture[] = [
     sessionSnapshot: null,
     messages: [{ role: 'user', text: 'Actually can you find us a hotel in Bangkok?' }],
     expectBehaviours: ['out-of-scope-decline-names-five'],
+  },
+  {
+    id: 'SP-06',
+    title: 'Returning user confirms a saved-field change → MUST call update_profile, not narrate',
+    familyProfile: STANDARD_FAMILY_PROFILE,
+    sessionSnapshot:
+      'Returning user Raj (Mumbai). Saved profile present: vegetarian, comfort budget.',
+    messages: [{ role: 'user', text: 'Actually, change my budget to luxury.' }],
+    expectBehaviours: ['confirmed-change-must-call-update-profile'],
   },
 ];
 

@@ -17,6 +17,7 @@ import type {
 } from '@/components/recommendation';
 import type { ChatMessage, ComponentPart } from '@/lib/chat/types';
 import { ChatStreamText } from './ChatStreamText';
+import { ProfileUpdatedChip, type ProfileUpdatedChipProps } from './ProfileUpdatedChip';
 
 /* ---- inline component registry ------------------------------------------- */
 /* Maps a component part name → renderer. `props` is narrowed here (the only
@@ -35,6 +36,8 @@ function InlineComponent({ part }: { part: ComponentPart }) {
           <InlineHardFlag {...(part.props as HardFlagProps)} />
         </div>
       );
+    case 'profile-update':
+      return <ProfileUpdatedChip {...(part.props as ProfileUpdatedChipProps)} />;
     default:
       return null;
   }

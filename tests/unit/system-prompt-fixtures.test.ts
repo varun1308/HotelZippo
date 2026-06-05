@@ -39,6 +39,12 @@ const BEHAVIOUR_EVIDENCE: Record<PromptBehaviour, RegExp[]> = {
     /decline warmly/i,
     /Phuket.*Hong Kong.*Singapore.*Maldives.*Bali/s,
   ],
+  'confirmed-change-must-call-update-profile': [
+    /MUST call\s+`update_profile`/i,
+    /BEFORE replying/i,
+    /Saying so without calling the tool is a failure/i,
+    /budgetTier:'luxury'/i,
+  ],
 };
 
 describe('SP-01…SP-05 system-prompt fixtures (structural)', () => {
@@ -47,9 +53,9 @@ describe('SP-01…SP-05 system-prompt fixtures (structural)', () => {
     prompt = await fs.readFile(PROMPT_PATH, 'utf8');
   });
 
-  it('ships exactly the five SP fixtures with unique ids', () => {
-    expect(SP_FIXTURES).toHaveLength(5);
-    expect(new Set(SP_FIXTURES.map((f) => f.id)).size).toBe(5);
+  it('ships exactly the six SP fixtures with unique ids', () => {
+    expect(SP_FIXTURES).toHaveLength(6);
+    expect(new Set(SP_FIXTURES.map((f) => f.id)).size).toBe(6);
   });
 
   for (const fx of SP_FIXTURES) {
