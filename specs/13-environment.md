@@ -17,8 +17,9 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID` | server-only | TripAdvisor Reviews Scraper actor (Phase 6) |
 | `APIFY_GOOGLE_REVIEWS_ACTOR_ID` | server-only | Google Maps Reviews Scraper actor (Phase 6) |
 | `APIFY_TRIPADVISOR_SEARCH_ACTOR_ID` | server-only | TripAdvisor Hotel **Search** actor used by curation tool (12a). Confirm exact name against 12a. |
-| `ROUTESTACK_API_KEY` | server-only | RouteStack MCP booking (Phase 7) |
-| `ROUTESTACK_API_URL` | server-only | RouteStack API base URL |
+| `ROUTESTACK_API_KEY` | server-only | RouteStack partner API key (public identifier) — used in the HMAC token exchange (Phase 7) |
+| `ROUTESTACK_API_SECRET` | server-only | RouteStack partner secret — signs the HMAC (`apiKey:timestamp:nonce`) for the partner-token exchange; never exposed to client (Phase 7) |
+| `ROUTESTACK_API_URL` | server-only | RouteStack HTTP base URL — sandbox `https://evolvemcp.routestack.ai` (Phase 7) |
 | `GOOGLE_CLIENT_ID` | server-only | Google OAuth client ID (Phase 4) |
 | `GOOGLE_CLIENT_SECRET` | server-only | Google OAuth client secret (Phase 4) |
 | `DASH0_API_KEY` | server-only | OTEL export to Dash0 |

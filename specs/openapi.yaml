@@ -1,0 +1,2098 @@
+openapi: 3.0.0
+components:
+  examples: {}
+  headers: {}
+  parameters: {}
+  requestBodies: {}
+  responses: {}
+  schemas:
+    Record_string.unknown_:
+      properties: {}
+      additionalProperties: {}
+      type: object
+      description: Construct a type with a set of properties K of type T
+    AnyJson:
+      $ref: '#/components/schemas/Record_string.unknown_'
+    PartnerTokenRequest:
+      properties:
+        nonce:
+          type: string
+          description: Random nonce to prevent replay attacks.
+        timestamp:
+          type: number
+          format: double
+          description: Unix timestamp (seconds).
+        hmac:
+          type: string
+          description: >-
+            HMAC signature of `apiKey:timestamp:nonce` using the partner secret
+            key.
+        apiKey:
+          type: string
+          description: Partner API key (public identifier).
+      required:
+        - nonce
+        - timestamp
+        - hmac
+        - apiKey
+      type: object
+    HotelSearchDestinationItem:
+      properties:
+        coordinates:
+          properties:
+            long:
+              type: number
+              format: double
+            lat:
+              type: number
+              format: double
+          type: object
+        id:
+          type: string
+        country:
+          type: string
+        fullName:
+          type: string
+        referenceId:
+          type: string
+          nullable: true
+        type:
+          type: string
+        city:
+          type: string
+          nullable: true
+      type: object
+    HotelSearchDestinationsResponse:
+      properties:
+        result:
+          items:
+            $ref: '#/components/schemas/HotelSearchDestinationItem'
+          type: array
+          nullable: true
+        code:
+          type: number
+          format: double
+        message:
+          type: string
+          nullable: true
+        success:
+          type: boolean
+      required:
+        - success
+      type: object
+    HotelSearchDestinationsRequest:
+      properties:
+        type:
+          type: string
+          enum:
+            - DESTINATION
+            - HOTEL
+        query:
+          type: string
+      required:
+        - query
+      type: object
+    HotelSearchHotel:
+      properties:
+        mainamenity:
+          type: string
+        reviews:
+          properties:
+            rating:
+              type: number
+              format: double
+            count:
+              type: number
+              format: double
+          type: object
+        contact:
+          properties:
+            address:
+              properties:
+                country:
+                  properties:
+                    name:
+                      type: string
+                    code:
+                      type: string
+                  type: object
+                city:
+                  properties:
+                    name:
+                      type: string
+                  type: object
+                line1:
+                  type: string
+              type: object
+          type: object
+        heroImage:
+          type: string
+        distance:
+          type: number
+          format: double
+        facilities:
+          items:
+            type: string
+          type: array
+        saving:
+          type: number
+          format: double
+        baseprice:
+          type: number
+          format: double
+        ourprice:
+          type: number
+          format: double
+        starRating:
+          type: number
+          format: double
+        providerName:
+          type: string
+        name:
+          type: string
+        id:
+          type: string
+      type: object
+    HotelSearchResult:
+      properties:
+        result:
+          items:
+            $ref: '#/components/schemas/HotelSearchHotel'
+          type: array
+        currency:
+          type: string
+        correlationId:
+          type: string
+          description: >-
+            Search-session id for this hotel listing. **Return it from
+            `search-hotels` and pass the same value**
+
+            on `get-hotel-details`, `get-rooms-and-rates`, `revalidate`, and
+            `get-payment-url` (see each operation).
+
+            Do not invent this id client-side. Session length is bounded by
+            server TTL (default 2h; `CORRELATION_ID_TTL_MS`).
+        token:
+          type: string
+          description: >-
+            **Listing session token** from the provider for this search result
+            set. It belongs to the same **search session**
+
+            as `correlationId` (from `search-hotels`). Copy both into later
+            calls (`get-hotel-details`, `get-rooms-and-rates`,
+
+            or the combined `get-hotel-details-and-rates`) until the user starts
+            a new search or the session expires.
+
+            Do not invent this value; always take it from the latest
+            `search-hotels` response for that hotel flow.
+        count:
+          type: number
+          format: double
+        nextResultsKey:
+          type: string
+        status:
+          type: string
+      type: object
+    HotelSearchResponse:
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/HotelSearchResult'
+          nullable: true
+        code:
+          type: number
+          format: double
+        message:
+          type: string
+          nullable: true
+        success:
+          type: boolean
+      required:
+        - success
+      type: object
+    HotelRoomOccupancy:
+      properties:
+        childAges:
+          items:
+            type: number
+            format: double
+          type: array
+        children:
+          type: number
+          format: double
+        adults:
+          type: number
+          format: double
+      type: object
+    HotelSearchRequest:
+      properties:
+        currency:
+          type: string
+        long:
+          type: number
+          format: double
+        lat:
+          type: number
+          format: double
+        rooms:
+          items:
+            $ref: '#/components/schemas/HotelRoomOccupancy'
+          type: array
+        checkOut:
+          type: string
+        checkIn:
+          type: string
+        destinationType:
+          type: string
+        destinationId:
+          type: string
+      required:
+        - long
+        - lat
+        - rooms
+        - checkOut
+        - checkIn
+        - destinationId
+      type: object
+    HotelGetHotelDetailsRequest:
+      properties:
+        contentType:
+          type: string
+        correlationId:
+          type: string
+          description: >-
+            Same `correlationId` as returned by `/mcp/hotel/search-hotels` for
+            this listing session.
+        token:
+          type: string
+          description: >-
+            **Listing session token** from `search-hotels` (`result.token`) for
+            this hotel and search session. Must pair with
+
+            the same `correlationId` you used from that search. If you use the
+            **combined** endpoint instead, you do not call
+
+            this route for the same step.
+        hotelId:
+          type: string
+      required:
+        - hotelId
+      type: object
+      description: >-
+        POST /mcp/hotel/get-hotel-details — use with `get-rooms-and-rates`
+        **or** use combined `get-hotel-details-and-rates`, not both.
+    HotelGetRoomsAndRatesRequest:
+      properties:
+        publishedRate:
+          type: number
+          format: double
+        hotelName:
+          type: string
+        correlationId:
+          type: string
+          description: Same `correlationId` as returned by `/mcp/hotel/search-hotels`.
+        rooms:
+          items:
+            $ref: '#/components/schemas/HotelRoomOccupancy'
+          type: array
+        checkOut:
+          type: string
+        checkIn:
+          type: string
+        token:
+          type: string
+          description: >-
+            **Listing session token** from `search-hotels` (`result.token`),
+            same search session as `correlationId`.
+
+            Some flows first call `get-hotel-details` and use the token from
+            that response where the provider requires it.
+        hotelId:
+          type: string
+      required:
+        - rooms
+        - checkOut
+        - checkIn
+        - token
+        - hotelId
+      type: object
+      description: >-
+        POST /mcp/hotel/get-rooms-and-rates — pair with `get-hotel-details`
+        **or** use `get-hotel-details-and-rates` alone, not both.
+    HotelDetailsAndRatesRequest:
+      properties:
+        publishedRate:
+          type: number
+          format: double
+        hotelName:
+          type: string
+        contentType:
+          type: string
+        correlationId:
+          type: string
+          description: >-
+            Same `correlationId` as returned by `/mcp/hotel/search-hotels` for
+            this listing session.
+        rooms:
+          items:
+            $ref: '#/components/schemas/HotelRoomOccupancy'
+          type: array
+        checkOut:
+          type: string
+        checkIn:
+          type: string
+        token:
+          type: string
+          description: >-
+            **Listing session token** from `search-hotels` (`result.token`) for
+            this hotel, together with `correlationId`
+
+            from the same response. Use this combined endpoint **instead of**
+            the two separate detail/rooms calls for the same
+
+            booking step—not in addition to them.
+        hotelId:
+          type: string
+      required:
+        - rooms
+        - checkOut
+        - checkIn
+        - token
+        - hotelId
+      type: object
+      description: >-
+        POST /mcp/hotel/get-hotel-details-and-rates — **alternative** to calling
+        `get-hotel-details` + `get-rooms-and-rates` separately.
+    PaymentUrlResponse:
+      properties:
+        url:
+          type: string
+        success:
+          type: boolean
+      required:
+        - url
+        - success
+      type: object
+    HotelPaymentUrlRequest:
+      properties:
+        portalUrl:
+          type: string
+        priceCheckResult:
+          $ref: '#/components/schemas/Record_string.unknown_'
+        correlationId:
+          type: string
+          description: >-
+            Same `correlationId` as returned by `/mcp/hotel/search-hotels` when
+            still in the same listing session.
+        hotelName:
+          type: string
+        checkOut:
+          type: string
+        checkIn:
+          type: string
+        recommendationId:
+          type: string
+        roomId:
+          type: string
+        token:
+          type: string
+          description: >-
+            **Session token** for this booking path from prior steps (search +
+            rooms/rates / revalidate), paired with
+
+            `correlationId` when the provider expects it.
+        hotelId:
+          type: string
+      required:
+        - checkOut
+        - checkIn
+        - recommendationId
+        - roomId
+        - token
+        - hotelId
+      type: object
+    HotelRevalidateRequest:
+      properties:
+        correlationId:
+          type: string
+          description: Same `correlationId` as returned by `/mcp/hotel/search-hotels`.
+        publishedRate:
+          type: number
+          format: double
+        token:
+          type: string
+          description: >-
+            **Rate or listing token** from the provider for the selected
+            room/offer—typically the same session token you have
+
+            been passing from `search-hotels` / rooms-and-rates (opaque string;
+            treat with `correlationId` as one session).
+        recommendationId:
+          type: string
+        hotelId:
+          type: string
+      required:
+        - token
+        - recommendationId
+        - hotelId
+      type: object
+    HotelBookingIdRequest:
+      properties:
+        bookingId:
+          type: string
+      required:
+        - bookingId
+      type: object
+    HotelListBookingsRequest:
+      properties:
+        offset:
+          type: number
+          format: double
+        limit:
+          type: number
+          format: double
+        module:
+          type: string
+          description: Optional vertical filter, e.g. HOTEL, FLIGHT, CAR when supported.
+        status:
+          type: string
+          enum:
+            - UPCOMING
+            - CANCELLED
+            - COMPLETED
+          description: 'Filter: UPCOMING (default), CANCELLED, or COMPLETED.'
+      type: object
+      description: >-
+        POST /mcp/hotel/list-bookings — requires member/club context from
+        account auth.
+    FlightLocationsRequest:
+      properties:
+        term:
+          type: string
+      required:
+        - term
+      type: object
+    FlightSearchRequest:
+      $ref: '#/components/schemas/Record_string.unknown_'
+    FlightRevalidateRequest:
+      properties:
+        searchFilterObj:
+          $ref: '#/components/schemas/Record_string.unknown_'
+        searchListPrice:
+          $ref: '#/components/schemas/Record_string.unknown_'
+        fareSourceCode:
+          type: string
+      required:
+        - fareSourceCode
+      type: object
+    CarLocationsRequest:
+      properties:
+        term:
+          type: string
+      required:
+        - term
+      type: object
+    CarSearchRequest:
+      $ref: '#/components/schemas/Record_string.unknown_'
+    CarGetPaymentUrlRequest:
+      properties:
+        portalUrl:
+          type: string
+        car:
+          $ref: '#/components/schemas/Record_string.unknown_'
+        dropoffDate:
+          type: string
+        pickupDate:
+          type: string
+        dropoff:
+          $ref: '#/components/schemas/Record_string.unknown_'
+        pickup:
+          $ref: '#/components/schemas/Record_string.unknown_'
+      required:
+        - car
+        - dropoffDate
+        - pickupDate
+        - dropoff
+        - pickup
+      type: object
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+info:
+  title: Travel Booking MCP API
+  version: 1.0.0
+  description: >-
+    Generated from tsoa controllers. Public HTTP skill endpoints live under
+    /mcp/*. For hotels, use provider `correlationId` and `token` from
+    `search-hotels` in JSON request bodies where documented — see
+    docs/EXTERNAL_MCP_INTEGRATION.md.
+  license:
+    name: MIT
+  contact: {}
+paths:
+  /mcp/auth/partner-token:
+    post:
+      operationId: PartnerToken
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    token: >-
+                      eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2NvdW50SWQiOiI1MzY4NDYiLCJpYXQiOjE3NzU0NzY5MjksImV4cCI6MTc3NTU2MzMyOSwiaXNzIjoiY3RzLXBhcnRuZXIifQ.ixHsEr6zbH3x33vWCbJYxrVQ-VGT889LPMlK080GnUQ
+                    expiresIn: 24h
+      description: >-
+        Exchange partner credentials for a short-lived bearer token (JWT).
+
+
+        The frontend (or customer backend) uses this token to authenticate
+        subsequent `/mcp/*` calls.
+
+
+        Dependency notes:
+
+        - Call this first, then send the returned JWT as `Authorization: Bearer
+        <token>` on all other MCP requests.
+      tags:
+        - Auth
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerTokenRequest'
+            examples:
+              sentExample1:
+                value:
+                  hmac: '-4-2mxxVi_c7J8lV4-Gb4MZsGYOpR7VREjim5T_StQ4'
+                  timestamp: 1775476924
+                  nonce: 9L8sYyY5gK664Tf6twSKiwSMYwmkbMco
+  /mcp/hotel/search-destinations:
+    post:
+      operationId: SearchDestinations
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HotelSearchDestinationsResponse'
+              examples:
+                example1:
+                  value:
+                    success: true
+                    message: data retrieved
+                    code: 5128
+                    result:
+                      - city: null
+                        type: City
+                        referenceId: null
+                        fullName: Pune, Maharashtra, India
+                        country: IN
+                        id: '328605'
+                        coordinates:
+                          lat: 18.520433
+                          long: 73.856737
+                      - city: null
+                        type: State
+                        referenceId: null
+                        fullName: Pune, Maharashtra, India
+                        country: IN
+                        id: '333627'
+                        coordinates:
+                          lat: 18.520837
+                          long: 73.855403
+                      - city: null
+                        type: Airport
+                        referenceId: null
+                        fullName: Pune, India (PNQ-Lohegaon)
+                        country: IN
+                        id: '327935'
+                        coordinates:
+                          lat: 18.579057
+                          long: 73.909664
+      description: >-
+        Resolve a location query to destination IDs and coordinates.
+
+
+        Dependency notes:
+
+        - Use the returned `destinationId`, `lat`, and `long` as inputs to
+        `/mcp/hotel/search-hotels`.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelSearchDestinationsRequest'
+            examples:
+              sentExample1:
+                value:
+                  query: Pune
+                  type: DESTINATION
+  /mcp/hotel/search-hotels:
+    post:
+      operationId: SearchHotels
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HotelSearchResponse'
+              examples:
+                example1:
+                  value:
+                    success: false
+                    message: null
+                    code: 204
+                    result: null
+      description: >-
+        Search hotels by destination, dates, and rooms.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Typically uses `destinationId/lat/long` from
+        `/mcp/hotel/search-destinations`.
+
+        - Response `result.correlationId` and `result.token` come from the
+        provider; **persist both** and send the same
+          `correlationId` on every subsequent hotel step until you start a **new** search (do not generate your own).
+        - Use the returned `hotelId` as input to `/mcp/hotel/get-hotel-details`
+        and `/mcp/hotel/get-rooms-and-rates`.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelSearchRequest'
+            examples:
+              sentExample1:
+                value:
+                  long: 77.73909664
+                  lat: 18.579057
+                  rooms:
+                    - childAges: []
+                      children: <double>
+                      adults: 1
+                    - childAges: []
+                      children: <double>
+                      adults: 1
+                  checkOut: '2026-05-07'
+                  checkIn: '2026-05-06'
+                  destinationId: '327935'
+                  currency: USD
+                  destinationType: '327935'
+  /mcp/hotel/get-hotel-details:
+    post:
+      operationId: GetHotelDetails
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    message: Response trimmed for documentation due to size
+                    type: object
+                    length: 150098
+      description: >-
+        Get hotel content and availability details for a given hotelId.
+
+
+        **Integration choice (pick one path, not both):** either call
+        **`get-hotel-details`** and **`get-rooms-and-rates`**
+
+        as two calls for the same hotel/dates, **or** call
+        **`get-hotel-details-and-rates`** once. Do not use the combined
+
+        endpoint and also duplicate the same step with the two separate
+        endpoints.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Provide `hotelId` from `/mcp/hotel/search-hotels`.
+
+        - Pass **`token`** and **`correlationId`** from the same `search-hotels`
+        response (see field descriptions).
+
+        - The response may include an opaque `token` used by downstream calls
+        (provider requirement).
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelGetHotelDetailsRequest'
+            examples:
+              sentExample1:
+                value:
+                  hotelId: '39679449'
+                  contentType: ALL
+                  correlationId: 1773231318764-73e160flv
+                  token: d0cf4062-191d-4e76-85e2-fc506f6da92b
+  /mcp/hotel/get-rooms-and-rates:
+    post:
+      operationId: GetRoomsAndRates
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: false
+                    message: The offer you were viewing has expired
+                    code: 5148
+                    result: null
+      description: >-
+        Get rooms, rate plans, and pricing for a given hotelId.
+
+
+        **Integration choice:** use this together with **`get-hotel-details`**
+        **or** use **`get-hotel-details-and-rates`**
+
+        alone—not both for the same booking step.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Provide `hotelId` from `/mcp/hotel/search-hotels`.
+
+        - Pass **`token`**, **`correlationId`**, dates, and `rooms` (see field
+        descriptions).
+
+        - Some providers require the `token` returned by
+        `/mcp/hotel/get-hotel-details` before rooms/rates.
+
+        - The response typically includes `recommendationId` required for
+        `/mcp/hotel/revalidate`.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelGetRoomsAndRatesRequest'
+            examples:
+              sentExample1:
+                value:
+                  rooms:
+                    - adults: 2
+                      children: 0
+                      childAges: []
+                    - adults: 2
+                      children: 0
+                      childAges: []
+                  checkOut: '2026-05-07'
+                  checkIn: '2026-05-06'
+                  hotelId: '39679449'
+                  publishedRate: 68.74
+                  hotelName: O Hotel Pune
+                  correlationId: 1773231318764-73e160flv
+                  token: d0cf4062-191d-4e76-85e2-fc506f6da92b
+  /mcp/hotel/get-hotel-details-and-rates:
+    post:
+      operationId: GetHotelDetailsAndRates
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    message: Response trimmed for documentation due to size
+                    type: object
+                    length: 150263
+      description: >-
+        Get hotel content and rooms/rates together in one call.
+
+
+        **Integration choice:** this **replaces** calling
+        **`get-hotel-details`** and **`get-rooms-and-rates`** separately
+
+        for the same hotel, dates, and search session. Do not also call those
+        two endpoints for the same user action.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Provide `hotelId` from `/mcp/hotel/search-hotels`.
+
+        - Provide `token`, `checkIn`, `checkOut`, and `rooms` (same meaning as
+        on `get-rooms-and-rates`).
+
+        - Executes detail + availability work and returns both payloads in
+        `result`.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelDetailsAndRatesRequest'
+            examples:
+              sentExample1:
+                value:
+                  rooms:
+                    - adults: 2
+                      children: 0
+                      childAges: []
+                    - adults: 2
+                      children: 0
+                      childAges: []
+                  checkOut: '2026-05-07'
+                  checkIn: '2026-05-06'
+                  hotelId: '39679449'
+                  publishedRate: 68.74
+                  hotelName: O Hotel Pune
+                  contentType: ALL
+                  correlationId: 1773231318764-73e160flv
+                  token: d0cf4062-191d-4e76-85e2-fc506f6da92b
+  /mcp/hotel/get-payment-url:
+    post:
+      operationId: GetPaymentUrl
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentUrlResponse'
+              examples:
+                example1:
+                  value:
+                    success: true
+                    url: >-
+                      https://evolve.routestack.ai/hotel/guests?query=H4sIAAAAAAAAE61WW2%2FiOhD%2BK5WfiZSEEhqkfWjpbhvUQktbYFlWyLEnxNRxWMdpl63634%2FsJBAu7VnpnEd%2F31zsmfHMvCFGUQc1fa%2Ftn576qIFIKiVwrFgqDOW020236TSds7Z3arWb4Hh2xF9QA8WpAq7SZxCog6hNolPbcy3Hd6h1Cm3POmuBa0WkZXuRR7HvhqiBVpIRQB1ka08xkGemlV3b9Sy7ZdleBae5quNt1EAJ%2Ft2NGafnC23AcVEDZYAlie9zkGvUQW8zRCFTTJjLz1BnhmDdW027gRcsb1v9JWn1L%2B9bAXtlJBkl00mPh0mfP4zv2YAF7Kbby7%2BPHR4sU%2Fa4vgjC5pCH3Yt7Om5xrTMVoyz82orD8RMbsN5d8DV%2BoVejLPh24YTJk9a3YXJh9B%2BufHs6ftXYEk%2BGLY0Zv81hTK%2BeKn9%2F6NU3ezryl6E75JXMd9d3QjFcw0PgBSzIAtHj02S0no5by%2BmovwybPS37etPtrYgz5CRx%2Bt8nwyXW70ymcXjd56WdF5IMV2HyzZ5ObvWdOTyt%2FoxH8RA%2F%2Bb%2FuJ%2F1eOImdseC9%2FrMT3F7aLLr%2F8mWGGrMiCUERxG12ttQgV7tc23BK4hfgHGRm2HEzY6EYqUd3ejG9HmX0%2BpYNlkEWJP0Uj38%2F348pJ%2BvAGzuOP9m43hZgQI2ZD0rQSMtcKJbA43oFRtYU5Qy9owZayDRf9XGiy2WYpglqoDBNn5lY1CrGyJd%2Bql9gDBtCaxtqcHKtzyd3uYAtfU6phKx46xYNEryAPewGK6ZyegCnYnEMf1BYDrFiYrFHbEC7MUOY5lxp765JC%2BNUgii5lYQVZvpdSuagAwVRLigOOWwxggUBzkswwjzTKOb8KodMZYGI0iH8ypmEmqFMYakusYJjxQGCHlJFbRi9uU5WwXZs%2B%2BTuttLaEk6dCVMs6QXOWBFkncaTgeDrIvdYbRPfh0WqGFb6qqaKmMjKWBAJlKnqlObSdKG94zyEKJUwL4RLMovT1%2FmnEiHOoG5ulYeckTpibBg4i4HO61QCksRYqAiOIPMVSFLCm381Qx2nMUOCLWLzIHMAdVczqvBvqN6aYLlgYudQNxvBRjLDL9vCKg661tIdRGrkeKAM%2F3EMP%2BElhFjBXCdsD6lLrbAEoeZ7ydtDj9rfl8GRAnlU5Bi2E5cdTNbCUxKURdEh8tmtPolLKbGTwh2snsmKOCioQ%2BKIGiYqx%2FyYp5IptY9xH7%2Fq42o54u%2BIMZImCcuyYpbbRWNKX4F2jVAXS6qL98dP7TfljMDmiCllen5g3o2xNM3Y4KmkIE1TFDnnpr2YefCgsMprbbyEy7FQ9JOyVWqzj3rn2VIyTZNuKiImk2rzeCua067MX5ojB6ZWMn1hFGQ%2FT0LTAuoTYQd8f%2F%2BvBhoztDDNv4pZlmSXWOHquDPhf7zNkMiTQXR%2BMInOF2U63n%2FuPfdO54ptk6VDUxmrhYmAZxPit60I%2FJZ16vmuhXEzsvCZD64dhaFjk80UqIe2dv33n43%2Fx6YEXYwgaH0tiUK%2FbUdnruUSYlunngPWWdv3LfB8AlELnzmtVrEVbRL8N1vy%2FhLE%2Fn0JqvJbv%2FIm59UKUyxFLKuW6DFTMRM3LGHqrpRFHaSHPHr%2FB%2FE5DNMXDAAA&deeplink=Y
+      description: >-
+        Generate the external payment portal URL for the hotel booking flow.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Supply `hotelId`, **`token`**, `recommendationId`, and dates from the
+        same listing session as your search and
+          rooms/rates (or combined) step—see body field descriptions for `token` and `correlationId`.
+        - For best results call `/mcp/hotel/revalidate` immediately before
+        generating a payment URL.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelPaymentUrlRequest'
+            examples:
+              sentExample1:
+                value:
+                  checkOut: '2026-05-07'
+                  checkIn: '2026-05-06'
+                  recommendationId: fb970f82-2cc0-461e-8799-e69cef5a8155
+                  roomId: ce60cc97-fe95-4692-aa3f-a89e20fbb10c
+                  hotelId: '39679449'
+                  portalUrl: '327935'
+                  priceCheckResult:
+                    key_0: false
+                  correlationId: 1773231318764-73e160flv
+                  hotelName: O Hotel Pune
+                  token: d0cf4062-191d-4e76-85e2-fc506f6da92b
+                  publishedRate: 68.74
+  /mcp/hotel/revalidate:
+    post:
+      operationId: Revalidate
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: false
+                    message: The offer you were viewing has expired
+                    result: null
+                    code: 5148
+      description: >-
+        Revalidate/verify a selected hotel rate before payment.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Typically requires `hotelId`, `recommendationId`, and a provider
+        `token` from previous calls.
+
+        - Include **`correlationId`** from the same `/mcp/hotel/search-hotels`
+        session when available.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelRevalidateRequest'
+            examples:
+              sentExample1:
+                value:
+                  recommendationId: fb970f82-2cc0-461e-8799-e69cef5a8155
+                  hotelId: '39679449'
+                  correlationId: 1773231318764-73e160flv
+                  publishedRate: 68.74
+                  token: d0cf4062-191d-4e76-85e2-fc506f6da92b
+  /mcp/hotel/get-booking-info:
+    post:
+      operationId: GetBookingInfo
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: false
+                    message: bookinginfo no data found
+                    code: 5034
+                    result: null
+      description: Fetch booking status/details by booking ID.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelBookingIdRequest'
+            examples:
+              sentExample1:
+                value:
+                  bookingId: '327935'
+  /mcp/hotel/cancel-booking:
+    post:
+      operationId: CancelBooking
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value: null
+      description: Cancel a hotel booking by booking ID.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelBookingIdRequest'
+            examples:
+              sentExample1:
+                value:
+                  bookingId: '327935'
+  /mcp/hotel/list-bookings:
+    post:
+      operationId: ListBookings
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: false
+                    message: >-
+                      To view bookings, memberId is required. Please log in or
+                      configure account CTS club id.
+      description: >-
+        List bookings for the authenticated member (hotel and other modules
+        aggregated upstream).
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`) and account
+        resolution so member/club IDs are available.
+      tags:
+        - Hotel
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HotelListBookingsRequest'
+            examples:
+              sentExample1:
+                value:
+                  offset: <double>
+                  limit: <double>
+                  module: '327935'
+                  status: COMPLETED
+  /mcp/flight/session:
+    post:
+      operationId: Session
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: true
+                    sessionId: 722243C3-FBF3-4359-806F-5AC5A07F6492-1910
+      description: >-
+        Create or refresh an Alpha flight session ID.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Call this first and reuse the returned session for
+        `/mcp/flight/locations` and `/mcp/flight/search` if required by the
+        provider.
+      tags:
+        - Flight
+      security: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            examples:
+              sentExample1:
+                value: {}
+  /mcp/flight/locations:
+    post:
+      operationId: Locations
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    code: '6032'
+                    success: true
+                    message: data retrieved
+                    result:
+                      - name: London Intl.
+                        code: YXU
+                        city: London
+                        country: Canada
+                        fullname: '[YXU] London Intl., London, Canada'
+                      - name: London Stansted
+                        code: STN
+                        city: London
+                        country: United Kingdom
+                        fullname: '[STN] London Stansted, London, United Kingdom'
+                      - name: London Heathrow
+                        code: LHR
+                        city: London
+                        country: United Kingdom
+                        fullname: '[LHR] London Heathrow, London, United Kingdom'
+      description: Autocomplete flight locations (IATA codes/cities/airports).
+      tags:
+        - Flight
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlightLocationsRequest'
+            examples:
+              sentExample1:
+                value:
+                  term: London
+  /mcp/flight/search:
+    post:
+      operationId: Search
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    count: null
+                    code: '6010'
+                    message: departure date should not be empty
+                    success: false
+                    searchFilterObj: null
+                    result: null
+                    currency: null
+                    currencyrate: null
+                    membercurrencyrate: null
+                    showcurrencyrate: null
+                    filters: null
+      description: >-
+        Search flights using Alpha flight newsearch.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Usually uses location codes from `/mcp/flight/locations` and may
+        require a session from `/mcp/flight/session`.
+
+        - Use the returned fare identifiers for `/mcp/flight/revalidate` and
+        `/mcp/flight/get-payment-url`.
+
+        - Upstream flight APIs use internal `correlationid` headers set by MCP;
+        external clients do **not** send `X-Correlation-Id`.
+      tags:
+        - Flight
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlightSearchRequest'
+            examples:
+              sentExample1:
+                value:
+                  key_0: 3452
+                  key_1: 5527.723764659338
+                  key_2: 642
+                  key_3: 2082
+  /mcp/flight/revalidate:
+    post:
+      operationId: Revalidate
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    revalidate: null
+      description: >-
+        Revalidate/reprice a selected itinerary before payment.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Uses identifiers returned by `/mcp/flight/search` (fare/itinerary
+        references).
+      tags:
+        - Flight
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlightRevalidateRequest'
+            examples:
+              sentExample1:
+                value:
+                  fareSourceCode: '327935'
+                  searchFilterObj: '{"key_0":7001.162182267506,"key_1":"string"}'
+  /mcp/flight/get-payment-url:
+    post:
+      operationId: GetPaymentUrl
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: true
+                    url: >-
+                      https://evolve.routestack.ai/flight/traveller?query=H4sIAAAAAAAAE6WSP2%2FCMBDFv8vNGQIFJJA6QKBgqwkiSZPgLX9MY7AdmhgSg%2FjulaGqxNCpwy3v6d7v7nRX%2BDrRWsPkerOgoWmdl5sfAZQ%2BUphAJWmc6rBmR7CgoI1iMlWskg1MIH5pGJH4nAVoRDXeZ32fo33FwkUZINayTLwpEqAROnTog6EGCe9YrA5szRB7d%2FClWL7Zd%2F%2FhnYt4aOfy1xdF3DXPGXj87mA708%2B8je2vnnnewtf%2F5ZmMO%2B9AklmZS7%2BXi2ixTR5Mdz%2FVHrM7N7Bbj29ad149yhm07nxq8jRJTM%2Fwrx7tXqreOqx662AwXIcHtovsV7BA1emZck5rc2OqcUlWUVOsXDNnZ%2Fbc9stjtvQ1iQdGa42WxkOxNftoNEL7O7%2FNRSRIgnkmvDvfj71zJsaKBqhBcqZJTHguotO2H7kkITxz0AjxH11iThw8Bgvqk1RM0PDxEDvOPksFNwtol5ep%2FKR%2BqihM7Ns3P%2FgGM04CAAA%3D&fromChat=1&_t=1775476995257&deeplink=Y
+      description: >-
+        Generate the external payment portal URL for the flight booking flow.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Usually called after `/mcp/flight/revalidate` using the chosen
+        itinerary identifiers.
+      tags:
+        - Flight
+      security: []
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            examples:
+              sentExample1:
+                value:
+                  flight: {}
+                  origin: LHR
+                  destination: CDG
+                  departureDate: '2026-11-06'
+                  adults: 1
+  /mcp/car/locations:
+    post:
+      operationId: Locations
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: true
+                    message: data retrieved
+                    code: 7012
+                    result:
+                      - code: PNQ
+                        type: airport
+                        name: Pune Airport
+                        state: null
+                        country: null
+                        airports: []
+      description: |-
+        Autocomplete car pickup/dropoff locations and return location codes.
+
+        Dependency notes:
+        - Requires partner token (see `/mcp/auth/partner-token`).
+        - Use returned location codes as inputs to `/mcp/car/search`.
+      tags:
+        - Car
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarLocationsRequest'
+            examples:
+              sentExample1:
+                value:
+                  term: Pune Airport
+  /mcp/car/search:
+    post:
+      operationId: Search
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value:
+                    success: true
+                    message: data retrieved
+                    code: 7000
+                    result:
+                      count: 10
+                      currency: USD
+                      currencyrate: 1
+                      showcurrencyrate: 1
+                      filters:
+                        partners:
+                          - code: AV
+                            name: Avis Rent A Car
+                            count: 5
+                            price: 264.77
+                          - code: FX
+                            name: Fox Rent A Car
+                            count: 5
+                            price: 491.53
+                        carTypes:
+                          - type: compact-car
+                            type_name: Compact Car
+                            count: 2
+                            price: 675
+                          - type: economy-car
+                            type_name: Economy Car
+                            count: 1
+                            price: 491.53
+                          - type: full-size-car
+                            type_name: Full-size Car
+                            count: 1
+                            price: 1553.25
+                          - type: full-size-van
+                            type_name: Full-size Van
+                            count: 1
+                            price: 420
+                          - type: luxury-car
+                            type_name: Luxury Car
+                            count: 1
+                            price: 399.17
+                          - type: mid-size-car
+                            type_name: Mid-size Car
+                            count: 1
+                            price: 264.77
+                          - type: premium-car
+                            type_name: Premium Car
+                            count: 1
+                            price: 2100
+                          - type: standard-size-car
+                            type_name: Standard-size Car
+                            count: 1
+                            price: 264.77
+                          - type: van
+                            type_name: Van
+                            count: 1
+                            price: 850.83
+                        features:
+                          - name: Air Conditioner
+                            count: 10
+                            price: 264.77
+                          - name: Automatic Transmission
+                            count: 1
+                            price: 2100
+                          - name: Manual Transmission
+                            count: 9
+                            price: 264.77
+                        minPrice: 264
+                        maxPrice: 2100
+                        location:
+                          - value: airport
+                            label: In Airport
+                            count: 10
+                            price: 264.77
+                            airports:
+                              - airport_name: Lohegaon
+                                airport_code: PNQ
+                        miles:
+                          - value: 'true'
+                            label: Unlimited
+                            count: 5
+                            price: 491.53
+                          - value: 'false'
+                            label: Limited
+                            count: 5
+                            price: 264.77
+                        fuelType:
+                          - value: diesel
+                            label: Diesel
+                            count: 2
+                            price: 728.03
+                          - value: petrol_gasoline
+                            label: Petrol/Gasoline
+                            count: 8
+                            price: 264.77
+                        carCapacity:
+                          - value: 2_to_5
+                            label: 2 to 5 Passengers
+                            count: 8
+                            price: 264.77
+                          - value: 6_or_more
+                            label: 6 or More Passengers
+                            count: 2
+                            price: 420
+                        transmission:
+                          - value: automatic
+                            label: Automatic
+                            count: 1
+                            price: 2100
+                          - value: manual
+                            label: Manual
+                            count: 9
+                            price: 264.77
+                        payment:
+                          - value: postpaid
+                            label: Pay Later
+                            count: 10
+                            price: 264.77
+                        cancellation:
+                          - value: free_cancellation
+                            label: Free Cancellation
+                            count: 10
+                            price: 264.77
+                        airportPickup:
+                          - value: shuttle
+                            label: Off Airport—Take Shuttle
+                            count: 5
+                            price: 491.53
+                      cars:
+                        - name: Toyota Innova 2.4 Crysta or similar
+                          description: Standard-Size Diesel Van
+                          type: van
+                          type_name: Van
+                          vehicle_code: SVMD
+                          passengers: 7
+                          doors: '4'
+                          hasAC: true
+                          bags: 4
+                          creditCardRequired: false
+                          hasAMT: false
+                          images:
+                            - size: SIZE67X36
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=67&height=36&opto
+                            - size: SIZE134X72
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=134&height=72&opto
+                            - size: SIZE335X180
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=335&height=180&opto
+                            - size: SIZE536X288
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png
+                            - size: SIZE268X144
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=268&height=144&opto
+                          heroImage: >-
+                            https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=134&height=72&opto
+                          features:
+                            - Air Conditioner
+                            - Manual Transmission
+                          fuelType: diesel
+                          partner:
+                            code: FX
+                            name: Fox Rent-A-Car
+                            logo: >-
+                              https://s1.pclncdn.com/rc-static/v2/partner-logos/FX/FX_20240910101806.png?width=106&height=27&opto&fit=bounds
+                            phone: null
+                          discounts:
+                            discount_code: null
+                            applied: ''
+                          pickup:
+                            location: >-
+                              Europcar New Airport Rd, Lohegaon, Pune, 411032,
+                              IN, 1
+                            location_code: PNQ
+                            latitude: '18.572474'
+                            longitude: '73.907341'
+                            city_center_distance: 1
+                            neighborhood: null
+                            location_information: Shuttle to Car
+                            airport_name: Lohegaon
+                            airport_code: PNQ
+                          dropoff:
+                            location: >-
+                              Europcar New Airport Rd, Lohegaon, Pune, 411032,
+                              IN, 1
+                            location_code: PNQ
+                            latitude: '18.572474'
+                            longitude: '73.907341'
+                            city_center_distance: 1
+                            neighborhood: null
+                            location_information: Shuttle to Car
+                            airport_code: PNQ
+                            airport_name: Lohegaon
+                          disclosure_required: false
+                          driver_age_required: false
+                          display_price: 850.83
+                          show_display_price: 850.83
+                          price_postpaid:
+                            currency: USD
+                            symbol: null
+                            total: 850.83
+                            showTotal: 850.83
+                            rateType: postpaid
+                            net_rate: false
+                            pay_at_booking: false
+                            mileage: true
+                            free_cancellation: true
+                            days: 6
+                            fareCode: >-
+                              V2--_uIwBaL3SDers49C-7COdLk-CN7k7zxx-m8rHaI-dR9ra93uYwNu9eLYulsLkRK5_uOtrnqPs6ZWXsCOjl6cU6l_Cjx4MCQ_VSvl2y9Fl7Rm-BWll4KRUR4P8VG4FDPwKXA-w7qIXgislm_VOtiBwcNRriGO67vQwIURHi9LfdhXBe90flrgNWb9-mzNGOnuvvSBAKDNUiBgNH7JVh4wz14ogHQ8Tg6BDVAMEBMrPltKNjNLREXSzS9lkz_zjOIzqgLPfvwKAviOO0j0glah0EpYsYXrzPOiS6TANYQ6Wzvu1IFgYhNrNpFe1Cxqvh9gwxZ4wd48U4eRwaiNXlyLwMQHDuGvio7DOBIKoop64bnS8nd68OaneNyo86UbGsNE8TUXtxpTvJChzzoe2J6tOOzdNCsbHqWOYpRavfmh_ROSjU5uEinO5suTt_cWY5ul3znixRabbBPYYhUq5VlfVc5rrczXJtXssYAoEVoQ_BpsjD0RtWSweg7-iIfCVIziedAmX5ukCLp34_Y4PVrbyki-O_y1IYUqli5EeG2Zau4CyPp0Y8iUoQNHY-WarCX_JkmuJFDE78thwcTZTnu326KxPSdnkpWfYB1sVLiSH7B7nyN77Lyx2bkEdX7E3REmn2Z7n2oQ_WizjjNqpNSRxXUIqsZRuGnpco2H0dZSI5N5GXNsai7NBjXZ3dEwfU7eD0HeD22c6IVAuyOEQodL8MxCsHbS64dvlpuSj8FiIoLdatSUHFBI0ucmnK-aWiBWtyYkfW6cQGhxpjtcSrGXqVQ
+                            allow_cancellation: 'true'
+                            strikeout_price: 0
+                          price_prepaid: null
+                          credit: 10
+                          coin: 10
+                          manual_transmission: true
+                          mileage: true
+                          inclusions: []
+                        - name: Toyota Etios Chauffeur Drive Only or similar
+                          description: Mid-Size Car
+                          type: mid-size-car
+                          type_name: Mid-size Car
+                          vehicle_code: ICMR
+                          passengers: 4
+                          doors: '4'
+                          hasAC: true
+                          bags: 2
+                          creditCardRequired: false
+                          hasAMT: false
+                          images:
+                            - size: SIZE67X36
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/av/17603/AV_ICMR_IN.png?width=67&height=36&opto
+                            - size: SIZE134X72
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/av/17603/AV_ICMR_IN.png?width=134&height=72&opto
+                            - size: SIZE335X180
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/av/4681/AV_ICMR_IN.png
+                            - size: SIZE536X288
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/av/1311/ZIINICMR.jpg
+                            - size: SIZE268X144
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/av/17603/AV_ICMR_IN.png
+                          heroImage: >-
+                            https://s1.pclncdn.com/rc-static/v2/vehicles/partner/av/17603/AV_ICMR_IN.png?width=134&height=72&opto
+                          features:
+                            - Air Conditioner
+                            - Manual Transmission
+                          fuelType: petrol_gasoline
+                          partner:
+                            code: AV
+                            name: Avis Rent a Car
+                            logo: >-
+                              https://s1.pclncdn.com/rc-static/v2/partner-logos/AV/AV.png?width=106&height=27&opto&fit=bounds
+                            phone: null
+                          discounts:
+                            discount_code: S169100
+                            applied: CUSTOMER
+                          pickup:
+                            location: >-
+                              Airline Flight Dtls Mandatory, Meet And Greet
+                              Service, Pune, IN, 1
+                            location_code: PNQ
+                            latitude: '18.571439'
+                            longitude: '73.908425'
+                            city_center_distance: 1
+                            neighborhood: null
+                            location_information: May Require Shuttle
+                            airport_name: Lohegaon
+                            airport_code: PNQ
+                          dropoff:
+                            location: >-
+                              Airline Flight Dtls Mandatory, Meet And Greet
+                              Service, Pune, IN, 1
+                            location_code: PNQ
+                            latitude: '18.571439'
+                            longitude: '73.908425'
+                            city_center_distance: 1
+                            neighborhood: null
+                            location_information: May Require Shuttle
+                            airport_code: PNQ
+                            airport_name: Lohegaon
+                          disclosure_required: false
+                          driver_age_required: false
+                          display_price: 264.77
+                          show_display_price: 264.77
+                          price_postpaid:
+                            currency: USD
+                            symbol: null
+                            total: 264.77
+                            showTotal: 264.77
+                            rateType: postpaid
+                            net_rate: false
+                            pay_at_booking: false
+                            mileage: false
+                            free_cancellation: true
+                            days: 6
+                            fareCode: >-
+                              V2--_bE0ZBk3o7IHDh_xUZOK6Dbi-CBUilXSrzZNLTvBRZbRc4cNTihu0f6cirugaS7zzgXj5gDlukXHqUK_-LV1I3QfC_a-r1ZJ9A-u6kjeHlZ_9DCe2_Z6goKoGd2MyFzvPFKkv8Ix-WERgoBg7bigSzOJ437FKPqTihndv6AO7p2RXPwlCnDQdeyFsb-HUsWXspgmuOiZq0e-CQMj19aMAVEr_HXleGt_QRDhEPR5H7LllimDuCFCPbpPi8HUGFa39RsB6x_-DlDJbwcMLIIyhQmk-EkXUhMLcfWGQXwonvgQ3z5_TAqWOBMZTT2Vvg_67L0nlJefb2u7ksSnjEY_FBVefKQKD2LtgarpOVZ2_ftuDMpHq_qitqpsGvW_ghUsAyrkMB06Ui2l637d_OpAAhblYlepTeaunH5k7kueGeo1Uh28lHf2WtdrITi48avoGINaCUpthKICu6lKnONSmSWaGUX-Q1ruPnno-mfUKYByu2pwEc149NU5cjh2S8aktouSTJHCxHcrRlhxKRk44cdX3ofbJStjhnVAYrTjdkWYlg-Ll8pKdEK7PUg9KvRnz_5kSBA79s6wSJ6WkW6GiSP4DiKUuxKRlZlLWz3F-Rtib8MKFJ5dqKml1iqNeZd506GuHzqkJqgmoW8dndR2m8Cgly-x_P1B1eMz4gAPZq2TWd9YMZAsybMkGJ3b8CkXnJY2b1d4tShOH1eRCf5WY_rX6v6LDe3JcYLo5nB3C7ruGzGdX9YFMo9Na-jXYK8SZgMMZByfvWR2M0rqT6aFCMfPuKRticowZzI0Luoz5s7XVdtbqSc2NToPvYQRW6Zp02z_3w0PZXrhiInZDv8d8LQ
+                            allow_cancellation: 'true'
+                            strikeout_price: 0
+                          price_prepaid: null
+                          credit: 10
+                          coin: 10
+                          manual_transmission: true
+                          mileage: false
+                          inclusions:
+                            - Theft Protection
+                            - Collision damage waiver
+                        - name: Honda City 1.5 or similar
+                          description: Compact Car
+                          type: compact-car
+                          type_name: Compact Car
+                          vehicle_code: CDMR
+                          passengers: 4
+                          doors: '4'
+                          hasAC: true
+                          bags: 2
+                          creditCardRequired: false
+                          hasAMT: false
+                          images:
+                            - size: SIZE67X36
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_CDMR_IN.png?width=67&height=36&opto
+                            - size: SIZE134X72
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_CDMR_IN.png?width=134&height=72&opto
+                            - size: SIZE335X180
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_CDMR_IN.png?width=335&height=180&opto
+                            - size: SIZE536X288
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_CDMR_IN.png
+                            - size: SIZE268X144
+                              url: >-
+                                https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_CDMR_IN.png?width=268&height=144&opto
+                          heroImage: >-
+                            https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_CDMR_IN.png?width=134&height=72&opto
+                          features:
+                            - Air Conditioner
+                            - Manual Transmission
+                          fuelType: petrol_gasoline
+                          partner:
+                            code: FX
+                            name: Fox Rent-A-Car
+                            logo: >-
+                              https://s1.pclncdn.com/rc-static/v2/partner-logos/FX/FX_20240910101806.png?width=106&height=27&opto&fit=bounds
+                            phone: null
+                          discounts:
+                            discount_code: null
+                            applied: ''
+                          pickup:
+                            location: >-
+                              Europcar New Airport Rd, Lohegaon, Pune, 411032,
+                              IN, 1
+                            location_code: PNQ
+                            latitude: '18.572474'
+                            longitude: '73.907341'
+                            city_center_distance: 1
+                            neighborhood: null
+                            location_information: Shuttle to Car
+                            airport_name: Lohegaon
+                            airport_code: PNQ
+                          dropoff:
+                            location: >-
+                              Europcar New Airport Rd, Lohegaon, Pune, 411032,
+                              IN, 1
+                            location_code: PNQ
+                            latitude: '18.572474'
+                            longitude: '73.907341'
+                            city_center_distance: 1
+                            neighborhood: null
+                            location_information: Shuttle to Car
+                            airport_code: PNQ
+                            airport_name: Lohegaon
+                          disclosure_required: false
+                          driver_age_required: false
+                          display_price: 675
+                          show_display_price: 675
+                          price_postpaid:
+                            currency: USD
+                            symbol: null
+                            total: 675
+                            showTotal: 675
+                            rateType: postpaid
+                            net_rate: false
+                            pay_at_booking: false
+                            mileage: true
+                            free_cancellation: true
+                            days: 6
+                            fareCode: >-
+                              V2--_halShPLvNmBJZLzAyije0M96SQ3gVtxMqKvthA6Yr2EipDzhR_G4G1XSe8sMr3xg3Z1tJiVCPhBDAy6toifDGXkNgnreNj1CRxi6eicl6NpfcL2UB9Jl_GpESgkWe4X4YW6-htmhuV7A6PKmfpHOQwIgkEkRnpdniLIhhWjYu1GYQGjABNCK91j3GKIgPHgRIJQpuCCujHnRm6ptWqTT9AttMCrvNSqgdXR3BJ1lprNgZy09st15Sepnco7bu0QeJ8hataJnHl_G7EYLIkm3J3yqOEkvd-V5B3Tm_64sqHuAY8uomEFnKFC3srMLqbmKbcZk6FE7LmJam6ffLPJc6W7UswtuG3hGwTUsRUZ4UXsqxru9BiPoEu8zsXoyK-AOqyzhzUa6APLM4CyTUkYnn6ta-TqRaKLmXFY_yXCcHZs57A7lotvydOte5ufsyh0u_OZOUKFiAnmTfjky9YJX-MzKZMDfFbPyq2F9xTN7IscOTBiZL7ae1jrLTCbJzVLBg569qlRaCJEselb75w2K7KUIXUShyLaijekVJy8vOits9N_JNr2Wxwns65eu3mlGLB60RT4hxImJcGqg_G2DeUipoWJl7UprHAFCFtVEW8oyEmsqKE4nygCxNuEOscGfah8jjH8syCoTQpGuu-UmyABDHvlzv7prdhGWcltzh6mguciprbv7zxxV6Tz0ADGa_CaIw5v2Jhk96f63CE3zJ64lq_jpxOq-HFsHB62QdD0knen6ZZCpIymdgfJCZF6q
+                            allow_cancellation: 'true'
+                            strikeout_price: 0
+                          price_prepaid: null
+                          credit: 10
+                          coin: 10
+                          manual_transmission: true
+                          mileage: true
+                          inclusions: []
+      description: >-
+        Search rental cars using Alpha car newsearch.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Usually uses location codes from `/mcp/car/locations`.
+
+        - Use the returned fareCode (or equivalent identifier) to generate a
+        payment URL.
+
+        - Upstream car APIs use internal `correlationid` headers set by MCP;
+        external clients do **not** send `X-Correlation-Id`.
+      tags:
+        - Car
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarSearchRequest'
+            examples:
+              sentExample1:
+                value:
+                  key_0: 3452
+                  key_1: 5527.723764659338
+                  key_2: 642
+                  key_3: 2082
+                  filter:
+                    pickup:
+                      name: Pune Airport
+                      code: PNQ
+                      date: '2026-05-06'
+                      time: '10:00'
+                    dropoff:
+                      name: Pune Airport
+                      code: PNQ
+                      date: '2026-05-11'
+                      time: '23:59'
+                    sortBy: {}
+                    findData: {}
+                    page: 1
+                    limit: 20
+  /mcp/car/get-payment-url:
+    post:
+      operationId: GetPaymentUrl
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentUrlResponse'
+              examples:
+                example1:
+                  value:
+                    success: true
+                    url: >-
+                      https://evolve.routestack.ai/carTraveller?query=H4sIAAAAAAAAE%2B1Xa4%2BrOBL9Ky0%2BzKee2zxC36alq9UlBAIbnA4PA16NWsYm4WETBggERvPfV6T7PjQzuyvNhx2ttFKkYJvCVXXK55R%2FEboMtyQ%2FXLJ2Ep5%2FEZqCVGGzOxPcF%2BdaeBayySlT2WN2eS7CjerZxVjQLRuRbz%2Fahd3ZXM3TKCz2hWPS2BmIBXJS6HsUk9MhYhOxtImudR%2Btx1NgaWcU0TyVV51t6lLKw842Dlc3%2BDy7xXjyw1VnG5tit3Zmapnitz3AQCNVJHVV7At7Wc9x7Iyp4ohksh9tRq6uIRbHw6dPwv17DAbus6DgmfAsKPJHTVEDSXwWl98HURSFe4G252Z%2FPP5vx%2FoexO%2BDlZVnVfsWbHup%2B4JnwdQs7xDcCr%2FeL38GX1Cv8c00OE%2FnHt%2FZdX0e8J38YXW3bqeux3fn9q4reMFwu2yZdaQtmvec%2BT2uKW7pj34xZ3dGkXUZu4O4Fu6F%2Fm2z4evg9X2ft%2BUhywvCsldypsukD11jAQ93XVafsrYTnoWPy3bn8%2B15JdwLOe4%2Br4VnoW8vmXAvpPj0ZYW0GS36NW6pl%2F18KdqMCs%2FCEbMuezdzg%2B8mCo5P2WIaKV1BZPZ4yz4DTlSFMpBOM1iQqOGUru1Hm%2Bci3erzvngayLy5EAt0KQdVWqhlKosD4W5PFC%2BnFit3SjLtFMSwxcrUgvNO0XNSexcU2wOqT4MbEAmU7uCx%2FBhKCHim5gSFOqacPFCZVdQ6aaAkHFuwQXIuvgSu7HBtpNZTcfSvH%2B0aNBm%2FVWDgw8Z0A1eMDDLdKjV2uqVy8dYTydZ93E3a7PrqmMjXSyJ7lx0HQ%2BprUzJJt4rDkTvQ0h4oh2ccgQ7F7kAsc6KWykih8Wz9dAVzKLuTZkWmFsBK2sQi2%2B9q%2FYJmTcGRJ2JDvLrz4Tt%2FyfRv%2FZ1dKTI2K3f91%2BV38cHhOcMRPVNDvO6NzzxVdDGdHG23%2FV09SO6MErc8rf7rOf5jfyZQ5okbHMS%2FEPMJlKfvMN%2BIYI0GsvUGu5bocuCy9mwvZ0x4FvK%2Bb7rnh4dO%2BtAQVhNafyBn%2FtCSH7se9wV5GOSHdyroHhrc9nXWPhyvD9JH9VF5MOPXhRhebfChqU9%2FGwva558kZfVDnhWnvP%2F0Uf7h3PRn4V44Zri%2FtMup%2FofwuWjv1ueaFgtJZQtpubi%2BYHYXtLjueNF1C3n9dC8cLxl750R6o64bA918%2BI0eeOy0cPEliaS3MddWtumwtD70B18ykvjG1V0q0%2BHPIPINBen2DbIgsF5QeJpcwxZdo7q6xmZ0g9MIflvRwWf5u4qewPSGhsNRQw2pSBV4QVt38W%2FElnZZqimtYZduxZuGFB05X%2Bq%2Bewu5wjEoFxNqau%2FhNxcaXbtFishW73AEqyVEuxa%2FyO2lebPtUhksB3VIC%2FvRrqBEuDYmsjnZG5XRSde%2FSJltOtVurbupnDMkm0NajKdwCy%2FIH0%2FA2Fxdw512a90JivHk%2BossXodEXtKlXWIZDMi6kcohYDcJ7ZLYa%2BgWVreDUm5WuzJU3PKggPWbbcrpd%2Btk3pXVCGZXfPs2aOiWHRMZXqgFp1j2moVwUg4WqK8L7ChiNbacgfB8SOVDseeqlFrjb%2FxiF8S1KY3exrc2Qs4luvU65C8Eo38pk6%2BSHstfW4rvcrH4ZDak1gdSe8dE1t78Zvo%2B9B3tXfbPx%2BP%2Fk%2F4nk%2F67WP4DIG9JLzrCzt2lzV7b3zcZtC2GrH3Fpz9eLbqG4em1aQuysM2TKn54UoR7ocvP4%2Bu%2FXL1NvDbnrm9wQd8picbOhCK1zG41AQPvJqZATSNnWAT1drTXY0EtTUyisdiXJ8ldr1buNBZEzgcqeQO1zEU4ViD4fNkbbmfXTk4tGGaxfqM3Ymkz3eo5jg432kOxdyT8rU1F3OyIHHZ2recZ1HJqakUqay2O1NouG55E1xn5Y5FGrEORWS82dOtIyxyqHYagViaRWqLoeiuhVF4V%2B9qbaBR2NvfyLHaLfZl0Nkc54dD4QsGwtPsd1CQ%2FpuskHOdQ9BipXXEfuj0QwQvaXNtdCPZA7pSszle7SFyRKs99X6rCkk1JUM0UMiWoQxWFV0Sj6xxYve%2FP8EhDTSRcvYZbV44YTYgIXjAf5UQK5dTUDFyfxCAEXiyhgPJxygJmpQb1U19aQ%2FnagU3vQ2iLoZFH3uxZnqkrvpTru5goJGQJktmcWtIRVpqIQ0dJRNUnnG2DOVEoMxUfQt%2B3KjWwUIXNfI2CakT8OiFRjZOy6tO42XuidqExkkPR0X3R28OIrZGo2kBsImx4SlZuxFSmdhjkIZrR2jORHoRwHcTOId16u4A3%2B8B0zMgEj%2BHMOqw0x4w3L37cXJF4PaAaKb5oyjjUXlzrPCL5mmNDN4nJ5gjmU8b0FwxdGW7MfQQ3MlQamQam43GK8Eadglq3UGAa2daUscFqquQYbGkFjBwCC%2FpUNpuA5V0WXpUAmra3hVvK2QBE7%2BVQsV0qayMovSJl7irlB3m%2F0fKUw30WPa0Ag4WngL0X5CGEuZht9ZBWjYG3zWMqh5NfIjEQtUe0UQ0iOzaB9CWKdT%2BJEU%2Bj%2FBhWWoBZKNEQNmn1JBEFhou%2BQamSaDTOGVebzHTyhDvr0GQIm%2FAKIOoQQyWInSlRmsSvvYQoAB0izYRc82LRGYncbFzTEaEEFBQRZRcxB1Ug8uOmQZGnp%2FAk0ag3gu3nGZgaAqYeEe6oWK76QNJUN2QIxmaHA2iikEwRNyWwAWq4%2FTxGQd7ASPOCKkc7SHNSgSQWmzaN4d%2B9yjPBnIt4S0toNmFah7Nbol1m6gGy1JaYlEehfSUScjEENhBtJa3ZHszUzeLTlPDeROZJ8QLge5F0cdlZSUtnCKEW47j5GVfqlWzUIKzzBIbsSqTGpyFdmvPBrU4jMpvAD%2BAehDQJapDjgO4PvEmiElReTDkMKPMM3UbhYXK5K%2FsQ6TRmLx40B7QZV0GcG0TMi3BORLRFHdnCAJe5hUM2BJaXUxNAf4PWfqBLiSxd%2FEnKoczWUPHUKOo5nFEZhvScbfWfqQUCUtGEQHS7sifRtUsVekxk85LIsEutb9LwxkM3vhQJZy2KNIma2kg4Kxeect9aonfebbM32q0vjH25YwrPgrTcqMm5qL8881t3%2Bdp%2F311%2BvaXygmVvrfD7RFETdlneWXrVn3799Z%2B5kbs8hREAAA%3D%3D&deeplink=Y
+      description: >-
+        Generate the external payment portal URL for the car booking flow.
+
+
+        Dependency notes:
+
+        - Requires partner token (see `/mcp/auth/partner-token`).
+
+        - Usually called after `/mcp/car/search` using the chosen car's
+        fareCode/identifier.
+      tags:
+        - Car
+      security: []
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarGetPaymentUrlRequest'
+            examples:
+              sentExample1:
+                value:
+                  car:
+                    name: Toyota Innova 2.4 Crysta or similar
+                    description: Standard-Size Diesel Van
+                    type: van
+                    type_name: Van
+                    vehicle_code: SVMD
+                    passengers: 7
+                    doors: '4'
+                    hasAC: true
+                    bags: 4
+                    creditCardRequired: false
+                    hasAMT: false
+                    images:
+                      - size: SIZE67X36
+                        url: >-
+                          https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=67&height=36&opto
+                      - size: SIZE134X72
+                        url: >-
+                          https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=134&height=72&opto
+                      - size: SIZE335X180
+                        url: >-
+                          https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=335&height=180&opto
+                      - size: SIZE536X288
+                        url: >-
+                          https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png
+                      - size: SIZE268X144
+                        url: >-
+                          https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=268&height=144&opto
+                    heroImage: >-
+                      https://s1.pclncdn.com/rc-static/v2/vehicles/partner/fx/17563/FX_SVMD_IN.png?width=134&height=72&opto
+                    features:
+                      - Air Conditioner
+                      - Manual Transmission
+                    fuelType: diesel
+                    partner:
+                      code: FX
+                      name: Fox Rent-A-Car
+                      logo: >-
+                        https://s1.pclncdn.com/rc-static/v2/partner-logos/FX/FX_20240910101806.png?width=106&height=27&opto&fit=bounds
+                      phone: null
+                    discounts:
+                      discount_code: null
+                      applied: ''
+                    pickup:
+                      location: Europcar New Airport Rd, Lohegaon, Pune, 411032, IN, 1
+                      location_code: PNQ
+                      latitude: '18.572474'
+                      longitude: '73.907341'
+                      city_center_distance: 1
+                      neighborhood: null
+                      location_information: Shuttle to Car
+                      airport_name: Lohegaon
+                      airport_code: PNQ
+                    dropoff:
+                      location: Europcar New Airport Rd, Lohegaon, Pune, 411032, IN, 1
+                      location_code: PNQ
+                      latitude: '18.572474'
+                      longitude: '73.907341'
+                      city_center_distance: 1
+                      neighborhood: null
+                      location_information: Shuttle to Car
+                      airport_code: PNQ
+                      airport_name: Lohegaon
+                    disclosure_required: false
+                    driver_age_required: false
+                    display_price: 850.83
+                    show_display_price: 850.83
+                    price_postpaid:
+                      currency: USD
+                      symbol: null
+                      total: 850.83
+                      showTotal: 850.83
+                      rateType: postpaid
+                      net_rate: false
+                      pay_at_booking: false
+                      mileage: true
+                      free_cancellation: true
+                      days: 6
+                      fareCode: >-
+                        V2--_uIwBaL3SDers49C-7COdLk-CN7k7zxx-m8rHaI-dR9ra93uYwNu9eLYulsLkRK5_uOtrnqPs6ZWXsCOjl6cU6l_Cjx4MCQ_VSvl2y9Fl7Rm-BWll4KRUR4P8VG4FDPwKXA-w7qIXgislm_VOtiBwcNRriGO67vQwIURHi9LfdhXBe90flrgNWb9-mzNGOnuvvSBAKDNUiBgNH7JVh4wz14ogHQ8Tg6BDVAMEBMrPltKNjNLREXSzS9lkz_zjOIzqgLPfvwKAviOO0j0glah0EpYsYXrzPOiS6TANYQ6Wzvu1IFgYhNrNpFe1Cxqvh9gwxZ4wd48U4eRwaiNXlyLwMQHDuGvio7DOBIKoop64bnS8nd68OaneNyo86UbGsNE8TUXtxpTvJChzzoe2J6tOOzdNCsbHqWOYpRavfmh_ROSjU5uEinO5suTt_cWY5ul3znixRabbBPYYhUq5VlfVc5rrczXJtXssYAoEVoQ_BpsjD0RtWSweg7-iIfCVIziedAmX5ukCLp34_Y4PVrbyki-O_y1IYUqli5EeG2Zau4CyPp0Y8iUoQNHY-WarCX_JkmuJFDE78thwcTZTnu326KxPSdnkpWfYB1sVLiSH7B7nyN77Lyx2bkEdX7E3REmn2Z7n2oQ_WizjjNqpNSRxXUIqsZRuGnpco2H0dZSI5N5GXNsai7NBjXZ3dEwfU7eD0HeD22c6IVAuyOEQodL8MxCsHbS64dvlpuSj8FiIoLdatSUHFBI0ucmnK-aWiBWtyYkfW6cQGhxpjtcSrGXqVQ
+                      allow_cancellation: 'true'
+                      strikeout_price: 0
+                    price_prepaid: null
+                    credit: 10
+                    coin: 10
+                    manual_transmission: true
+                    mileage: true
+                    inclusions: []
+                  dropoffDate: '327935'
+                  pickupDate: '327935'
+                  dropoff:
+                    key_0: true
+                  pickup:
+                    key_0: 2034.4579522147433
+                    key_1: true
+                    key_2: false
+                  portalUrl: '327935'
+  /mcp/docs:
+    get:
+      operationId: DocsIndex
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnyJson'
+              examples:
+                example1:
+                  value: |-
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                      <meta charset="UTF-8">
+                      <title>RouteStack Travel MCP Server</title>
+                      <style>body{font-family:sans-serif;max-width:800px;margin:2rem auto;line-height:1.5}h1,h2{color:#333;}a{color:#0066cc;}</style>
+                    </head>
+                    <body>
+                      <h1>RouteStack Hotel Booking MCP Server</h1>
+                      <p>This service exposes a set of skillset APIs (hotel/flight/car) that
+                      can be consumed by AI agents and other clients.  You can interact with the
+                      web application or call the endpoints directly.</p>
+
+                      <h2>Getting started</h2>
+                      <p>If you are browsing this in a browser the root URL redirects to this page.</p>
+                      <ol>
+                        <li>Authenticate by POSTing to
+                          <code>/mcp/auth/login</code> (or <code>/auth/login</code> if the server is mounted
+                          without the <code>/mcp</code> prefix).</li>
+                        <li>Use the returned JWT as a bearer token for further requests.</li>
+                      </ol>
+
+                      <h2 id="auth">Auth endpoints</h2>
+                      <p>The only public endpoint is <code>/mcp/auth/login</code>. Send a JSON
+                      body with <code>username</code> and <code>password</code> to receive a
+                      JWT. All other API calls require the token in an <code>Authorization:
+                      Bearer &lt;token&gt;</code> header.</p>
+
+                      <h2 id="api-docs">API documentation</h2>
+                      <p>This server can be hosted at the root (e.g. <code>/docs</code>) or behind a path prefix
+                      (commonly <code>/mcp</code>, e.g. <code>/mcp/docs</code>). The links below automatically adapt
+                      to whichever mode you're currently browsing.</p>
+                      <ul>
+                        <li><a id="link-openapi-yaml" href="#">OpenAPI spec (YAML)</a></li>
+                        <li><a id="link-openapi-json" href="#">OpenAPI spec (JSON redirect)</a></li>
+                        <li><a id="link-api-html" href="#">API reference (HTML)</a></li>
+                        <li><a id="link-capabilities" href="#">Capabilities / tool catalog</a></li>
+                        <li><a id="link-postman" href="#">Postman collection</a></li>
+                      </ul>
+
+                      <h2>Helpers & samples</h2>
+                      <ul>
+                        <li><a id="link-skills" href="#">Skillset descriptions</a></li>
+                        <li><a id="link-quickstart" href="#">Quickstart guide</a></li>
+                      </ul>
+
+                      <h2>FAQ</h2>
+                      <p>If you are deploying behind a load balancer or reverse-proxy that
+                      rewrites paths, make sure you request <code>/openapi.yaml</code> (or
+                      <code>/mcp/openapi.yaml</code> when a base path is in use) rather than the
+                      root. </p>
+
+                      <p>For any issues, check the GitHub repository or contact the API maintainer.</p>
+
+                      <script>
+                        (function () {
+                          // Determine whether we're mounted under /mcp.
+                          // When browsing /mcp/docs, assets live under /mcp/docs/* and /mcp/*.
+                          var isPrefixed = window.location.pathname.indexOf('/mcp/') === 0;
+                          var prefix = isPrefixed ? '/mcp' : '';
+                          var docsBase = prefix + '/docs';
+
+                          function setHref(id, href) {
+                            var el = document.getElementById(id);
+                            if (!el) return;
+                            el.setAttribute('href', href);
+                            // show full path for copy/paste
+                            el.textContent = href;
+                          }
+
+                          setHref('link-openapi-yaml', docsBase + '/openapi.yaml');
+                          setHref('link-openapi-json', docsBase + '/openapi.json');
+                          setHref('link-api-html', docsBase + '/api.html');
+                          setHref('link-capabilities', docsBase + '/capabilities.json');
+                          setHref('link-postman', docsBase + '/postman_collection.json');
+                          setHref('link-skills', docsBase + '/SKILLS.md');
+                          setHref('link-quickstart', docsBase + '/QUICKSTART.md');
+                        })();
+                      </script>
+                    </body>
+                    </html>
+      description: Docs landing page (HTML).
+      tags:
+        - Docs
+      security: []
+      parameters: []
+servers:
+  - url: /
+tags:
+  - name: General
+    description: Health and system status.
+  - name: Authentication
+    description: Partner token exchange and JWT inspection.
+  - name: Hotels
+    description: >-
+      Hotel search, details, rooms, pricing, and payment URL. After
+      search-hotels, persist result.token and result.correlationId. For
+      details+rooms: either call get-hotel-details-and-rates once, OR
+      get-hotel-details and get-rooms-and-rates—do not use both patterns for the
+      same step.
+  - name: Flights
+    description: >-
+      Flight search, revalidation, and payment URL. Upstream correlation headers
+      are set inside MCP; external clients do not send X-Correlation-Id.
+  - name: Cars
+    description: >-
+      Car rental search and payment URL. Upstream correlation headers are set
+      inside MCP; external clients do not send X-Correlation-Id.
+  - name: Auth
+  - name: Hotel
+  - name: Flight
+  - name: Car
+  - name: Docs
+x-tagGroups:
+  - name: Skills
+    tags:
+      - Auth
+      - Hotel
+      - Flight
+      - Car
+      - Docs
