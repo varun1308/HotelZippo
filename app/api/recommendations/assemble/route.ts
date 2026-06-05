@@ -11,11 +11,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServiceClient } from '@/lib/db/server';
-import {
-  queryCandidates,
-  type QueryInput,
-} from '@/lib/review-intelligence/query';
-import { assembleRecommendations, AssemblyError } from '@/lib/recommendations/assemble';
+import { AssemblyError } from '@/lib/recommendations/assemble';
+import { runAssembly } from '@/lib/recommendations/run-assembly';
 import { DESTINATIONS, BUDGET_TIERS } from '@/lib/db/schemas';
 
 export const runtime = 'nodejs';
@@ -56,43 +53,12 @@ export async function POST(req: Request) {
 
   const supabase = createServiceClient();
 
-  // Step (a): deterministic candidate query (08a-5).
-  const queryInput: QueryInput = {
-    destination: body.trip_brief.destination,
-    evaluateOnly: body.trip_brief.evaluate_only ?? false,
-    preShortlistedHotels: body.trip_brief.pre_shortlisted_hotels ?? null,
-    budgetTier: body.family_profile?.budget_tier ?? null,
-  };
-
-  let candidates;
+  // Two-step runtime (08a-5 query → 08b-2 assembly) via the shared helper, so this
+  // route and the conversation agent's tool run the exact same code path.
   try {
-    candidates = await queryCandidates(supabase, queryInput);
-  } catch (e) {
-    return NextResponse.json(
-      {
-        error: 'query_failed',
-        message: 'I had trouble looking up hotels for that destination. Give me another go?',
-        reason: e instanceof Error ? e.message : String(e),
-      },
-      { status: 500 },
-    );
-  }
-
-  // No candidates at all → surface the assembly-style error (agent renders it warmly).
-  if (candidates.length === 0) {
-    return NextResponse.json({
-      error: 'no_eligible_hotels',
-      reason:
-        'No hotels with sufficient family review intelligence are available for this destination yet.',
-    });
-  }
-
-  // Step (b): assembly LLM call (08b-2), validated against the contract.
-  try {
-    const assembly = await assembleRecommendations({
-      family_profile: body.family_profile ?? null,
+    const assembly = await runAssembly(supabase, {
+      family_profile: body.family_profile ?? {},
       trip_brief: body.trip_brief,
-      candidates,
     });
     return NextResponse.json(assembly);
   } catch (e) {
