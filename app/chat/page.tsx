@@ -1,13 +1,13 @@
-/* Phase 3b chat page — hosts <ChatShell> with the scripted mock stream.
+/* Chat page — hosts <ChatShell> with the real agent-backed stream source (Phase 3c).
  *
- * This is the UI shell ONLY. There is NO real conversation agent here and no
- * /api/chat route (Phase 3c). The mock stream is injected as the `source`; 3c
- * swaps in the real agent-backed source at exactly this seam. */
+ * `chatHttpStream` POSTs to /api/chat and adapts the Vercel AI SDK UI-message stream
+ * into the 3b StreamChunk protocol — the seam ChatShell was built around. The scripted
+ * `mockStream` (3b) remains available for tests/local preview. */
 'use client';
 
 import { ChatShell } from '@/components/chat';
-import { mockStream } from '@/lib/chat/mockStream';
+import { chatHttpStream } from '@/lib/chat/httpStream';
 
 export default function ChatPage() {
-  return <ChatShell source={mockStream} />;
+  return <ChatShell source={chatHttpStream} />;
 }

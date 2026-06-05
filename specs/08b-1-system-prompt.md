@@ -48,6 +48,7 @@ Never process raw reviews in real time · never invent · never suppress/dilute 
 
 ## Action items
 
-- Author the prompt at `/prompts/conversation-agent/system-prompt.md`.
-- Define the `<family_profile>` / `<session_snapshot>` injection contract (server-side).
-- Tests per 08b-4 SP-01…SP-05 (use `prompt-contract-test` where structured).
+- ✅ Author the prompt at `/prompts/conversation-agent/system-prompt.md`. **BUILT (phase-3c-agent).**
+- ✅ Define the `<family_profile>` / `<session_snapshot>` injection contract (server-side) — `lib/chat/build-system.ts` `buildSystem(base, ctx)` always emits both blocks (empty = new user); unit-tested.
+- Runtime: `lib/chat/agent.ts` `runConversation()` (Vercel AI SDK `streamText`, INJECTABLE model — tests use MockLanguageModelV3, CI key-free) with the `assemble_recommendations` tool → `runAssembly` (08a-5 query + 08b-2 assembly) + hotel hydration (03b). `/app/api/chat/route.ts` streams NDJSON StreamChunks (the 3b protocol); client adapter `lib/chat/httpStream.ts`. Tests: route NDJSON translation, http-stream adapter, hydration (integration), buildSystem (unit).
+- SP-01…SP-05 structured fixtures: **deferred to Phase 3d** (live conversation flow) per the 4-PR split; 3c ships the runtime + wiring.
