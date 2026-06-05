@@ -1,0 +1,30 @@
+[
+  {
+    "source": "tripadvisor",
+    "review_date": "2026-05-20",
+    "reviewer_name": "Anita Patel",
+    "review_text": "Travelled with our two kids and the family rooms were spacious and spotless. The kids club kept them busy all day.",
+    "rating": 5
+  },
+  {
+    "source": "tripadvisor",
+    "review_date": "2026-04-12",
+    "reviewer_name": "James Wong",
+    "review_text": "Quiet, well-kept resort. The pool area was relaxing and the breakfast spread was generous.",
+    "rating": 4
+  },
+  {
+    "source": "google",
+    "review_date": "2026-03-02",
+    "reviewer_name": "Priya Sharma",
+    "review_text": "Lovely stay, good vegetarian and paneer options for us visiting from Mumbai. Our toddler loved the shallow beach.",
+    "rating": 5
+  },
+  {
+    "source": "google",
+    "review_date": "2025-12-15",
+    "reviewer_name": "Tom Baker",
+    "review_text": "Comfortable rooms and friendly staff. Beach access was easy and the grounds well maintained.",
+    "rating": 4
+  }
+]
