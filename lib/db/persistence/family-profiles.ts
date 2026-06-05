@@ -1,15 +1,20 @@
 /* family_profiles persistence (Phase 4 · specs/04-auth-persistence.md Stage 4 + 5).
- * Client-side, through the cookie-based anon SSR client → RLS scopes every row to the
- * signed-in user (auth.uid() = user_id). Bridges the form's camelCase FamilyProfile
+ * Through the cookie-based anon SSR client → RLS scopes every row to the signed-in user
+ * (auth.uid() = user_id). Bridges the form's camelCase FamilyProfile
  * (components/profile/types.ts) ⇄ the snake_case public.family_profiles columns
  * (canonical: Notion 07 / migration 0001). One profile per user — upsert on user_id.
+ *
+ * NOT a `'use client'` module: it's isomorphic — every function takes an injectable client
+ * and only calls createSupabaseBrowserClient() as a default arg. Client components import it
+ * fine, and the SERVER (the conversation agent's update_profile tool) imports the same named
+ * functions directly. Marking it `'use client'` turned those into non-callable client
+ * reference proxies on the server ("loadFamilyProfile is not a function") — so the directive
+ * is deliberately absent.
  *
  * The columns: name, hometown, family_members (jsonb: spouse + children), food_preferences
  * (text[]), budget_tier, brand_preferences (text[]), freestyle_notes. The form's collapsed
  * `food` enum + `indianFoodMatters` flag map into food_preferences; `spouse`/`children`
  * live in family_members jsonb (the data model keeps members structured, not columns). */
-'use client';
-
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/db/ssr';
 import type { Child, FamilyProfile } from '@/components/profile';
