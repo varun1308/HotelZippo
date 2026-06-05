@@ -79,3 +79,73 @@ export async function saveFamilyProfile(
     .upsert(toRow(profile, userId), { onConflict: 'user_id' });
   if (error) throw error;
 }
+
+/* ---------------------------------------------------------------------------
+ * Agent-driven profile refinement (Phase 4-fix · agent profile persistence).
+ *
+ * When a signed-in user CONFIRMS a change/addition to an already-known profile while
+ * chatting ("actually, make it luxury", "we're vegetarian now"), the conversation agent's
+ * `update_profile` tool merges just those fields into the existing row. These two PURE
+ * helpers are the merge + change-labelling core — no DB, fully unit-testable. The structured
+ * profile stays durable so the agent never re-states a stale value next session.
+ * ------------------------------------------------------------------------- */
+
+/** The subset of profile fields the agent may patch when the user confirms a change.
+ * Every field optional — the agent fills only what changed. `name` included so a user can
+ * correct it, but the tool never invents one. */
+export type ProfilePatch = Partial<
+  Pick<
+    FamilyProfile,
+    | 'name'
+    | 'hometown'
+    | 'spouse'
+    | 'children'
+    | 'food'
+    | 'indianFoodMatters'
+    | 'budgetTier'
+    | 'brandPreferences'
+    | 'notes'
+  >
+>;
+
+/** Human-readable label per patchable field — what the inline "profile updated" chip shows. */
+const FIELD_LABELS: Record<keyof ProfilePatch, string> = {
+  name: 'name',
+  hometown: 'hometown',
+  spouse: 'travelling party',
+  children: 'children',
+  food: 'food preference',
+  indianFoodMatters: 'Indian food preference',
+  budgetTier: 'budget',
+  brandPreferences: 'hotel brands',
+  notes: 'notes',
+};
+
+/** Merge a confirmed patch over an existing profile. Only keys actually present in the
+ * patch (not `undefined`) override; everything else is carried through unchanged. Pure. */
+export function mergeProfile(existing: FamilyProfile, patch: ProfilePatch): FamilyProfile {
+  const merged: FamilyProfile = { ...existing };
+  for (const k of Object.keys(patch) as (keyof ProfilePatch)[]) {
+    const v = patch[k];
+    if (v !== undefined) (merged as unknown as Record<string, unknown>)[k] = v;
+  }
+  return merged;
+}
+
+/** The human labels for fields the patch ACTUALLY changes (value differs from existing).
+ * A patch that re-states the current value yields no label — so the chip only appears on a
+ * real change. Deep-equal by JSON for the array/object fields (children, brands). */
+export function changedFieldLabels(existing: FamilyProfile, patch: ProfilePatch): string[] {
+  const labels: string[] = [];
+  for (const k of Object.keys(patch) as (keyof ProfilePatch)[]) {
+    const next = patch[k];
+    if (next === undefined) continue;
+    const prev = existing[k];
+    const changed =
+      typeof next === 'object' || typeof prev === 'object'
+        ? JSON.stringify(next) !== JSON.stringify(prev)
+        : next !== prev;
+    if (changed) labels.push(FIELD_LABELS[k]);
+  }
+  return labels;
+}

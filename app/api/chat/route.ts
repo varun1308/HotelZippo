@@ -8,9 +8,11 @@
  *
  * Body: { messages: ChatMessage[], familyProfile?, sessionSnapshot? }.
  * Server-side only; ANTHROPIC_API_KEY never reaches the client. */
-import { runConversation } from '@/lib/chat/agent';
+import { cookies } from 'next/headers';
+import { runConversation, type ProfileUpdateResult } from '@/lib/chat/agent';
 import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
 import { toModelMessages } from '@/lib/chat/to-model-messages';
+import { createSupabaseServerClient } from '@/lib/db/ssr';
 import type { ChatMessage, StreamChunk } from '@/lib/chat/types';
 
 export const runtime = 'nodejs';
@@ -31,12 +33,36 @@ export async function POST(req: Request) {
     return Response.json({ error: 'messages required' }, { status: 400 });
   }
 
+  // Resolve the signed-in user (cookie SSR) so the agent can persist confirmed profile
+  // changes under RLS. Best-effort: unauthenticated / no env → no userId, the update_profile
+  // tool simply isn't registered and chat works unchanged (CI + env-free build stay green).
+  let userId: string | undefined;
+  let profileClient: ReturnType<typeof createSupabaseServerClient> | undefined;
+  try {
+    const cookieStore = await cookies();
+    const supabase = createSupabaseServerClient({
+      getAll: () => cookieStore.getAll(),
+      setAll: () => {},
+    });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      userId = user.id;
+      profileClient = supabase;
+    }
+  } catch {
+    /* no env / no cookies → run without profile persistence */
+  }
+
   let result;
   try {
     result = await runConversation({
       messages: toModelMessages(body.messages),
       familyProfile: body.familyProfile,
       sessionSnapshot: body.sessionSnapshot ?? null,
+      userId,
+      profileClient,
     });
   } catch (e) {
     return Response.json(
@@ -62,6 +88,15 @@ export async function POST(req: Request) {
             if (props) {
               controller.enqueue(
                 encodeChunk({ type: 'component', component: 'recommendation-set', props }),
+              );
+            }
+          } else if (part.type === 'tool-result' && part.toolName === 'update_profile') {
+            // Confirmed profile change persisted → emit the inline "profile updated" chip.
+            // Only when fields actually changed (the tool returns [] for a no-op).
+            const { updated } = (part.output ?? { updated: [] }) as ProfileUpdateResult;
+            if (Array.isArray(updated) && updated.length > 0) {
+              controller.enqueue(
+                encodeChunk({ type: 'component', component: 'profile-update', props: { updated } }),
               );
             }
           } else if (part.type === 'error') {

@@ -20,6 +20,14 @@ import { createServiceClient } from '@/lib/db/server';
 import { runAssembly } from '@/lib/recommendations/run-assembly';
 import { DESTINATIONS, BUDGET_TIERS } from '@/lib/db/schemas';
 import type { RecommendationAssembly } from '@/lib/contracts/recommendation-assembly';
+import {
+  loadFamilyProfile,
+  saveFamilyProfile,
+  mergeProfile,
+  changedFieldLabels,
+  type ProfilePatch,
+} from '@/lib/db/persistence/family-profiles';
+import type { Child } from '@/components/profile';
 
 export const AGENT_MODEL = 'claude-sonnet-4-20250514';
 
@@ -53,6 +61,30 @@ const assembleToolInput = z.object({
     .passthrough(),
 });
 
+/** Input the model fills when the user CONFIRMS a change/addition to a known profile.
+ * Every field optional — the agent sends only what changed. Enums are validated against the
+ * canonical sets so an out-of-range value can never be written. */
+const FOOD_VALUES = ['vegetarian', 'vegan', 'none'] as const;
+const childSchema = z.object({ name: z.string(), age: z.number().int().min(0).max(17) });
+const updateProfileInput = z.object({
+  name: z.string().min(1).optional(),
+  hometown: z.string().nullable().optional(),
+  spouse: z.boolean().optional(),
+  children: z.array(childSchema).optional(),
+  food: z.enum(FOOD_VALUES).optional(),
+  indianFoodMatters: z.boolean().optional(),
+  budgetTier: z.enum(BUDGET_TIERS).optional(),
+  brandPreferences: z.array(z.string()).optional(),
+  notes: z.string().nullable().optional(),
+});
+
+/** The result the `update_profile` tool returns to the model AND the route forwards to the
+ * client as a `profile-update` component chunk. `updated` is the human field labels actually
+ * changed (empty ⇒ no-op: no known profile, or the patch matched the current values). */
+export interface ProfileUpdateResult {
+  updated: string[];
+}
+
 export interface RunConversationArgs {
   messages: ModelMessage[];
   /** Injectable model — default Anthropic; tests pass a MockLanguageModelV3. */
@@ -61,6 +93,11 @@ export interface RunConversationArgs {
   sessionSnapshot?: string | null;
   /** Override the assembly model seam (tests); forwarded to runAssembly. */
   assembleModel?: Parameters<typeof runAssembly>[2];
+  /** Signed-in user id — enables the `update_profile` tool (RLS-scoped writes). */
+  userId?: string;
+  /** RLS-scoped client (cookie SSR) for profile reads/writes. Required alongside `userId`
+   *  for `update_profile` to register; absent ⇒ tool not offered (CI/env-free stay green). */
+  profileClient?: SupabaseClient;
 }
 
 /**
@@ -97,8 +134,44 @@ export async function runConversation(args: RunConversationArgs) {
           return hydrateHotels(supabase, assembly);
         },
       }),
+      // Only offered to a signed-in user with an RLS-scoped client (env-free build + key-free
+      // CI never register it). It changes a KNOWN profile only — onboarding owns the first save.
+      ...(args.userId && args.profileClient
+        ? {
+            update_profile: tool({
+              description:
+                'Persist a CONFIRMED change or addition to the signed-in family’s saved ' +
+                'profile (e.g. they switch budget to luxury, or tell you they’re now ' +
+                'vegetarian). Call ONLY after the user confirms the change, and ONLY for a ' +
+                'returning user who already has a saved profile — never during first-time ' +
+                'onboarding (the summary/form saves that), and never for an unconfirmed or ' +
+                'hypothetical preference. Send only the fields that changed. If no profile ' +
+                'exists yet it is a safe no-op.',
+              inputSchema: updateProfileInput,
+              execute: (input): Promise<ProfileUpdateResult> =>
+                runUpdateProfile(input, args.userId!, args.profileClient!),
+            }),
+          }
+        : {}),
     },
   });
+}
+
+/** Merge a confirmed patch into the signed-in user's EXISTING profile (RLS-scoped). No-op
+ *  (returns `{updated: []}`) when there is no profile yet (onboarding owns the first save) or
+ *  the patch matches current values — so no chip ever fires on a non-change. */
+export async function runUpdateProfile(
+  input: z.infer<typeof updateProfileInput>,
+  userId: string,
+  client: SupabaseClient,
+): Promise<ProfileUpdateResult> {
+  const existing = await loadFamilyProfile(client);
+  if (!existing) return { updated: [] }; // no known profile → onboarding's job, not ours
+  const patch = input as ProfilePatch & { children?: Child[] };
+  const updated = changedFieldLabels(existing, patch);
+  if (updated.length === 0) return { updated: [] }; // patch matched current values → no write
+  await saveFamilyProfile(mergeProfile(existing, patch), userId, client);
+  return { updated };
 }
 
 /** Attach `_hotel` display metadata to each pick (spec 03b card hydration). Single

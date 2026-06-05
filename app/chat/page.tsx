@@ -175,6 +175,17 @@ export default function ChatPage() {
               // can't read trip type off the card, so just ensure the gate shows met.
               type: brief.brief.type ?? 'Confirmed',
             });
+          } else if (chunk.type === 'component' && chunk.component === 'profile-update') {
+            // The agent just persisted a confirmed profile change (server-side, RLS-scoped).
+            // Re-load the saved profile so profileRef carries the fresh values on the NEXT turn
+            // — keeping the injected <family_profile> consistent with what was just written.
+            loadFamilyProfile()
+              .then((p) => {
+                if (p) setSavedProfile(p);
+              })
+              .catch(() => {
+                /* best-effort refresh; the chip already confirmed the save to the user */
+              });
           }
           yield chunk;
         }

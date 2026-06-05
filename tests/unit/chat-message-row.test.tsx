@@ -47,6 +47,20 @@ describe('MessageRow', () => {
     expect(screen.getByText('Top Pick')).toBeInTheDocument();
   });
 
+  it('renders the inline profile-updated chip for a profile-update component part', () => {
+    const message: ChatMessage = {
+      id: 'a4',
+      role: 'assistant',
+      parts: [
+        { type: 'text', text: 'Done — switched you to luxury.' },
+        { type: 'component', component: 'profile-update', props: { updated: ['budget'] } },
+      ],
+    };
+    render(<MessageRow message={message} />);
+    expect(screen.getByText(/Family profile updated/i)).toBeInTheDocument();
+    expect(screen.getByText(/budget/)).toBeInTheDocument();
+  });
+
   it('renders an inline hard flag for a hard-flag component part (role alert)', () => {
     const message: ChatMessage = {
       id: 'a3',

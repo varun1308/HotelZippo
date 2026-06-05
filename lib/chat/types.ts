@@ -18,7 +18,7 @@ export interface TextPart {
 
 /** Names of the inline UI blocks the assistant may emit.
  *  Add a name here + a renderer in the MessageRow registry to extend. */
-export type ComponentName = 'recommendation-set' | 'hard-flag';
+export type ComponentName = 'recommendation-set' | 'hard-flag' | 'profile-update';
 
 /** An inline rendered UI block emitted mid-conversation.
  *  `props` is intentionally `unknown` at the transport boundary — the registry
