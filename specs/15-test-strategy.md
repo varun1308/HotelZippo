@@ -46,8 +46,22 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - Top pick clearly distinguished from other recommendations.
 - **Test type:** E2E (Playwright: onboarding → recommendations → card rendering).
 
+### Phase 4 — Auth & Persistence
+(Source: `specs/04-auth-persistence.md` acceptance criteria.)
+- Unauthenticated `GET /chat` redirects to `/`.
+- "Continue with Google" completes OAuth and lands on `/chat` with an active session. *(Live path verified once founder Google creds are configured; mocked in CI.)*
+- Session persists across page refresh and browser restart (cookie-based).
+- `family_profiles` / `sessions` / `shortlists` are written to Supabase, keyed to the user.
+- **RLS isolation:** user A cannot read or write user B's rows (two real signed-in users).
+- A `public.users` row exists after first sign-in (the `on_auth_user_created` trigger).
+- Edit profile loads existing values and saves changes.
+- Sign-out clears the session and returns to `/`.
+- Landing renders from the prototype, Google-only (no email button), responsive 375–430px.
+- OAuth failure path returns to `/` with a non-blocking error and no broken state.
+- **Test type:** unit/jsdom (landing, account menu), node integration (gating + callback, `public.users` trigger, RLS isolation, persistence round-trip). Live Google sign-in is verified manually once creds land.
+
 ## Later phases (reference)
-Phase 4 (auth + RLS), Phase 5 (session snapshot save/restore + token budget), Phase 6 (pipeline idempotency, tagging, hard-flag detection, single-active-run, low_confidence exclusion), Phase 7 (RouteStack), Phase 8 (shortlist save/share + all 14 error scenarios). See Notion 15.
+Phase 5 (session snapshot save/restore + token budget), Phase 6 (pipeline idempotency, tagging, hard-flag detection, single-active-run, low_confidence exclusion), Phase 7 (RouteStack), Phase 8 (shortlist save/share + all 14 error scenarios). See Notion 15.
 
 ## Action items
 - Stand up Jest + Playwright + Zod with a dedicated Supabase test project.
