@@ -8,24 +8,13 @@
  *
  * Body: { messages: ChatMessage[], familyProfile?, sessionSnapshot? }.
  * Server-side only; ANTHROPIC_API_KEY never reaches the client. */
-import type { ModelMessage } from 'ai';
 import { runConversation } from '@/lib/chat/agent';
 import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
+import { toModelMessages } from '@/lib/chat/to-model-messages';
 import type { ChatMessage, StreamChunk } from '@/lib/chat/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-
-/** Map our ChatMessage[] (text parts only) → AI SDK ModelMessages. */
-function toModelMessages(messages: ChatMessage[]): ModelMessage[] {
-  return messages.map((m) => ({
-    role: m.role,
-    content: m.parts
-      .filter((p): p is Extract<typeof p, { type: 'text' }> => p.type === 'text')
-      .map((p) => p.text)
-      .join(''),
-  }));
-}
 
 function encodeChunk(chunk: StreamChunk): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(chunk) + '\n');

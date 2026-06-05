@@ -22,7 +22,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { StreamSource } from '@/lib/chat/types';
+import type { ChatMessage, StreamSource } from '@/lib/chat/types';
 import { useChatStream } from '@/lib/chat/useChatStream';
 import { MessageRow } from './MessageRow';
 import { TypingIndicator } from './TypingIndicator';
@@ -54,6 +54,9 @@ export interface ChatShellProps {
   onOpenShortlist?: () => void;
   /** Signed-in account menu (Phase 4). Rendered at the end of the topbar when present. */
   accountMenu?: ReactNode;
+  /** Phase 5: notified whenever the conversation changes, so the page can snapshot it
+   *  at the session-memory trigger points. */
+  onMessages?: (messages: ChatMessage[]) => void;
 }
 
 function GhostButton({
@@ -94,6 +97,7 @@ export function ChatShell({
   onOpenBrief,
   onOpenShortlist,
   accountMenu,
+  onMessages,
 }: ChatShellProps) {
   const { messages, status, researching, streamingMessageId, sendMessage, isBusy } =
     useChatStream({ source });
@@ -106,6 +110,11 @@ export function ChatShell({
     const el = streamRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, status, researching]);
+
+  // Phase 5: surface the conversation upward so the page can snapshot it at triggers.
+  useEffect(() => {
+    onMessages?.(messages);
+  }, [messages, onMessages]);
 
   const isEmpty = messages.length === 0;
   // Show the typing indicator only while thinking AND nothing is streaming yet.
