@@ -11,7 +11,9 @@
  * separately; if one source fails we proceed with the other and RECORD the gap, rather than
  * failing the whole hotel. Zero reviews overall is a distinct signal (TC-P1) handled by the
  * caller (worker): review_count_total = 0 → skip synthesis, mark failed, continue. */
-import 'server-only';
+// No `import 'server-only'`: this module is part of the worker chain (run by the standalone
+// Node worker via tsx, where that guard throws). Server-side by construction; never imported
+// by a client component.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';

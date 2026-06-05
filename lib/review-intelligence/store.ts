@@ -10,7 +10,8 @@
  * - RUN linkage (TC-P7): every inserted row carries the run's pipeline_run_id.
  *
  * Server-side; service client (raw_reviews is service-role only — no client policy). */
-import 'server-only';
+// No `import 'server-only'`: part of the worker chain (run by the standalone Node worker via
+// tsx). Server-side by construction (service client); never imported by a client component.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TaggedReview } from './tagging';
 

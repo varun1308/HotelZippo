@@ -6,7 +6,8 @@
  *
  * Malformed output → SynthesisError (the pipeline fails that hotel with no partial write
  * and logs the full response via OTEL, per spec 14 / TC-P14). Wrapped in an OTEL span. */
-import 'server-only';
+// No `import 'server-only'`: part of the worker chain (run by the standalone Node worker via
+// tsx). Server-side by construction (Anthropic key); never imported by a client component.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
