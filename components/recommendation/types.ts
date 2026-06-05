@@ -31,6 +31,9 @@ export type CategorySummaries = Record<CategoryKey, string>;
  *  All optional-presentation fields are nullable so the card can degrade gracefully:
  *  null area → destination only, null star_rating → no stars, null hero → placeholder. */
 export interface HotelDisplay {
+  /** hotels.id — carried through so the card can save to the shortlist (Phase 3d).
+   *  Optional so pure-presentational fixtures/tests need not supply it. */
+  hotelId?: string;
   hotelName: string;
   destination: string;
   /** null → render destination only */
@@ -61,6 +64,9 @@ export interface TopPickCardProps extends CardBase {
   categorySummaries: CategorySummaries;
   /** assembly `top_pick.why_top_pick`. Reserved for future use / a11y. */
   whyTopPick?: TopPick['why_top_pick'];
+  /** Controlled shortlist membership — when set, the Save button reflects it
+   *  (label/aria-pressed) instead of the card's own local toggle. Phase 3d. */
+  saved?: boolean;
   onSave?: () => void;
   onProceed?: () => void;
 }
@@ -88,6 +94,9 @@ export interface StandardCardProps extends CardBase {
   rankLabel?: string;
   /** Controlled-open override; otherwise the card manages its own open state. */
   defaultOpen?: boolean;
+  /** Controlled shortlist membership. When set, the Save button reflects it
+   *  instead of the card's own local toggle (Phase 3d). */
+  saved?: boolean;
   onSave?: (saved: boolean) => void;
   onProceed?: () => void;
 }

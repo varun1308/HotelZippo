@@ -56,20 +56,26 @@ function RankPill({ label }: { label: string }) {
 function CTAs({
   onSave,
   onProceed,
-  saveLabel = 'Save to shortlist',
+  saved = false,
 }: {
   onSave?: () => void;
   onProceed?: () => void;
-  saveLabel?: string;
+  saved?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3 pt-[2px] sm:flex-row">
       <button
         type="button"
         onClick={onSave}
-        className="inline-flex h-[50px] flex-1 items-center justify-center gap-[9px] rounded-btn border border-border-strong bg-surface text-[15px] font-semibold text-text transition-colors duration-fast hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-pressed={saved}
+        className={`inline-flex h-[50px] flex-1 items-center justify-center gap-[9px] rounded-btn border text-[15px] font-semibold transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+          saved
+            ? 'border-primary-500 bg-primary-500 text-white'
+            : 'border-border-strong bg-surface text-text hover:bg-surface-2'
+        }`}
       >
-        <Bookmark aria-hidden className="h-[17px] w-[17px]" strokeWidth={1.75} /> {saveLabel}
+        <Bookmark aria-hidden className="h-[17px] w-[17px]" strokeWidth={1.75} />{' '}
+        {saved ? 'Saved to shortlist' : 'Save to shortlist'}
       </button>
       <button
         type="button"
@@ -95,6 +101,7 @@ export function TopPickCard(props: TopPickCardProps) {
     hardFlags,
     verdict,
     categorySummaries,
+    saved,
     onSave,
     onProceed,
   } = props;
@@ -131,7 +138,7 @@ export function TopPickCard(props: TopPickCardProps) {
       <div className="flex flex-col gap-[22px] p-[18px] sm:p-6">
         <Verdict label="Why this one" text={verdict} />
         <CategoryGrid summaries={categorySummaries} />
-        <CTAs onSave={onSave} onProceed={onProceed} />
+        <CTAs onSave={onSave} onProceed={onProceed} saved={saved} />
       </div>
     </article>
   );
@@ -153,6 +160,7 @@ export function StandardCard(props: StandardCardProps) {
     categorySummaries,
     rankLabel,
     defaultOpen = false,
+    saved: savedProp,
     onSave,
     onProceed,
   } = props;
@@ -161,15 +169,16 @@ export function StandardCard(props: StandardCardProps) {
   // just `summary`). Without it we never offer "See full details" — see types.ts note.
   const expandable = verdict != null || categorySummaries != null;
   const [open, setOpen] = useState(defaultOpen && expandable);
-  const [saved, setSaved] = useState(false);
+  const [localSaved, setLocalSaved] = useState(false);
+  // Controlled (Phase 3d shortlist) when `saved` is provided; else self-managed.
+  const controlled = savedProp != null;
+  const saved = controlled ? savedProp : localSaved;
   const detailId = useId();
 
   function handleSave() {
-    setSaved((s) => {
-      const next = !s;
-      onSave?.(next);
-      return next;
-    });
+    const next = !saved;
+    if (!controlled) setLocalSaved(next);
+    onSave?.(next);
   }
 
   return (

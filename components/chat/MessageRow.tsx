@@ -10,7 +10,7 @@
  * User turns: a right-aligned primary bubble. Mined from
  * `Chat - Active & Streaming.html` (.msg.assistant / .msg.user / .ava). */
 import { ConciergeBell } from 'lucide-react';
-import { RecommendationSet, InlineHardFlag } from '@/components/recommendation';
+import { ShortlistableRecommendationSet, InlineHardFlag } from '@/components/recommendation';
 import type {
   RecommendationSetProps,
   HardFlagProps,
@@ -26,7 +26,7 @@ function InlineComponent({ part }: { part: ComponentPart }) {
     case 'recommendation-set':
       return (
         <div className="mt-2">
-          <RecommendationSet {...(part.props as RecommendationSetProps)} />
+          <ShortlistableRecommendationSet {...(part.props as RecommendationSetProps)} />
         </div>
       );
     case 'hard-flag':
