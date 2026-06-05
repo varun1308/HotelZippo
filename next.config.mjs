@@ -14,6 +14,10 @@ const nextConfig = {
       { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'http', hostname: '127.0.0.1', port: '54321' },
       { protocol: 'http', hostname: 'localhost', port: '54321' },
+      // Placeholder hero host used by the local demo seed fixtures (npm run dev:db).
+      // Harmless dummy-image service; production heroes still come from Supabase Storage.
+      { protocol: 'https', hostname: 'picsum.photos' },
+      { protocol: 'https', hostname: 'fastly.picsum.photos' }, // picsum redirects here
     ],
   },
 };
