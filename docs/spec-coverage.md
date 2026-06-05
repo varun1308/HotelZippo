@@ -40,7 +40,7 @@ Log pages (`08a-4/7`, `08b-5`, `12c/f`) and pure reference pages (01, 02, 03, 04
 |---|---|---|
 | 08b-6 · Recommendation Flow & Card Contract | `specs/03b-recommendation-flow.md` | generated |
 | 08b-2 · Recommendation Assembly Prompt | `specs/08b-2-recommendation-assembly.md` | generated |
-| 08a-5 · Pipeline Spec (consumption contract only) | `specs/02-review-intelligence-pipeline.md` | generated (consumption contract; full pipeline deferred to Phase 6) |
+| 08a-5 · Pipeline Spec (consumption contract) | `specs/02-review-intelligence-pipeline.md` | generated — consumption contract BUILT here (Phase 2 `query.ts`); full producer specced under Phase 6 below |
 | 07 · Data Model | `specs/07-data-model.md` | generated |
 
 ## Phase 3 — Conversational UI
@@ -74,6 +74,20 @@ Log pages (`08a-4/7`, `08b-5`, `12c/f`) and pure reference pages (01, 02, 03, 04
 |---|---|---|
 | 08b-3 · Session Snapshot Prompt | `specs/08b-3-session-snapshot.md` | generated (SPECCED — not yet built) |
 
-## Out of scope for this plan (Phases 6–8)
+## Phase 6 — Review Intelligence Pipeline
 
-Generated as reference where they share a page with a 0–3 contract (e.g. `02-review-intelligence-pipeline.md` carries the Phase 6 pipeline). Not built now: 08a (full), 08a-1/2/3, 08c (booking, Phase 7), 10b (Apify, Phase 6), 10c (RouteStack, Phase 7).
+The full producer pipeline (scrape → store → tag → synthesise → write, the worker, and the admin UI) is now contracted in `specs/02-review-intelligence-pipeline.md`, reconciled from 08a-5 (briefing) + 08a-1/2/3/6. The consumption-side query was built in Phase 2; the producer is Phase 6 work.
+
+| Spec page | `/specs` file | Status |
+|---|---|---|
+| 08a-5 · Pipeline Spec | `specs/02-review-intelligence-pipeline.md` | generated — **SPECCED (producer) + BUILT (consumption query)** |
+| 08a-1 · Synthesis Prompt | (→ `/prompts/review-intelligence-agent/synthesis.md`, Phase 6) | folded into `02` |
+| 08a-2 · Pipeline Design Decisions | folded into `02` | folded |
+| 08a-3 · Synthesis Test Cases | folded into `02` (pointer; 7 cases owned by Notion) | folded |
+| 08a-6 · Pipeline Test Cases (TC-P1…P22) | folded into `02` | folded |
+
+Already built (no Phase 6 action): schema (`supabase/migrations/0002_pipeline_tables.sql`), consumption `query.ts`, and both `APIFY_*_REVIEWS_ACTOR_ID` env vars in `.env.example`.
+
+## Out of scope for this plan (Phases 7–8)
+
+Not built now: 08c (booking, Phase 7), 10c (RouteStack, Phase 7). The Review Intelligence pipeline pieces (08a / 08a-1/2/3/6, the Apify review-scraping path) are no longer out of scope — they are contracted under **Phase 6** above.
