@@ -52,6 +52,8 @@ export interface ChatShellProps {
   onSwitchToForm?: () => void;
   onOpenBrief?: () => void;
   onOpenShortlist?: () => void;
+  /** Signed-in account menu (Phase 4). Rendered at the end of the topbar when present. */
+  accountMenu?: ReactNode;
 }
 
 function GhostButton({
@@ -91,6 +93,7 @@ export function ChatShell({
   onSwitchToForm,
   onOpenBrief,
   onOpenShortlist,
+  accountMenu,
 }: ChatShellProps) {
   const { messages, status, researching, streamingMessageId, sendMessage, isBusy } =
     useChatStream({ source });
@@ -146,6 +149,7 @@ export function ChatShell({
             count={shortlistCount}
             onClick={onOpenShortlist}
           />
+          {accountMenu}
         </div>
       </header>
 
