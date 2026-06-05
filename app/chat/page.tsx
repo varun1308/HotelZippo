@@ -33,6 +33,9 @@ import { AccountMenu } from '@/components/account';
 import { useTripBrief } from '@/lib/brief/useTripBrief';
 import { useShortlist } from '@/lib/shortlist/useShortlist';
 import { ShortlistProvider } from '@/lib/shortlist/context';
+import { BookingProvider } from '@/lib/booking/context';
+import { useBookingFlow } from '@/lib/booking/useBookingFlow';
+import { RoomPickerModal } from '@/components/booking/RoomPickerModal';
 import { useUser } from '@/lib/auth/useUser';
 import { signOut } from '@/lib/auth/signIn';
 import { loadFamilyProfile, saveFamilyProfile } from '@/lib/db/persistence/family-profiles';
@@ -142,6 +145,14 @@ export default function ChatPage() {
     [shortlist.save, shortlist.remove, shortlist.toggle, shortlist.isSaved],
   );
 
+  // Phase 7 booking flow. The card's "Proceed to book" opens a deterministic modal:
+  // confirm (travellers · rooms · dates, seeded from the saved profile) → live rooms/rates →
+  // room picker → deep-link checkout (opened in a new tab). The brief's `dates` is free-text
+  // (e.g. "early July"), not a resolvable start+end, so we pass null and let the confirm
+  // screen collect exact dates — the month-only path from the spec.
+  const bookingFlow = useBookingFlow({ profile: savedProfile, dates: null });
+  const bookingActions = useMemo(() => ({ proceed: bookingFlow.proceed }), [bookingFlow.proceed]);
+
   // Persist the shortlist (saved hotel ids) whenever it changes, keyed to the user.
   // Skip the initial empty render; best-effort (never blocks the UX). A leading ref
   // avoids writing an empty row before the user has saved anything.
@@ -202,6 +213,7 @@ export default function ChatPage() {
 
   return (
     <ShortlistProvider actions={shortlistActions}>
+      <BookingProvider actions={bookingActions}>
       <ChatShell
         source={source}
         briefCount={brief.filledCount}
@@ -249,6 +261,24 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      <RoomPickerModal
+        open={bookingFlow.state.step !== 'idle'}
+        step={bookingFlow.state.step === 'idle' ? 'confirm' : bookingFlow.state.step}
+        hotelName={bookingFlow.state.hotel?.hotelName ?? ''}
+        party={bookingFlow.state.party}
+        grandparentHint={bookingFlow.state.grandparentHint}
+        dates={bookingFlow.state.dates}
+        onPartyChange={bookingFlow.setParty}
+        onDatesChange={bookingFlow.setDates}
+        onConfirm={bookingFlow.confirm}
+        options={bookingFlow.state.options}
+        onSelectRoom={bookingFlow.selectRoom}
+        error={bookingFlow.state.error}
+        onRetry={bookingFlow.retry}
+        onClose={bookingFlow.close}
+      />
+      </BookingProvider>
     </ShortlistProvider>
   );
 }
