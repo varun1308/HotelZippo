@@ -1,7 +1,7 @@
 /* Seed a LOCAL dev user for email/password sign-in (LOCAL DEVELOPMENT ONLY).
  *
- *   npm run dev:user                       # default dev@hotelzippo.local / dev-password-123!
- *   npm run dev:user -- me@x.test secret    # custom email + password
+ *   npm run dev:user                          # dev@hotelzippo.local / dev-password-123! / "Varun"
+ *   npm run dev:user -- me@x.test secret Asha  # custom email + password + display name
  *
  * Production auth is Google-only; this exists so you can reach the hard-gated /chat locally
  * without Google OAuth. It uses the service role to create a CONFIRMED auth user against
@@ -15,9 +15,12 @@ import { createClient } from '@supabase/supabase-js';
 const DEFAULT_EMAIL = 'dev@hotelzippo.local';
 const DEFAULT_PASSWORD = 'dev-password-123!';
 
+const DEFAULT_NAME = 'Varun';
+
 async function main() {
   const email = process.argv[2] ?? DEFAULT_EMAIL;
   const password = process.argv[3] ?? DEFAULT_PASSWORD;
+  const fullName = process.argv[4] ?? DEFAULT_NAME;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -31,7 +34,14 @@ async function main() {
 
   const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  // Set user_metadata.full_name so it mirrors a real Google sign-in (where the display name
+  // lives in user_metadata) — the chat page reads this via useUser and hands it to the agent.
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName },
+  });
   if (error) {
     if (/already.*registered|already.*exists|duplicate/i.test(error.message)) {
       // eslint-disable-next-line no-console

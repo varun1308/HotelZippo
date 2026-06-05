@@ -6,14 +6,21 @@
 import type { ChatMessage, StreamChunk } from './types';
 
 /** Body the /api/chat route expects: the prior thread + the new user turn, plus the
- *  resumed session snapshot (Phase 5) when one was loaded for the signed-in user. */
-function toRequestBody(input: string, history: ChatMessage[], sessionSnapshot?: string | null) {
+ *  resumed session snapshot (Phase 5) and the signed-in user's saved family profile
+ *  (so the agent greets by name and never re-asks known fields) when available. */
+function toRequestBody(
+  input: string,
+  history: ChatMessage[],
+  sessionSnapshot?: string | null,
+  familyProfile?: unknown,
+) {
   return {
     messages: [
       ...history,
       { id: `u${history.length}`, role: 'user' as const, parts: [{ type: 'text' as const, text: input }] },
     ],
     ...(sessionSnapshot ? { sessionSnapshot } : {}),
+    ...(familyProfile ? { familyProfile } : {}),
   };
 }
 
@@ -25,13 +32,14 @@ export async function* chatHttpStream(
   input: string,
   history: ChatMessage[],
   sessionSnapshot?: string | null,
+  familyProfile?: unknown,
 ): AsyncIterable<StreamChunk> {
   let res: Response;
   try {
     res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(toRequestBody(input, history, sessionSnapshot)),
+      body: JSON.stringify(toRequestBody(input, history, sessionSnapshot, familyProfile)),
     });
   } catch {
     yield { type: 'text-delta', delta: "I couldn't reach my notes just now — try me again in a moment?" };

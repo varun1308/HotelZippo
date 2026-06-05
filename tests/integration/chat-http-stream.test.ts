@@ -85,4 +85,36 @@ describe('chatHttpStream adapter', () => {
     const out = await collect('hi');
     expect(out[out.length - 1].type).toBe('done');
   });
+
+  /** A fetch spy whose recorded calls are typed [input, init] so we can read the body. */
+  function fetchSpy() {
+    return jest.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(ndjsonResponse([{ type: 'done' }])),
+    );
+  }
+  function sentBody(spy: ReturnType<typeof fetchSpy>): Record<string, unknown> {
+    const init = spy.mock.calls[0]?.[1];
+    return JSON.parse((init?.body as string) ?? '{}');
+  }
+
+  it('sends the family profile + session snapshot in the request body when provided', async () => {
+    const spy = fetchSpy();
+    global.fetch = spy as unknown as typeof fetch;
+    const profile = { name: 'Varun', children: [], food: 'none' };
+    for await (const _ of chatHttpStream('hi', [], 'prior summary', profile)) void _;
+
+    const body = sentBody(spy);
+    expect(body.familyProfile).toEqual(profile);
+    expect(body.sessionSnapshot).toBe('prior summary');
+    // the new user turn is appended to the messages
+    const messages = body.messages as Array<{ role: string }>;
+    expect(messages[messages.length - 1]).toMatchObject({ role: 'user' });
+  });
+
+  it('omits familyProfile from the body when not provided', async () => {
+    const spy = fetchSpy();
+    global.fetch = spy as unknown as typeof fetch;
+    await collect('hi');
+    expect('familyProfile' in sentBody(spy)).toBe(false);
+  });
 });
