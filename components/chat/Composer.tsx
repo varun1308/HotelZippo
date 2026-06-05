@@ -9,6 +9,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useId,
   useImperativeHandle,
   useRef,
@@ -40,6 +41,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [value, setValue] = useState('');
   const textareaId = useId();
   const ref = useRef<HTMLTextAreaElement>(null);
+  // The textarea is `disabled` while the assistant streams (prevents typing mid-turn) —
+  // but disabling an element blurs it, so after a turn finishes focus would be lost and
+  // the user would have to click back in. Re-focus on the disabled → enabled transition,
+  // but only if focus is still on this composer's region (don't steal focus if the user
+  // has deliberately moved elsewhere, e.g. into a modal or the trip-brief rail).
+  const wasDisabled = useRef(disabled);
+  useEffect(() => {
+    const el = ref.current;
+    if (wasDisabled.current && !disabled && el) {
+      const active = document.activeElement;
+      const focusLeftComposer = !active || active === document.body || active === el;
+      if (focusLeftComposer) el.focus();
+    }
+    wasDisabled.current = disabled;
+  }, [disabled]);
 
   useImperativeHandle(handleRef, () => ({
     prefill(text: string) {

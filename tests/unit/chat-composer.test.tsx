@@ -1,5 +1,5 @@
 /* Composer: send/disable/keyboard semantics (spec 05). */
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Composer } from '@/components/chat/Composer';
 
@@ -56,5 +56,46 @@ describe('Composer', () => {
     await user.type(screen.getByLabelText(/message your concierge/i), '  hello  ');
     await user.click(screen.getByRole('button', { name: /send/i }));
     expect(onSend).toHaveBeenCalledWith('hello');
+  });
+
+  it('restores focus when re-enabled after a turn (disabled → enabled)', () => {
+    // Disabling the textarea mid-turn blurs it; when the assistant finishes (disabled
+    // flips back to false) focus must return so the user can type the next message
+    // without clicking back in.
+    const { rerender } = render(<Composer onSend={jest.fn()} disabled={false} />);
+    const ta = screen.getByLabelText(/message your concierge/i) as HTMLTextAreaElement;
+
+    // Turn starts: disabled. (Browsers blur disabled elements; jsdom won't auto-focus.)
+    rerender(<Composer onSend={jest.fn()} disabled={true} />);
+    expect(ta).toBeDisabled();
+
+    // Turn ends: re-enabled → focus restored to the composer.
+    act(() => {
+      rerender(<Composer onSend={jest.fn()} disabled={false} />);
+    });
+    expect(ta).toHaveFocus();
+  });
+
+  it('does NOT steal focus if the user moved elsewhere during the turn', () => {
+    const { rerender } = render(
+      <>
+        <Composer onSend={jest.fn()} disabled={true} />
+        <button type="button">elsewhere</button>
+      </>,
+    );
+    const other = screen.getByRole('button', { name: 'elsewhere' });
+    other.focus();
+    expect(other).toHaveFocus();
+
+    // Turn ends while focus is intentionally on another control → focus stays put.
+    act(() => {
+      rerender(
+        <>
+          <Composer onSend={jest.fn()} disabled={false} />
+          <button type="button">elsewhere</button>
+        </>,
+      );
+    });
+    expect(other).toHaveFocus();
   });
 });
