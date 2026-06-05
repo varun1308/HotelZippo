@@ -20,6 +20,7 @@ export type PromptBehaviour =
   | 'never-reask-known-fields'
   | 'transactional-direct-to-assemble'
   | 'hard-flag-acknowledged-in-wrapper'
+  | 'recommendation-wrapper-one-line-no-restate'
   | 'out-of-scope-decline-names-five';
 
 export interface FixtureTurn {
@@ -80,7 +81,10 @@ export const SP_FIXTURES: SystemPromptFixture[] = [
     familyProfile: STANDARD_FAMILY_PROFILE,
     sessionSnapshot: null,
     messages: [{ role: 'user', text: 'Phuket, a beach resort trip. What do you recommend?' }],
-    expectBehaviours: ['hard-flag-acknowledged-in-wrapper'],
+    expectBehaviours: [
+      'hard-flag-acknowledged-in-wrapper',
+      'recommendation-wrapper-one-line-no-restate',
+    ],
   },
   {
     id: 'SP-05',

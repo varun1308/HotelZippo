@@ -30,6 +30,11 @@ const BEHAVIOUR_EVIDENCE: Record<PromptBehaviour, RegExp[]> = {
     /acknowledge any flag in your\s+conversational wrapper/i,
     /never suppress, soften, or\s+dilute/i,
   ],
+  'recommendation-wrapper-one-line-no-restate': [
+    /ONE warm sentence of framing/i,
+    /moves the user forward/i,
+    /NEVER restate the cards in prose/i,
+  ],
   'out-of-scope-decline-names-five': [
     /decline warmly/i,
     /Phuket.*Hong Kong.*Singapore.*Maldives.*Bali/s,

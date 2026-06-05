@@ -10,7 +10,7 @@ Structured fixtures for the three Conversation Agent prompts. Tests validate **s
 - **SP-01** New-user onboarding — one question at a time; first question is **name only**.
 - **SP-02** Returning user, complete profile + partial brief — must not repeat confirmed fields; resume from last unanswered field.
 - **SP-03** Transactional mode — all required fields in one message → proceed directly to `assemble_recommendations`, no clarifying questions.
-- **SP-04** Hard-flag acknowledgement — top pick with severe flag surfaced explicitly in the conversational wrapper (not just the card).
+- **SP-04** Hard-flag acknowledgement — top pick with severe flag surfaced explicitly in the conversational wrapper (not just the card). Also pins the recommendation-wrapper prose discipline: ONE framing sentence before the cards, ONE short forward-moving line after (book/shortlist/refine), and never restating the cards in prose.
 - **SP-05** Out-of-scope destination (Bangkok) — decline warmly, list the 5 covered destinations, no hotel names.
 
 ## Recommendation Assembly (RA-01…RA-05)
