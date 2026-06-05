@@ -4,6 +4,7 @@ export type { HardFlagProps } from './HardFlag';
 export { HotelCard, TopPickCard, StandardCard } from './HotelCard';
 export type { HotelCardProps } from './HotelCard';
 export { RecommendationSet } from './RecommendationSet';
+export { ShortlistableRecommendationSet } from './ShortlistableRecommendationSet';
 export { HotelCardSkeleton } from './HotelCardSkeleton';
 export { categoryMeta } from './internal';
 export * from './types';

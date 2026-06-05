@@ -29,8 +29,9 @@ interface PickLike {
   _hotel?: HydratedHotel | null;
 }
 
-function hotelDisplay(name: string, h?: HydratedHotel | null) {
+function hotelDisplay(id: string, name: string, h?: HydratedHotel | null) {
   return {
+    hotelId: id,
     hotelName: name,
     destination: h?.destination ?? '',
     area: h?.area ?? null,
@@ -59,7 +60,7 @@ export function toRecommendationSetProps(assembly: unknown): RecommendationSetPr
 
   const tp = a.top_pick;
   const topPick: TopPickCardProps = {
-    ...hotelDisplay(tp.hotel_name, tp._hotel),
+    ...hotelDisplay(tp.hotel_id, tp.hotel_name, tp._hotel),
     hardFlags: tp.hard_flags ?? [],
     brandNote: tp.brand_note ?? null,
     verdict: tp.verdict,
@@ -68,7 +69,7 @@ export function toRecommendationSetProps(assembly: unknown): RecommendationSetPr
   };
 
   const otherPicks: StandardCardProps[] = (a.other_picks ?? []).map((op) => ({
-    ...hotelDisplay(op.hotel_name, op._hotel),
+    ...hotelDisplay(op.hotel_id, op.hotel_name, op._hotel),
     hardFlags: op.hard_flags ?? [],
     brandNote: op.brand_note ?? null,
     summary: op.summary,

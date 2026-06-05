@@ -32,11 +32,19 @@ import { ChatWelcome } from './ChatWelcome';
 import { Composer, type ComposerHandle } from './Composer';
 import { WarmError } from '@/components/ui/WarmError';
 
+/** Imperative-ish API the shell hands to a render-prop rail so the rail's
+ *  "Find hotels" button can inject a chat turn into the live conversation. */
+export interface ChatShellRailApi {
+  sendMessage: (text: string) => void;
+  isBusy: boolean;
+}
+
 export interface ChatShellProps {
   /** The injected stream source (mock for 3b, real agent for 3c). */
   source: StreamSource;
-  /** Trip-brief rail content. 3d injects this; 3b renders a placeholder if absent. */
-  rail?: ReactNode;
+  /** Trip-brief rail content. 3d injects this; 3b renders a placeholder if absent.
+   *  Accepts a render function so the rail can reach `sendMessage` (3d Find hotels). */
+  rail?: ReactNode | ((api: ChatShellRailApi) => ReactNode);
   /** Counts for the topbar badges (3d wires real values). */
   briefCount?: number;
   shortlistCount?: number;
@@ -105,6 +113,11 @@ export function ChatShell({
   const handleSuggestion = (prompt: string) => {
     composerRef.current?.prefill(prompt);
   };
+
+  // Resolve the rail: a render function gets the send API (3d Find-hotels button);
+  // a plain node renders as-is; absent → the placeholder.
+  const railNode =
+    typeof rail === 'function' ? rail({ sendMessage, isBusy }) : (rail ?? <RailPlaceholder />);
 
   return (
     <div className="flex h-[100dvh] flex-col">
@@ -192,7 +205,7 @@ export function ChatShell({
         </div>
 
         {/* ---------- rail slot (Phase 3d) ---------- */}
-        {rail ?? <RailPlaceholder />}
+        {railNode}
       </div>
     </div>
   );

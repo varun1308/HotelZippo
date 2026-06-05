@@ -1,6 +1,6 @@
 /* Public surface for the Phase 3b chat components. */
 export { ChatShell } from './ChatShell';
-export type { ChatShellProps } from './ChatShell';
+export type { ChatShellProps, ChatShellRailApi } from './ChatShell';
 export { MessageRow } from './MessageRow';
 export type { MessageRowProps } from './MessageRow';
 export { ChatStreamText } from './ChatStreamText';
