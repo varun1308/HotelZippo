@@ -62,6 +62,12 @@ Log pages (`08a-4/7`, `08b-5`, `12c/f`) and pure reference pages (01, 02, 03, 04
 | 15 · Test Strategy | `specs/15-test-strategy.md` | generated |
 | 06 · System Overview | — (see `docs/architecture.md`) | n/a |
 
-## Out of scope for this plan (Phases 4–8)
+## Phase 4 — Auth & Persistence
+
+| Spec page | `/specs` file | Status |
+|---|---|---|
+| 17 · Auth & Persistence Spec | `specs/04-auth-persistence.md` | generated (SPECCED — not yet built) |
+
+## Out of scope for this plan (Phases 5–8)
 
 Generated as reference where they share a page with a 0–3 contract (e.g. `02-review-intelligence-pipeline.md` carries the Phase 6 pipeline). Not built now: 08a (full), 08a-1/2/3, 08b-3 (session snapshot, Phase 5), 08c (booking, Phase 7), 10b (Apify, Phase 6), 10c (RouteStack, Phase 7).
