@@ -22,6 +22,7 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `ROUTESTACK_API_URL` | server-only | RouteStack HTTP base URL — sandbox `https://evolvemcp.routestack.ai` (Phase 7) |
 | `GOOGLE_CLIENT_ID` | server-only | Google OAuth client ID (Phase 4) |
 | `GOOGLE_CLIENT_SECRET` | server-only | Google OAuth client secret (Phase 4) |
+| `GOOGLE_PLACES_API_KEY` | server-only | Google Places **Text Search (New)**, ID-only field mask — resolves curated hotels → `google_place_id` (12a). Free 10k/mo SKU. Distinct from the OAuth creds. |
 | `DASH0_API_KEY` | server-only | OTEL export to Dash0 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | server-only | Dash0 OTLP endpoint URL |
 | `NEXT_PUBLIC_APP_URL` | public | Public base URL — OAuth redirect + shareable shortlist links |

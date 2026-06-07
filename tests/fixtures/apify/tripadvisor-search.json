@@ -11,7 +11,18 @@
     "hotelClass": "4.0",
     "priceLevel": "$$$",
     "priceRange": "$218 - $347",
-    "numberOfRooms": 1454
+    "numberOfRooms": 1454,
+    "latitude": 41.872528,
+    "longitude": -87.62451,
+    "address": "720 South Michigan Avenue, Chicago, IL 60605-2116",
+    "addressObj": {
+      "street1": "720 South Michigan Avenue",
+      "street2": "",
+      "city": "Chicago",
+      "state": "IL",
+      "country": "United States",
+      "postalcode": "60605-2116"
+    }
   },
   {
     "title": "Angsana Laguna Phuket",

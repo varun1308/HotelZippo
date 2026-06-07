@@ -26,8 +26,16 @@ export async function PATCH(req: Request) {
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
   }
-  const { id, ...fields } = body as { id?: string } & Record<string, unknown>;
+  const { id, ...rawFields } = body as { id?: string } & Record<string, unknown>;
   if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
+
+  // Whitelist the editable columns rather than passing the body through blindly.
+  const ALLOWED = ['status', 'google_place_id', 'latitude', 'longitude', 'address', 'brand', 'price_tier'] as const;
+  const fields: Record<string, unknown> = {};
+  for (const k of ALLOWED) if (k in rawFields) fields[k] = rawFields[k];
+  if (Object.keys(fields).length === 0) {
+    return NextResponse.json({ error: 'no_editable_fields' }, { status: 400 });
+  }
 
   const supabase = createServiceClient();
 
