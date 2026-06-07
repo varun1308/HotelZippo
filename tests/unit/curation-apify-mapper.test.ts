@@ -33,6 +33,23 @@ describe('mapSearchItem', () => {
     });
     // image was wrapped in <…>; bracket stripped, no trailing '>'.
     expect(h!.images).toEqual(['https://media-cdn.tripadvisor.com/media/photo-o/28/6c/18/b7/exterior.jpg']);
+    // Geo captured for the place-id resolver (lat/long floats, not rounded; flat address).
+    expect(h!.latitude).toBe(41.872528);
+    expect(h!.longitude).toBe(-87.62451);
+    expect(h!.address).toBe('720 South Michigan Avenue, Chicago, IL 60605-2116');
+  });
+
+  it('falls back to addressObj when no flat address; geo is null when the actor omits it', () => {
+    const fromObj = mapSearchItem(
+      { name: 'Obj Hotel', addressObj: { street1: '1 Beach Rd', city: 'Phuket', country: 'Thailand' } },
+      'Phuket',
+    );
+    expect(fromObj!.address).toBe('1 Beach Rd, Phuket, Thailand');
+    // items[1] (Angsana) has no geo at all → nulls.
+    const noGeo = mapSearchItem(items[1], 'Phuket')!;
+    expect(noGeo.latitude).toBeNull();
+    expect(noGeo.longitude).toBeNull();
+    expect(noGeo.address ?? null).toBeNull();
   });
 
   it('handles alternate field names + coercion (title/url, rank "7", "3,100", stars 4.5→4, "$$$$"→ultra-luxury)', () => {

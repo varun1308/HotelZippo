@@ -19,6 +19,10 @@ interface Row {
   price_tier: string | null;
   star_rating: number | null;
   images: string[] | null;
+  google_place_id: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  address: string | null;
   status: 'pending' | 'approved' | 'rejected';
 }
 
@@ -62,6 +66,42 @@ export default function CurationPage() {
     if (!res.ok) {
       const json = await res.json();
       setNotice(`Cannot ${status}: ${(json.reasons ?? [json.error]).join(' ')}`);
+    }
+    await load(active);
+    setBusy(null);
+  }
+
+  async function resolvePlaces() {
+    setBusy('resolve');
+    setNotice('');
+    const res = await fetch('/api/admin/curation/resolve-places', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ destination: active }),
+    });
+    const json = await res.json();
+    setNotice(
+      res.ok
+        ? `Resolved ${json.resolved}/${json.total} place ids; skipped ${json.skipped?.length ?? 0}${
+            json.lowConfidence?.length ? ` · ${json.lowConfidence.length} name-only (check)` : ''
+          }.`
+        : `Error: ${json.reason ?? json.error}`,
+    );
+    await load(active);
+    setBusy(null);
+  }
+
+  /** Inline edit of a single editable field (e.g. a manually-entered google_place_id). */
+  async function setField(id: string, field: string, value: string) {
+    setBusy(id);
+    const res = await fetch('/api/admin/hotels', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, [field]: value === '' ? null : value }),
+    });
+    if (!res.ok) {
+      const json = await res.json();
+      setNotice(`Edit failed: ${json.error ?? ''}`);
     }
     await load(active);
     setBusy(null);
@@ -143,6 +183,13 @@ export default function CurationPage() {
           {busy === 'fetch' ? 'Fetching…' : 'Fetch Hotels'}
         </button>
         <button
+          onClick={resolvePlaces}
+          disabled={!!busy}
+          className="rounded-btn border border-border-strong px-4 py-2 text-body-sm text-text disabled:opacity-50"
+        >
+          {busy === 'resolve' ? 'Resolving…' : 'Resolve Place IDs'}
+        </button>
+        <button
           onClick={publish}
           disabled={!!busy}
           className="rounded-btn border border-border-strong px-4 py-2 text-body-sm text-text disabled:opacity-50"
@@ -181,6 +228,26 @@ export default function CurationPage() {
                 #{r.tripadvisor_rank ?? '—'} · {r.review_count ?? 0} reviews ·{' '}
                 {r.star_rating ?? '—'}★ · {r.price_tier ?? '—'} · {r.brand ?? '—'}
               </p>
+              <div className="mt-1 flex items-center gap-2">
+                <span
+                  className={`font-mono text-caption ${
+                    r.google_place_id ? 'text-success-text' : 'text-text-tertiary'
+                  }`}
+                >
+                  place: {r.google_place_id ? `${r.google_place_id} ✓` : '— unresolved'}
+                </span>
+                <input
+                  aria-label={`Google place id for ${r.name}`}
+                  defaultValue={r.google_place_id ?? ''}
+                  placeholder="paste place id"
+                  disabled={busy === r.id}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (r.google_place_id ?? '')) void setField(r.id, 'google_place_id', v);
+                  }}
+                  className="w-48 rounded-input border border-border bg-surface-2 px-2 py-0.5 font-mono text-caption text-text"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <span

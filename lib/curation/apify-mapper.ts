@@ -33,6 +33,16 @@ function asString(v: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+/** A finite float (lat/long) — unlike asInt, does NOT round and accepts negatives. */
+function asNumber(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 function asInt(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v);
   if (typeof v === 'string') {
@@ -98,8 +108,22 @@ export function mapSearchItem(item: unknown, destination: Destination): FetchedH
     price_tier: asPriceTier(row.priceTier ?? row.priceLevel),
     star_rating: asStarRating(row.hotelClass ?? row.stars ?? row.rating),
     images: asImages(row),
+    // Geo — matching inputs for the Google Place-ID resolver (lat/long bias is the strongest key).
+    latitude: asNumber(row.latitude),
+    longitude: asNumber(row.longitude),
+    address: asString(row.address) ?? addressFromObj(row.addressObj),
   };
 
   const parsed = fetchedHotelSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
+}
+
+/** Build a flat address string from the actor's structured addressObj, when no flat `address`. */
+function addressFromObj(obj: unknown): string | null {
+  if (!obj || typeof obj !== 'object') return null;
+  const a = obj as Record<string, unknown>;
+  const parts = [a.street1, a.street2, a.city, a.state, a.postalcode, a.country]
+    .map((p) => asString(p))
+    .filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
 }

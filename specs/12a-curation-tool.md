@@ -21,7 +21,7 @@ Web-based internal admin tool at `/admin/curation` (Next.js App Router). **No au
 
 ## Staging table
 
-`curation_hotels` — see `docs/data-model.md`. Columns: name, destination, tripadvisor_url, tripadvisor_rank, review_count, google_place_id, brand, price_tier, star_rating, images[], status (pending|approved|rejected), fetch_source (apify|playwright|manual), fetched_at, updated_at.
+`curation_hotels` — see `docs/data-model.md`. Columns: name, destination, tripadvisor_url, tripadvisor_rank, review_count, google_place_id, brand, price_tier, star_rating, images[], latitude, longitude, address, status (pending|approved|rejected), fetch_source (apify|playwright|manual), fetched_at, updated_at. (latitude/longitude/address added 2026-06-07, migration 0010 — geo matching inputs for the place-id resolver.)
 
 ## Scraping layer
 
@@ -30,9 +30,17 @@ Web-based internal admin tool at `/admin/curation` (Next.js App Router). **No au
 - **Mock mode:** static fixtures at `/scripts/seed/fixtures/[destination].json`.
 - `APIFY_API_TOKEN` optional — degrades gracefully to fallback/mock.
 
+## Google Place-ID resolution (added 2026-06-07)
+
+The TripAdvisor search actor returns no `google_place_id` (the Google-reviews half of the pipeline needs it). A separate, re-runnable **"Resolve Place IDs"** step fills it for staged rows:
+- `POST /api/admin/curation/resolve-places { destination? }` → `lib/curation/resolve-places.ts` over `curation_hotels` rows with a null `google_place_id`.
+- Per row, calls Google Places **Text Search (New)** (`lib/curation/google-places.ts`, ID-only field mask) biased to the hotel's `latitude`/`longitude` (captured from the TA actor) with `includedType: lodging`; takes the top match.
+- No match → left null, reported skipped (`no_match`). No lat/long → resolved name-only and flagged **low-confidence** for a founder double-check. `GOOGLE_PLACES_API_KEY` absent → 400 with a clear notice (env-gated; CI key-free).
+- The founder can paste/override a `google_place_id` inline per card (PATCH `/api/admin/hotels`, whitelisted fields). Publish then carries `google_place_id` → `hotels` as before.
+
 ## UI
 
-Header: destination tabs + count badges, "Fetch Hotels" button per destination, "Publish to Hotels" button, "Seed Demo Intelligence" button. Hotel cards editable inline; status badge; Approve/Reject buttons.
+Header: destination tabs + count badges, "Fetch Hotels" button per destination, **"Resolve Place IDs"** button, "Publish to Hotels" button, "Seed Demo Intelligence" button. Hotel cards editable inline (incl. a place-id field + resolved status); status badge; Approve/Reject buttons.
 
 ## Rules
 

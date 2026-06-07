@@ -22,6 +22,10 @@ export const fetchedHotelSchema = z.object({
   price_tier: z.enum(PRICE_TIERS).nullable().optional(),
   star_rating: z.union([z.literal(3), z.literal(4), z.literal(5)]).nullable().optional(),
   images: z.array(z.string()).nullable().optional(),
+  // Geo (from the TripAdvisor search actor) — matching inputs for the Google Place-ID resolver.
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  address: z.string().nullable().optional(),
 });
 export type FetchedHotel = z.infer<typeof fetchedHotelSchema>;
 
