@@ -1,0 +1,14 @@
+[
+  {
+    "publishedAtDate": "2026-03-10T12:00:00.000Z",
+    "name": "Priya Sharma",
+    "text": "Lovely pool and very helpful staff with our toddler.",
+    "stars": 4
+  },
+  {
+    "publishAt": 1735689600,
+    "user": "John Smith",
+    "review": "Great location near the beach.",
+    "rating": "5"
+  }
+]

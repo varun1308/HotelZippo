@@ -1,0 +1,24 @@
+[
+  {
+    "name": "JW Marriott Phuket Resort & Spa",
+    "url": "https://www.tripadvisor.com/Hotel_Review-JW-Marriott-Phuket",
+    "rankingPosition": 3,
+    "numberOfReviews": 4200,
+    "hotelClass": 5,
+    "brand": "Marriott",
+    "priceLevel": "luxury",
+    "photos": ["https://example.com/jw1.jpg", "https://example.com/jw2.jpg"]
+  },
+  {
+    "title": "Angsana Laguna Phuket",
+    "webUrl": "https://www.tripadvisor.com/Hotel_Review-Angsana-Laguna-Phuket",
+    "rank": "7",
+    "reviewsCount": "3,100",
+    "stars": 4.5,
+    "image": "https://example.com/angsana.jpg"
+  },
+  {
+    "title": "",
+    "url": "https://www.tripadvisor.com/Hotel_Review-Nameless"
+  }
+]
