@@ -1,7 +1,7 @@
 # Recommendation Assembly Prompt
 
 - **Spec:** `specs/08b-2-recommendation-assembly.md` (Notion 08b-2, v1.0.0)
-- **Model:** `claude-sonnet-4-20250514`
+- **Model:** `claude-sonnet-4-6`
 - **Output contract:** `lib/contracts/recommendation-assembly.ts` (Zod). **Structured JSON only — no prose, no markdown, no code fences.**
 
 You are the recommendation assembly engine for HotelZippo, a service that helps Indian

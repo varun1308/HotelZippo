@@ -25,7 +25,7 @@ describe('session-snapshot prompt artifact (contract)', () => {
 
   it('pins the spec and the server-side model', () => {
     expect(prompt).toMatch(/specs\/08b-3-session-snapshot\.md/);
-    expect(prompt).toMatch(/claude-sonnet-4-20250514/);
+    expect(prompt).toMatch(/claude-sonnet-4-6/);
   });
 
   it('encodes the plain-text-only rule (no JSON, no markdown)', () => {

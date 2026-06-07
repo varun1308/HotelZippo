@@ -29,7 +29,7 @@ import {
 } from '@/lib/db/persistence/family-profiles';
 import type { Child } from '@/components/profile';
 
-export const AGENT_MODEL = 'claude-sonnet-4-20250514';
+export const AGENT_MODEL = 'claude-sonnet-4-6';
 
 const SYSTEM_PROMPT_PATH = path.join(
   process.cwd(),

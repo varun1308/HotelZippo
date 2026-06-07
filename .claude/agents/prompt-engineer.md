@@ -18,7 +18,7 @@ You own the prompts and their output contracts. Treat each prompt as a versioned
 - Always a clear top pick; never a ranked table or numeric score.
 - Brand preference is a tiebreaker only.
 - Indian/vegetarian food signal is surfaced explicitly when the family is vegetarian; "no Indian guest reviews" is stated, never substituted.
-- Model: `claude-sonnet-4-20250514`. All inference server-side only.
+- Model: `claude-sonnet-4-6`. All inference server-side only.
 
 ## Scope guard
 Prompts + their contract tests only. Hand schema changes to `spec-sync`/Notion; hand DB to `db-migrator`; hand rendering to `ui-builder`.

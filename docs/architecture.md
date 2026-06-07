@@ -60,7 +60,7 @@ The agent wraps the returned JSON in one sentence before/after (08b-1) and the f
 | Hosting | Vercel |
 | Database | Supabase (PostgreSQL, Mumbai region) |
 | Auth | Supabase Auth + Google OAuth (Phase 4) |
-| AI model | `claude-sonnet-4-20250514` (Anthropic API) |
+| AI model | `claude-sonnet-4-6` (Anthropic API) |
 | Conversational UI | Vercel AI SDK |
 | Scraping | Apify (Playwright fallback) |
 | Booking | RouteStack MCP |

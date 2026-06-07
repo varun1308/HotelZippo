@@ -1,7 +1,7 @@
 /* Synthesis call + confidence gate (Phase 6 · specs/02 Stage 5 / 08a-1 / 08a-2).
  * Server-side. Calls the 08a-1 synthesis prompt with the segmented review input, parses
  * and validates the JSON, and applies the confidence gate. Model is INJECTABLE (default
- * Anthropic claude-sonnet-4, lazily imported, ANTHROPIC_API_KEY server-side only) so the
+ * Anthropic claude-sonnet-4-6, lazily imported, ANTHROPIC_API_KEY server-side only) so the
  * 7 synthesis test cases (08a-3) and the pipeline tests run key-free with a fixture model.
  *
  * Malformed output → SynthesisError (the pipeline fails that hotel with no partial write
@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 import { SIGNAL_STRENGTHS, hardFlagSchema } from '@/lib/db/schemas';
 
-export const SYNTHESIS_MODEL = 'claude-sonnet-4-20250514';
+export const SYNTHESIS_MODEL = 'claude-sonnet-4-6';
 const PROMPT_PATH = path.join(process.cwd(), 'prompts/review-intelligence-agent/synthesis.md');
 
 const CONFIDENCE_LEVELS = ['high', 'medium', 'low'] as const;

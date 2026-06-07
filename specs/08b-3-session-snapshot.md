@@ -3,7 +3,7 @@
 - **Notion:** https://app.notion.com/p/3754958429ac814a8e99e6dc122ef7d0
 - **Phase:** 5 · **Status:** SPECCED
 - **Prompt artifact:** `/prompts/conversation-agent/session-snapshot.md`
-- **Model:** `claude-sonnet-4-20250514`
+- **Model:** `claude-sonnet-4-6`
 
 > Production prompt for the Session Snapshot step. A one-shot generation that compresses a full conversation transcript into a dense plain-text summary, stored in `sessions.session_summary`, and injected into the Conversation Agent system prompt as `<session_snapshot>` on resumption so a returning user picks up exactly where they left off. **No schema change** — `sessions.session_summary text` + `sessions.last_active timestamptz` already exist (migration `0001_core_tables.sql`). Phase 5 builds the **generate + persist + load** sides; the **consumption seam already exists** (Phase 3).
 
@@ -96,7 +96,7 @@ The `<session_snapshot>` consumption path was built in Phase 3 and is unit-teste
 ## Claude Code Action Items (from Notion)
 
 1. Author the prompt at `/prompts/conversation-agent/session-snapshot.md` — the production prompt **verbatim** from this page (system prompt + your task + what to capture + rules + output format/example).
-2. **Snapshot generator** — calls the prompt **one-shot** with the full conversation history as the user turn. **Injectable model** (default = Anthropic `claude-sonnet-4-20250514`, `ANTHROPIC_API_KEY` server-side only) so CI runs key-free, like the other prompts (08b-1 / 08b-2).
+2. **Snapshot generator** — calls the prompt **one-shot** with the full conversation history as the user turn. **Injectable model** (default = Anthropic `claude-sonnet-4-6`, `ANTHROPIC_API_KEY` server-side only) so CI runs key-free, like the other prompts (08b-1 / 08b-2).
 3. **Persist** the generated snapshot to `sessions.session_summary` (and touch `last_active`) at the **trigger points** — session end, 30-min inactivity, navigation away. No schema change.
 4. **Resume loader** — fetch the **latest `sessions` row** for the user (by `last_active`) and thread its `session_summary` → the existing `sessionSnapshot` seam. **The consumption seam already exists** (`lib/chat/build-system.ts` injects `<session_snapshot>`; `lib/chat/agent.ts` `runConversation` accepts `sessionSnapshot`; `app/api/chat/route.ts` already threads `body.sessionSnapshot`) — Phase 5 builds the **generate + persist + load** sides only.
 5. Tests per 15 (add the Phase 5 criteria above): snapshot written at trigger points, auto-resume of most recent session, ≤500-token ceiling, missing-snapshot fresh-start, plain-text + `<session_snapshot>` injection. Generator tests inject a fake model so CI runs with no key.

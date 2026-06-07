@@ -1,7 +1,7 @@
 # Session Snapshot Prompt
 
 - **Spec:** specs/08b-3-session-snapshot.md (Notion 08b-3, v1.0.0)
-- **Model:** claude-sonnet-4-20250514
+- **Model:** claude-sonnet-4-6
 - **Invocation:** one-shot at session end / 30-min inactivity / navigation away; full conversation history passed as the user turn
 - **Output:** plain text only — no JSON, no markdown, no headers, no bullet symbols. Stored in sessions.session_summary, injected as <session_snapshot>. Budget: <400 tokens preferred, 500 hard ceiling.
 
