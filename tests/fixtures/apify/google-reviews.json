@@ -1,14 +1,31 @@
 [
   {
-    "publishedAtDate": "2026-03-10T12:00:00.000Z",
-    "name": "Priya Sharma",
-    "text": "Lovely pool and very helpful staff with our toddler.",
-    "stars": 4
+    "reviewerId": "110758759962531004425",
+    "name": "TALENTO HUMANO",
+    "isLocalGuide": true,
+    "text": "Genial",
+    "textTranslated": "Brilliant",
+    "publishAt": "51 minutes ago",
+    "publishedAtDate": "2026-03-10T04:56:59.605Z",
+    "reviewId": "Ci9DQUlRQUNvZENodHljRjlvT210Tk1YbHRYME5sVm1Kb01rMXRkamR1WWpkMVJGRRAB",
+    "reviewOrigin": "Google",
+    "stars": 4,
+    "rating": null,
+    "originalLanguage": "es",
+    "translatedLanguage": "en",
+    "placeId": "ChIJVVVVVVXlUVMRu-GPNDD5qKw"
   },
   {
-    "publishAt": 1735689600,
-    "user": "John Smith",
-    "review": "Great location near the beach.",
-    "rating": "5"
+    "name": "Priya Sharma",
+    "text": "Lovely pool and very helpful staff with our toddler.",
+    "textTranslated": null,
+    "publishAt": "2 hours ago",
+    "publishedAtDate": "2026-03-08T03:27:47.401Z",
+    "reviewId": "Ci9DQUlRQUNvZENodHljRjlvT2t4T09YQm5aMWRpZUMxb1YwcE9XRk40YVZOSFJVRRAB",
+    "stars": 5,
+    "rating": null,
+    "originalLanguage": "en",
+    "translatedLanguage": null,
+    "placeId": "ChIJVVVVVVXlUVMRu-GPNDD5qKw"
   }
 ]

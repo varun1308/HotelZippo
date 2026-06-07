@@ -86,6 +86,16 @@ function pickText(row: Record<string, unknown>): string | null {
   return asString(row.text) ?? asString(row.review) ?? asString(row.reviewText) ?? asString(row.body);
 }
 
+/** Google's reviews actor returns the review body in its ORIGINAL language in `text`, with an
+ * English rendering in `textTranslated` whenever the original isn't English (verified in the real
+ * sample: a Spanish "Genial" carried `textTranslated: "Brilliant"`). For our Asian destinations a
+ * large share of Google reviews are Thai/Chinese/Bahasa with an English translation alongside, and
+ * our synthesis is English-only — so prefer the translation, falling back to the original. The raw
+ * payload keeps both fields, so a future re-map can revisit this without re-scraping. */
+function pickGoogleText(row: Record<string, unknown>): string | null {
+  return asString(row.textTranslated) ?? pickText(row);
+}
+
 function pickName(row: Record<string, unknown>): string | null {
   // TripAdvisor nests the reviewer under `user` as an object: prefer the display name, then the
   // username handle (the tagging step's Indian-name heuristic reads whatever we surface here).
@@ -131,8 +141,11 @@ export function mapTripadvisorReviewItem(item: unknown): RawReviewInput | null {
 export function mapGoogleReviewItem(item: unknown): RawReviewInput | null {
   if (!item || typeof item !== 'object') return null;
   const row = item as Record<string, unknown>;
-  const review_text = pickText(row);
-  const review_date = normaliseDate(row.publishedAtDate ?? row.publishAt ?? row.date ?? row.reviewDate);
+  const review_text = pickGoogleText(row);
+  // `publishedAtDate` is the real ISO timestamp; `publishAt` is a relative string ("2 hours ago")
+  // in the live actor, so it's the LAST resort (normaliseDate rejects relative strings → null).
+  const review_date = normaliseDate(row.publishedAtDate ?? row.date ?? row.reviewDate ?? row.publishAt);
+  // The live actor puts the star value in `stars`; `rating` is often null there — read `stars` first.
   const rating = normaliseRating(row.stars ?? row.rating ?? row.score);
   if (review_text == null && rating == null) return null;
   return { source: 'google', review_date, reviewer_name: pickName(row), review_text, rating };
