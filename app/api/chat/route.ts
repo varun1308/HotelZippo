@@ -13,6 +13,7 @@ import { runConversation, type ProfileUpdateResult } from '@/lib/chat/agent';
 import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
 import { toModelMessages } from '@/lib/chat/to-model-messages';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
+import { e2eEnabled } from '@/lib/chat/e2e-stub';
 import type { ChatMessage, StreamChunk } from '@/lib/chat/types';
 
 export const runtime = 'nodejs';
@@ -32,6 +33,15 @@ export async function POST(req: Request) {
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return Response.json({ error: 'messages required' }, { status: 400 });
   }
+
+  // E2E stub seam (specs/15a §1.1): when the Playwright harness sets NEXT_PUBLIC_E2E=1,
+  // serve a deterministic, key-free scripted stream instead of the live Anthropic agent.
+  // Read at call time + lazy-import so the live bundle is untouched and prod is impossible.
+  if (e2eEnabled()) {
+    const { e2eChatStub } = await import('@/lib/chat/e2e-stub');
+    return e2eChatStub(body.messages);
+  }
+  // (e2eChatStub is async — it resolves real seeded hotel ids onto the stubbed cards.)
 
   // Resolve the signed-in user (cookie SSR) so the agent can persist confirmed profile
   // changes under RLS. Best-effort: unauthenticated / no env → no userId, the update_profile

@@ -9,7 +9,7 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 ## Test types
 - **Unit** — Jest; pure functions + prompt output parsers.
 - **Integration** — Jest + a dedicated Supabase **test** project (never production).
-- **E2E** — Playwright on critical user journeys. **DEFERRED post-v1** (not yet built; the CI `e2e` job is a documented no-op until a `test:e2e` script exists — see the Phase 3 note below).
+- **E2E** — Playwright on critical user journeys. **ACTIVE** — see `specs/15a-e2e-test-strategy.md` for the full contract (seams, journeys J1–J4, acceptance criteria). The suite is deterministic + key-free (the agent + booking providers are stubbed via `NEXT_PUBLIC_E2E`; auth is real via dev-login; data is a seeded local Supabase). The CI `e2e` job auto-activates on the `test:e2e` script. *(Was deferred post-v1; reactivated 2026-06-08.)*
 - **Contract** — Zod schema validation.
 
 ## Test data
@@ -45,7 +45,7 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - Hard-flag alerts render prominently on relevant cards.
 - Top pick clearly distinguished from other recommendations.
 - **Test type (current gate):** jsdom component/unit tests cover card rendering, hard-flag prominence, and top-pick distinction; the conversational flow is exercised via the chat-runtime unit/contract tests + a manual happy-path smoke against the dev server.
-- **Test type (deferred post-v1):** full E2E (Playwright: onboarding → recommendations → card rendering). Not yet built — tracked as a post-v1 follow-up; until a `test:e2e` script lands, the CI `e2e` job is an explicit no-op (it logs "E2E deferred (spec 15)").
+- **Test type (E2E, active):** Playwright journey **J2** in `specs/15a-e2e-test-strategy.md` (onboarding → recommendations → inline card rendering → top-pick distinction → hard-flag prominence), run against the real server with a stubbed agent. *(All four journeys J1–J4 are live; see 15a.)*
 
 ### Phase 4 — Auth & Persistence
 (Source: `specs/04-auth-persistence.md` acceptance criteria.)
@@ -90,6 +90,9 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 Phase 8 (launch checklist — Notion 18; founder-run, not build work in this campaign). See Notion 15.
 
 ## Action items
-- Stand up Jest + Zod with a dedicated Supabase test project. **Done.** (Playwright/E2E deferred post-v1 — see Test types + Phase 3.)
+- Stand up Jest + Zod with a dedicated Supabase test project. **Done.**
+- Stand up Playwright E2E (`specs/15a`). **Done** — all four journeys live (J1 auth/landing,
+  J2 onboarding→recommendations, J3 shortlist+profile persistence, J4 booking room-picker).
+  17 tests green + 1 documented `test.fixme` (shortlist-reload gap — see 15a §7).
 - `qa-gate` owns these criteria and refuses to mark a phase complete until they pass.
 - Materialise `/tests/fixtures/` standard profile + brief.

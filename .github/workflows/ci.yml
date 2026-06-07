@@ -128,12 +128,52 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Install Supabase CLI
+        if: steps.detect.outputs.has_e2e == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
       - name: Install
         if: steps.detect.outputs.has_e2e == 'true'
         run: npm ci
-      - name: Install Playwright browsers
+
+      - name: Install Playwright (Chromium)
         if: steps.detect.outputs.has_e2e == 'true'
-        run: npx playwright install --with-deps
+        run: npx playwright install --with-deps chromium
+
+      # Boot the same local Supabase the integration job uses, then seed it deterministically
+      # (10 hotels + intelligence) and create the dev user E2E signs in as. .env.e2e carries
+      # ONLY public localhost-only demo keys + the E2E/dev-login flags (no secrets).
+      - name: Start Supabase (applies migrations)
+        if: steps.detect.outputs.has_e2e == 'true'
+        run: supabase start
+
+      - name: Seed DB + dev user
+        if: steps.detect.outputs.has_e2e == 'true'
+        run: |
+          npm run dev:db
+          npm run e2e:user
+
+      # Build with .env.e2e exported so NEXT_PUBLIC_E2E / dev-login flags bake into the bundle.
+      # Playwright's webServer then runs `next start` (also with the flags) on E2E_PORT.
+      - name: Build (E2E env)
+        if: steps.detect.outputs.has_e2e == 'true'
+        run: set -a && . ./.env.e2e && set +a && npm run e2e:build
+
       - name: E2E (Playwright)
         if: steps.detect.outputs.has_e2e == 'true'
         run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always() && steps.detect.outputs.has_e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Stop Supabase
+        if: always() && steps.detect.outputs.has_e2e == 'true'
+        run: supabase stop || true

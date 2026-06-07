@@ -16,7 +16,11 @@
     "booking:capture": "tsx --env-file=.env.local scripts/booking/capture-rates.ts",
     "dev:user": "tsx --env-file=.env.local scripts/dev/seed-dev-user.ts",
     "dev:gen-seed": "tsx scripts/dev/gen-seed-sql.ts",
-    "dev:db": "npm run dev:gen-seed && supabase db reset"
+    "dev:db": "npm run dev:gen-seed && supabase db reset",
+    "e2e:user": "tsx --env-file=.env.e2e scripts/dev/seed-dev-user.ts",
+    "e2e:build": "next build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",
@@ -34,6 +38,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.4.8",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.6.1",

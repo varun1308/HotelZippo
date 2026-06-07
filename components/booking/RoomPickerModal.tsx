@@ -396,6 +396,7 @@ function RoomOptionRow({
   return (
     <button
       type="button"
+      data-testid="room-option"
       onClick={onSelect}
       className="group flex w-full items-start justify-between gap-4 rounded-card border border-border bg-surface p-4 text-left shadow-xs transition-colors duration-fast hover:border-border-strong hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >

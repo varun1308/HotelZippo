@@ -24,6 +24,7 @@ next-env.d.ts
 .env.test.local
 .env.production.local
 # .env.example IS committed (template only, no values)
+# .env.e2e IS committed (specs/15a) — only public localhost-only Supabase demo keys + E2E flags, no secrets
 
 # Testing
 /coverage

@@ -10,6 +10,7 @@ import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { searchAndRates } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { BookingError } from '@/lib/booking/types';
 import type { RatesRequest, RatesResponse, BookingApiError } from '@/lib/booking/api-contract';
 
@@ -33,6 +34,14 @@ export async function POST(req: Request): Promise<Response> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return errJson('config', 'Please sign in to book.', 401);
+
+  // E2E stub seam (specs/15a §1.1): after the REAL auth gate, swap the RouteStack provider
+  // for a deterministic stub when the harness sets NEXT_PUBLIC_E2E=1. Lazy-imported so the
+  // live bundle is untouched; absent the flag this is byte-for-byte today's behaviour.
+  if (e2eEnabled()) {
+    const { e2eRatesStub } = await import('@/lib/booking/e2e-stub');
+    return e2eRatesStub(body);
+  }
 
   try {
     const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch() });

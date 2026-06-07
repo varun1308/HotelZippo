@@ -20,7 +20,7 @@ export function RecommendationSet({
 }: RecommendationSetProps) {
   const heading = altHeading ?? defaultAltHeading(otherPicks.length);
   return (
-    <div className="mx-auto w-full max-w-card">
+    <div className="mx-auto w-full max-w-card" data-testid="recommendation-set">
       <TopPickCard {...topPick} />
 
       {otherPicks.length > 0 && (
