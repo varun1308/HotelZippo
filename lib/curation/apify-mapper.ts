@@ -105,6 +105,16 @@ export function mapSearchItem(item: unknown, destination: Destination): FetchedH
   const name = asString(row.name) ?? asString(row.title) ?? asString(row.hotelName);
   if (!name) return null;
 
+  // Hotels-only defense-in-depth. The actor's output is an anyOf of HOTEL | RESTAURANT | ATTRACTION
+  // (each with `type`/`category`), and it tags out-of-area matches with `isNearbyResult`. The input
+  // already excludes non-hotels + nearby results, but never STAGE one if a config slip / actor quirk
+  // lets it through. Permissive when the fields are absent (mock/playwright sources + older fixtures
+  // don't set them) — only reject a value that is present and not a hotel.
+  const category = asString(row.category)?.toLowerCase(); // "hotel" | "restaurant" | "attraction"
+  const locType = asString(row.type)?.toLowerCase(); // "HOTEL" | "RESTAURANT" | "ATTRACTION"
+  if ((category && category !== 'hotel') || (locType && locType !== 'hotel')) return null;
+  if (row.isNearbyResult === true) return null;
+
   const candidate = {
     name,
     destination,

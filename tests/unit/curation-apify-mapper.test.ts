@@ -100,4 +100,29 @@ describe('mapSearchItem', () => {
     expect(mapSearchItem(null, 'Phuket')).toBeNull();
     expect(mapSearchItem({ junk: true }, 'Phuket')).toBeNull();
   });
+
+  // Hotels-only guard: the actor's output is an anyOf of HOTEL | RESTAURANT | ATTRACTION and tags
+  // out-of-area matches with isNearbyResult. The mapper must never stage a non-hotel / nearby result.
+  it('drops a non-hotel row by `category` or `type`', () => {
+    expect(mapSearchItem({ name: 'Portillo\'s', category: 'restaurant' }, 'Phuket')).toBeNull();
+    expect(mapSearchItem({ name: 'The Bean', type: 'ATTRACTION' }, 'Phuket')).toBeNull();
+  });
+
+  it('drops a nearby-result hotel (different city)', () => {
+    expect(
+      mapSearchItem({ name: 'Faraway Inn', type: 'HOTEL', isNearbyResult: true }, 'Phuket'),
+    ).toBeNull();
+  });
+
+  it('still maps a real HOTEL row (type "HOTEL", not nearby)', () => {
+    // items[0] (Hilton Chicago) carries type:"HOTEL" — the guard must let it through.
+    const h = mapSearchItem(items[0], 'Phuket');
+    expect(h).not.toBeNull();
+    expect(h!.name).toBe('Hilton Chicago');
+  });
+
+  it('is permissive when category/type are absent (mock/playwright rows)', () => {
+    // items[1] (Angsana) has no type/category — must still map.
+    expect(mapSearchItem(items[1], 'Phuket')).not.toBeNull();
+  });
 });
