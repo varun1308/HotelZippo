@@ -5,11 +5,36 @@ import { buildSearchInput, mapSearchItem } from '@/lib/curation/apify-mapper';
 import items from '../fixtures/apify/tripadvisor-search.json';
 
 describe('buildSearchInput', () => {
-  it('encodes the destination + maxResults cap', () => {
+  // Keys verified against the real actor's input schema (founder-supplied 2026-06-07).
+  it('uses the real actor keys: bare-location query + maxItemsPerQuery cap', () => {
     const input = buildSearchInput('Phuket', 50);
-    expect(input.locationQuery).toBe('Phuket');
-    expect(input.maxItems).toBe(50);
-    expect(String(input.query)).toMatch(/Phuket/);
+    expect(input.query).toBe('Phuket'); // bare location, NOT "hotels in Phuket"
+    expect(input.maxItemsPerQuery).toBe(50);
+    expect(input.language).toBe('en');
+    expect(input.currency).toBe('USD');
+  });
+
+  it('restricts to hotels only (attractions + restaurants default true upstream)', () => {
+    const input = buildSearchInput('Bali', 25);
+    expect(input.includeHotels).toBe(true);
+    expect(input.includeAttractions).toBe(false);
+    expect(input.includeRestaurants).toBe(false);
+    expect(input.includeNearbyResults).toBe(false);
+  });
+
+  it('omits the dead/guessed keys and the paid lead-gen add-ons', () => {
+    const input = buildSearchInput('Phuket', 50);
+    for (const dead of [
+      'locationQuery',
+      'maxItems',
+      'includeReviewCount',
+      'startUrls',
+      'maximumLeadsEnrichmentRecords',
+      'leadsEnrichmentDepartments',
+      'verifyLeadsEnrichmentEmails',
+    ]) {
+      expect(input).not.toHaveProperty(dead);
+    }
   });
 });
 
@@ -74,5 +99,30 @@ describe('mapSearchItem', () => {
     expect(mapSearchItem(items[2], 'Phuket')).toBeNull();
     expect(mapSearchItem(null, 'Phuket')).toBeNull();
     expect(mapSearchItem({ junk: true }, 'Phuket')).toBeNull();
+  });
+
+  // Hotels-only guard: the actor's output is an anyOf of HOTEL | RESTAURANT | ATTRACTION and tags
+  // out-of-area matches with isNearbyResult. The mapper must never stage a non-hotel / nearby result.
+  it('drops a non-hotel row by `category` or `type`', () => {
+    expect(mapSearchItem({ name: 'Portillo\'s', category: 'restaurant' }, 'Phuket')).toBeNull();
+    expect(mapSearchItem({ name: 'The Bean', type: 'ATTRACTION' }, 'Phuket')).toBeNull();
+  });
+
+  it('drops a nearby-result hotel (different city)', () => {
+    expect(
+      mapSearchItem({ name: 'Faraway Inn', type: 'HOTEL', isNearbyResult: true }, 'Phuket'),
+    ).toBeNull();
+  });
+
+  it('still maps a real HOTEL row (type "HOTEL", not nearby)', () => {
+    // items[0] (Hilton Chicago) carries type:"HOTEL" — the guard must let it through.
+    const h = mapSearchItem(items[0], 'Phuket');
+    expect(h).not.toBeNull();
+    expect(h!.name).toBe('Hilton Chicago');
+  });
+
+  it('is permissive when category/type are absent (mock/playwright rows)', () => {
+    // items[1] (Angsana) has no type/category — must still map.
+    expect(mapSearchItem(items[1], 'Phuket')).not.toBeNull();
   });
 });
