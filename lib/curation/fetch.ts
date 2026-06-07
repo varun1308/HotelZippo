@@ -8,6 +8,9 @@ import 'server-only';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fetchedHotelSchema, type FetchHotelsResult, type FetchedHotel } from './types';
+import { runActorGetItems } from '@/lib/apify/client';
+import { buildSearchInput, mapSearchItem } from './apify-mapper';
+import { DESTINATIONS } from '@/lib/db/schemas';
 
 function slug(destination: string): string {
   return destination.toLowerCase().replace(/\s+/g, '-');
@@ -20,9 +23,24 @@ async function fetchFromMock(destination: string): Promise<FetchedHotel[]> {
   return fetchedHotelSchema.array().parse(parsed);
 }
 
-// Placeholder — wired in full when a live Apify token + search-actor id exist.
-async function fetchFromApify(_destination: string): Promise<FetchedHotel[]> {
-  throw new Error('apify-not-configured');
+/** Live TripAdvisor-search fetch. `maxResults` = "top N by traveller ranking" cap (TA search
+ * returns ranking order); the ≥100-review gate stays at approve-time (canApprove), not here.
+ * Throws on missing actor id / Apify failure → fetchHotels() catch degrades to playwright→mock. */
+async function fetchFromApify(destination: string): Promise<FetchedHotel[]> {
+  const actorId = process.env.APIFY_TRIPADVISOR_SEARCH_ACTOR_ID;
+  if (!actorId) throw new Error('APIFY_TRIPADVISOR_SEARCH_ACTOR_ID is not set');
+  if (!(DESTINATIONS as readonly string[]).includes(destination)) {
+    throw new Error(`unknown destination: ${destination}`);
+  }
+  const max = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);
+  const items = await runActorGetItems({
+    actorId,
+    input: buildSearchInput(destination, max),
+    limit: max,
+  });
+  return items
+    .map((it) => mapSearchItem(it, destination as (typeof DESTINATIONS)[number]))
+    .filter((h): h is FetchedHotel => h !== null);
 }
 
 async function fetchFromPlaywright(_destination: string): Promise<FetchedHotel[]> {

@@ -19,6 +19,13 @@ import path from 'node:path';
 import { z } from 'zod';
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 import type { RawReviewInput } from './tagging';
+import { runActorGetItems } from '@/lib/apify/client';
+import {
+  buildTripadvisorReviewsInput,
+  buildGoogleReviewsInput,
+  mapTripadvisorReviewItem,
+  mapGoogleReviewItem,
+} from './apify-mapper';
 
 export type ReviewSource = 'tripadvisor' | 'google';
 
@@ -74,11 +81,36 @@ async function scrapeFromMock(target: ScrapeTarget): Promise<RawReviewInput[]> {
   return rawReviewSchema.array().parse(JSON.parse(raw));
 }
 
-// Live Apify per-source scrape — wired but only runs when a token + actor id exist.
-// Each source maps to one actor; throws on failure so the caller records the gap.
-async function scrapeFromApify(_target: ScrapeTarget, _source: ReviewSource): Promise<RawReviewInput[]> {
-  // Implemented against the live actors once APIFY creds are provided (08a-6 pre-deploy).
-  throw new Error('apify-not-configured');
+// Live Apify per-source scrape — only runs when a token + the source's actor id exist (hasApifyFor).
+// Each source maps to one actor; throws on failure (incl. a missing url/place_id) so the per-source
+// chain records the gap and the run continues. Over-fetches the last 12 months; format.ts re-filters
+// to 12mo + per-segment caps at synthesis, so the wide window here is safe.
+const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
+
+async function scrapeFromApify(target: ScrapeTarget, source: ReviewSource): Promise<RawReviewInput[]> {
+  const since = new Date(Date.now() - TWELVE_MONTHS_MS);
+  const maxResults = Number(process.env.APIFY_REVIEWS_MAX_RESULTS ?? 600);
+
+  if (source === 'tripadvisor') {
+    if (!target.tripadvisorUrl) throw new Error('no tripadvisor_url for hotel');
+    const actorId = process.env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID!;
+    const items = await runActorGetItems({
+      actorId,
+      input: buildTripadvisorReviewsInput(target.tripadvisorUrl, { maxResults, since }),
+      limit: maxResults,
+    });
+    return items.map(mapTripadvisorReviewItem).filter((r): r is RawReviewInput => r !== null);
+  }
+
+  // google
+  if (!target.googlePlaceId) throw new Error('no google_place_id for hotel');
+  const actorId = process.env.APIFY_GOOGLE_REVIEWS_ACTOR_ID!;
+  const items = await runActorGetItems({
+    actorId,
+    input: buildGoogleReviewsInput(target.googlePlaceId, { maxResults, since }),
+    limit: maxResults,
+  });
+  return items.map(mapGoogleReviewItem).filter((r): r is RawReviewInput => r !== null);
 }
 
 async function scrapeFromPlaywright(_target: ScrapeTarget, _source: ReviewSource): Promise<RawReviewInput[]> {

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "87590",
+    "type": "HOTEL",
+    "name": "Hilton Chicago",
+    "image": "<https://media-cdn.tripadvisor.com/media/photo-o/28/6c/18/b7/exterior.jpg>",
+    "rankingPosition": 129,
+    "rating": 4,
+    "webUrl": "<https://www.tripadvisor.com/Hotel_Review-g35805-d87590-Reviews-Hilton_Chicago-Chicago_Illinois.html>",
+    "numberOfReviews": 6717,
+    "hotelClass": "4.0",
+    "priceLevel": "$$$",
+    "priceRange": "$218 - $347",
+    "numberOfRooms": 1454
+  },
+  {
+    "title": "Angsana Laguna Phuket",
+    "url": "https://www.tripadvisor.com/Hotel_Review-Angsana-Laguna-Phuket",
+    "rank": "7",
+    "reviewsCount": "3,100",
+    "stars": 4.5,
+    "priceLevel": "$$$$",
+    "photos": ["https://example.com/angsana1.jpg", "https://example.com/angsana2.jpg"]
+  },
+  {
+    "title": "",
+    "webUrl": "<https://www.tripadvisor.com/Hotel_Review-Nameless>"
+  }
+]
