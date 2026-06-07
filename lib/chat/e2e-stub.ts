@@ -37,6 +37,57 @@ interface AssistantStep {
   recommendations?: unknown;
 }
 
+interface CardLike {
+  hotelId?: string;
+  hotelName: string;
+  [k: string]: unknown;
+}
+interface RecoLike {
+  topPick: CardLike;
+  otherPicks: CardLike[];
+  [k: string]: unknown;
+}
+
+/** Rebind the scripted recommendation cards to REAL seeded hotels (id + name) so the stubbed
+ * cards are production-faithful: the Save + Proceed-to-book paths key off `hotelId`, which the
+ * live map-recommendation carries from the DB. We keep the scripted DISPLAY content (hard
+ * flags, verdict, category summaries — what J2 asserts on) and only swap identity onto real
+ * seeded rows, so the top pick + alts are all saveable/bookable. Best-effort: if the lookup
+ * fails (no DB / nothing seeded), the cards still render; only save/booking stay inert. */
+async function withRealHotelIds(reco: unknown): Promise<unknown> {
+  if (!reco || typeof reco !== 'object') return reco;
+  const r = reco as RecoLike;
+
+  let seeded: Array<{ id: string; name: string; destination: string }> = [];
+  try {
+    const { createServiceClient } = await import('@/lib/db/server');
+    const { data } = await createServiceClient()
+      .from('hotels')
+      .select('id, name, destination')
+      .eq('destination', r.topPick?.destination ?? 'Phuket')
+      .order('name', { ascending: true });
+    seeded = data ?? [];
+  } catch {
+    return reco; // no DB → leave the scripted cards as-is (render-only)
+  }
+  if (seeded.length === 0) return reco;
+
+  // Assign distinct seeded hotels to the cards in order (top pick first, then alts), keeping
+  // the scripted display fields. If there aren't enough seeded rows, leave extras untouched.
+  let cursor = 0;
+  const rebind = (c: CardLike): CardLike => {
+    const hit = seeded[cursor];
+    if (!hit) return c;
+    cursor += 1;
+    return { ...c, hotelId: hit.id, hotelName: hit.name, destination: hit.destination };
+  };
+  return {
+    ...r,
+    topPick: rebind(r.topPick),
+    otherPicks: (r.otherPicks ?? []).map(rebind),
+  };
+}
+
 /** Pick the assistant turn to emit for this send: the Nth assistant step, where N is the
  * number of user turns already spoken (1-based). The script alternates user/assistant
  * starting with an assistant greeting, so we walk to the (userCount)-th assistant step
@@ -50,8 +101,9 @@ function pickAssistantStep(userTurns: number): AssistantStep {
   return assistantSteps[idx];
 }
 
-/** Build the deterministic NDJSON stream for one assistant turn. delayMs=0 → instant. */
-function streamForStep(step: AssistantStep): ReadableStream<Uint8Array> {
+/** Build the deterministic NDJSON stream for one assistant turn. delayMs=0 → instant.
+ * `recommendations` is pre-resolved (real hotel ids stamped) so this stays sync. */
+function streamForStep(step: AssistantStep, recommendations: unknown): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(encodeChunk({ type: 'typing' }));
@@ -65,12 +117,12 @@ function streamForStep(step: AssistantStep): ReadableStream<Uint8Array> {
       if (step.researching) {
         controller.enqueue(encodeChunk({ type: 'researching', label: step.researching }));
       }
-      if (step.recommendations) {
+      if (recommendations) {
         controller.enqueue(
           encodeChunk({
             type: 'component',
             component: 'recommendation-set',
-            props: step.recommendations,
+            props: recommendations,
           }),
         );
       }
@@ -81,11 +133,15 @@ function streamForStep(step: AssistantStep): ReadableStream<Uint8Array> {
 }
 
 /** Handle a POST /api/chat in E2E stub mode. Mirrors the live route's response shape +
- * headers exactly. Validates the body the same way so the 400 paths stay covered. */
-export function e2eChatStub(messages: ChatMessage[]): Response {
+ * headers exactly. Async because the recommendation turn resolves real seeded hotel ids so
+ * the stubbed cards drive the Save + Proceed-to-book paths exactly like production. */
+export async function e2eChatStub(messages: ChatMessage[]): Promise<Response> {
   const userTurns = messages.filter((m) => m.role === 'user').length;
   const step = pickAssistantStep(userTurns);
-  return new Response(streamForStep(step), {
+  const recommendations = step.recommendations
+    ? await withRealHotelIds(step.recommendations)
+    : undefined;
+  return new Response(streamForStep(step, recommendations), {
     headers: {
       'content-type': 'application/x-ndjson; charset=utf-8',
       'cache-control': 'no-cache, no-transform',

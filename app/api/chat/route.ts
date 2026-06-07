@@ -41,6 +41,7 @@ export async function POST(req: Request) {
     const { e2eChatStub } = await import('@/lib/chat/e2e-stub');
     return e2eChatStub(body.messages);
   }
+  // (e2eChatStub is async — it resolves real seeded hotel ids onto the stubbed cards.)
 
   // Resolve the signed-in user (cookie SSR) so the agent can persist confirmed profile
   // changes under RLS. Best-effort: unauthenticated / no env → no userId, the update_profile

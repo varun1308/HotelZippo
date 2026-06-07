@@ -17,9 +17,9 @@ function asstMsg(): ChatMessage {
   return { id: 'a', role: 'assistant', parts: [{ type: 'text', text: 'ok' }] };
 }
 
-/** Read the whole NDJSON body of a stub Response into parsed StreamChunks. */
-async function drain(res: Response): Promise<StreamChunk[]> {
-  const text = await res.text();
+/** Read the whole NDJSON body of a stub Response (or its promise) into parsed StreamChunks. */
+async function drain(res: Response | Promise<Response>): Promise<StreamChunk[]> {
+  const text = await (await res).text();
   return text
     .split('\n')
     .filter((l) => l.trim().length > 0)
@@ -53,7 +53,7 @@ describe('e2eChatStub', () => {
     expect(chunks.at(-1)).toEqual({ type: 'done' });
     expect(chunks.some((c) => c.type === 'text-delta')).toBe(true);
     // Correct content-type so the client adapter parses it as the real route's body.
-    const res = e2eChatStub([userMsg('hi')]);
+    const res = await e2eChatStub([userMsg('hi')]);
     expect(res.headers.get('content-type')).toContain('application/x-ndjson');
   });
 
