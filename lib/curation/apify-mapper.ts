@@ -3,9 +3,10 @@
  * logic. `buildSearchInput` produces the actor input; `mapSearchItem` converts one dataset row
  * into a `FetchedHotel` (or null to skip a malformed row).
  *
- * The exact actor input keys / dataset field names below are modelled on a standard public
- * TripAdvisor-search actor and are the founder-verifiable detail: when the real actor's dataset
- * differs, adjust the field reads here + the test fixture — nothing else changes. */
+ * INPUT keys (`buildSearchInput`) are VERIFIED against the founder's real actor input docs
+ * (2026-06-07). The OUTPUT field reads (`mapSearchItem`) are still modelled on a standard public
+ * TripAdvisor-search row and are the remaining founder-verifiable detail: when the real actor's
+ * dataset differs, adjust the field reads here + the test fixture — nothing else changes. */
 import { fetchedHotelSchema, type FetchedHotel } from './types';
 import { DESTINATIONS, PRICE_TIERS } from '@/lib/db/schemas';
 
@@ -13,14 +14,21 @@ type Destination = (typeof DESTINATIONS)[number];
 
 /** Build the TripAdvisor-search actor input for one destination. `maxResults` doubles as the
  * "top N by traveller ranking" cap — TA search returns results in ranking order, so the top N
- * fall out naturally. */
+ * fall out naturally. Keys match the real actor's input schema (founder-supplied 2026-06-07):
+ * `query` is a LOCATION name (actor scrapes that location); `maxItemsPerQuery` is the per-query
+ * cap; the `include*` toggles default TRUE for hotels/attractions/restaurants, so we MUST set
+ * attractions+restaurants false to get hotels-only. `startUrls`, check-in/out dates (price offers
+ * are off + under maintenance), and the paid `leadsEnrichment*` add-ons are intentionally omitted. */
 export function buildSearchInput(destination: string, maxResults: number): Record<string, unknown> {
   return {
-    // Common public-actor keys; the founder confirms against the chosen actor's README.
-    query: `hotels in ${destination}`,
-    locationQuery: destination,
-    maxItems: maxResults,
-    includeReviewCount: true,
+    query: destination, // location name → the actor scrapes hotels for that location
+    maxItemsPerQuery: maxResults, // per-query cap (the real actor's cap key; min 1)
+    includeHotels: true,
+    includeAttractions: false, // hotels-only (actor defaults attractions/restaurants TRUE)
+    includeRestaurants: false,
+    includeNearbyResults: false, // keep results to the queried location
+    includePriceOffers: false, // no rates at curation time (also "under maintenance" upstream)
+    includeAiReviewsSummary: false, // slows runs; not needed for curation
     language: 'en',
     currency: 'USD',
   };

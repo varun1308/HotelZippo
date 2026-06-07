@@ -5,11 +5,36 @@ import { buildSearchInput, mapSearchItem } from '@/lib/curation/apify-mapper';
 import items from '../fixtures/apify/tripadvisor-search.json';
 
 describe('buildSearchInput', () => {
-  it('encodes the destination + maxResults cap', () => {
+  // Keys verified against the real actor's input schema (founder-supplied 2026-06-07).
+  it('uses the real actor keys: bare-location query + maxItemsPerQuery cap', () => {
     const input = buildSearchInput('Phuket', 50);
-    expect(input.locationQuery).toBe('Phuket');
-    expect(input.maxItems).toBe(50);
-    expect(String(input.query)).toMatch(/Phuket/);
+    expect(input.query).toBe('Phuket'); // bare location, NOT "hotels in Phuket"
+    expect(input.maxItemsPerQuery).toBe(50);
+    expect(input.language).toBe('en');
+    expect(input.currency).toBe('USD');
+  });
+
+  it('restricts to hotels only (attractions + restaurants default true upstream)', () => {
+    const input = buildSearchInput('Bali', 25);
+    expect(input.includeHotels).toBe(true);
+    expect(input.includeAttractions).toBe(false);
+    expect(input.includeRestaurants).toBe(false);
+    expect(input.includeNearbyResults).toBe(false);
+  });
+
+  it('omits the dead/guessed keys and the paid lead-gen add-ons', () => {
+    const input = buildSearchInput('Phuket', 50);
+    for (const dead of [
+      'locationQuery',
+      'maxItems',
+      'includeReviewCount',
+      'startUrls',
+      'maximumLeadsEnrichmentRecords',
+      'leadsEnrichmentDepartments',
+      'verifyLeadsEnrichmentEmails',
+    ]) {
+      expect(input).not.toHaveProperty(dead);
+    }
   });
 });
 
