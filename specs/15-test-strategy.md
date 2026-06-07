@@ -45,7 +45,7 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - Hard-flag alerts render prominently on relevant cards.
 - Top pick clearly distinguished from other recommendations.
 - **Test type (current gate):** jsdom component/unit tests cover card rendering, hard-flag prominence, and top-pick distinction; the conversational flow is exercised via the chat-runtime unit/contract tests + a manual happy-path smoke against the dev server.
-- **Test type (E2E, active):** Playwright journey **J2** in `specs/15a-e2e-test-strategy.md` (onboarding → recommendations → inline card rendering → top-pick distinction → hard-flag prominence), run against the real server with a stubbed agent. *(J1 auth/landing shipped first; J3 persistence + J4 booking follow.)*
+- **Test type (E2E, active):** Playwright journey **J2** in `specs/15a-e2e-test-strategy.md` (onboarding → recommendations → inline card rendering → top-pick distinction → hard-flag prominence), run against the real server with a stubbed agent. *(All four journeys J1–J4 are live; see 15a.)*
 
 ### Phase 4 — Auth & Persistence
 (Source: `specs/04-auth-persistence.md` acceptance criteria.)
@@ -91,6 +91,8 @@ Phase 8 (launch checklist — Notion 18; founder-run, not build work in this cam
 
 ## Action items
 - Stand up Jest + Zod with a dedicated Supabase test project. **Done.**
-- Stand up Playwright E2E (`specs/15a`). **In progress** — J1 (auth gate + landing) shipped; J2–J4 to follow.
+- Stand up Playwright E2E (`specs/15a`). **Done** — all four journeys live (J1 auth/landing,
+  J2 onboarding→recommendations, J3 shortlist+profile persistence, J4 booking room-picker).
+  17 tests green + 1 documented `test.fixme` (shortlist-reload gap — see 15a §7).
 - `qa-gate` owns these criteria and refuses to mark a phase complete until they pass.
 - Materialise `/tests/fixtures/` standard profile + brief.

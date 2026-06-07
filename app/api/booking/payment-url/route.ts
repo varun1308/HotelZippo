@@ -9,6 +9,7 @@ import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { selectAndPaymentUrl } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { BookingError } from '@/lib/booking/types';
 import type { PaymentUrlRequest, PaymentUrlResponse, BookingApiError } from '@/lib/booking/api-contract';
 
@@ -32,6 +33,13 @@ export async function POST(req: Request): Promise<Response> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return errJson('config', 'Please sign in to book.', 401);
+
+  // E2E stub seam (specs/15a §1.1): after the REAL auth gate, return a deterministic deep
+  // link instead of calling RouteStack when the harness sets NEXT_PUBLIC_E2E=1.
+  if (e2eEnabled()) {
+    const { e2ePaymentUrlStub } = await import('@/lib/booking/e2e-stub');
+    return e2ePaymentUrlStub(body);
+  }
 
   try {
     const result = await selectAndPaymentUrl(
