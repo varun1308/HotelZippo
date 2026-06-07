@@ -12,6 +12,7 @@
     "test:unit": "jest --selectProjects jsdom",
     "test:integration": "jest --selectProjects integration --runInBand",
     "pipeline:worker": "tsx --env-file=.env.local scripts/pipeline/run-worker.ts",
+    "pipeline:remap": "tsx --env-file=.env.local scripts/pipeline/remap.ts",
     "booking:capture": "tsx --env-file=.env.local scripts/booking/capture-rates.ts",
     "dev:user": "tsx --env-file=.env.local scripts/dev/seed-dev-user.ts",
     "dev:gen-seed": "tsx scripts/dev/gen-seed-sql.ts",

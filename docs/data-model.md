@@ -75,6 +75,20 @@ Deduplicated across runs; carries `pipeline_run_id`. The 12-month recency filter
 
 Dedup index: `UNIQUE (hotel_id, source, reviewer_name, review_date)`.
 
+### `raw_review_payloads` — original Apify actor items; persisted to allow re-mapping without re-scrape
+Permanently accumulated; never deleted; carries `pipeline_run_id`. The mapper keeps only 5 fields in `raw_reviews` and discards the rich actor payload; this table stores the untouched dataset item so review mappings can be re-run later without a (paid) re-scrape. **Service-role only** (like `raw_reviews`).
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | |
+| hotel_id | uuid | FK → hotels |
+| pipeline_run_id | uuid | FK → pipeline_runs (set null on delete) |
+| source | text | tripadvisor / google |
+| external_id | text (nullable) | Actor item's own id (e.g. TripAdvisor review id) for dedup |
+| payload | jsonb | The untouched actor dataset item |
+| scraped_at | timestamp | |
+
+Dedup index: `UNIQUE (hotel_id, source, external_id)`. NULL `external_id` rows do not dedup (Postgres treats NULLs as distinct), consistent with the `raw_reviews_dedup` NULL behaviour.
+
 ### `hotel_intelligence` — Claude-synthesised; replaced per pipeline run
 | Column | Type | Notes |
 |---|---|---|
@@ -168,7 +182,7 @@ curation_hotels (
 |---|---|
 | `family_profiles`, `trip_briefs`, `sessions`, `shortlists` | Owner-only: `auth.uid() = user_id`. Each user reads/writes only their own rows. |
 | `hotels`, `hotel_intelligence` | Read-only reference data for **authenticated** users. No client writes. |
-| `raw_reviews`, `pipeline_runs`, `pipeline_run_hotels`, `curation_hotels` | **Service-role / admin only** — never client-readable. |
+| `raw_reviews`, `raw_review_payloads`, `pipeline_runs`, `pipeline_run_hotels`, `curation_hotels` | **Service-role / admin only** — never client-readable. |
 
 RLS verification (Phase 1 acceptance, 15): **user A cannot read user B's data** in any owner-scoped table — tested in `db-migrator`'s isolation test.
 

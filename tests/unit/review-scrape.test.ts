@@ -22,6 +22,10 @@ describe('scrapeHotelReviews', () => {
     expect(ta.length).toBe(2);
     expect(g.length).toBe(2);
     expect(res.partial).toBe(false);
+    // Raw payloads captured too (one per review for the mock path; payload = the review itself).
+    expect(res.payloads.length).toBe(4);
+    expect(res.payloads.every((p) => p.external_id === null)).toBe(true);
+    expect(res.payloads[0].payload).toEqual(res.reviews.find((r) => r.source === res.payloads[0].source));
   });
 
   it('TC-P1 zero reviews: a hotel with no fixture yields an empty set (no error)', async () => {
@@ -43,6 +47,9 @@ describe('scrapeHotelReviews', () => {
     const googleOutcome = res.sources.find((s) => s.source === 'google');
     expect(googleOutcome?.ok).toBe(false);
     expect(googleOutcome?.error).toMatch(/timeout/);
+    // The fake keeps its RawReviewInput[] signature; payloads are synthesised from the reviews.
+    expect(res.payloads).toHaveLength(1);
+    expect(res.payloads[0]).toMatchObject({ source: 'tripadvisor', external_id: null });
   });
 
   it('TC-P2 actor timeout on both sources → zero reviews, both outcomes failed, not partial', async () => {
@@ -53,5 +60,6 @@ describe('scrapeHotelReviews', () => {
     expect(res.reviews).toHaveLength(0);
     expect(res.partial).toBe(false); // both failed → not "partial"
     expect(res.sources.every((s) => !s.ok)).toBe(true);
+    expect(res.payloads).toHaveLength(0);
   });
 });

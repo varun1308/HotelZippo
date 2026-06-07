@@ -54,6 +54,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await admin.from('raw_reviews').delete().in('hotel_id', [hotelA, hotelZeroReviews]);
+  await admin.from('raw_review_payloads').delete().in('hotel_id', [hotelA, hotelZeroReviews]);
   await admin.from('hotel_intelligence').delete().in('hotel_id', [hotelA, hotelZeroReviews]);
   await admin.from('pipeline_run_hotels').delete().in('hotel_id', [hotelA, hotelZeroReviews]);
   // pipeline_runs cleaned per-test below; sweep any stragglers for these scopes.
@@ -96,6 +97,14 @@ describe('pipeline worker — single hotel', () => {
 
       const { data: rr } = await admin.from('raw_reviews').select('id').eq('hotel_id', hotelA);
       expect((rr ?? []).length).toBe(2);
+
+      // Raw payloads banked for re-map (mock fixture → 2 items, even on the key-free path).
+      const { data: pl } = await admin
+        .from('raw_review_payloads')
+        .select('id, source, payload')
+        .eq('hotel_id', hotelA);
+      expect((pl ?? []).length).toBe(2);
+      expect((pl ?? []).every((p) => p.payload != null)).toBe(true);
 
       // The run itself is finalised complete.
       const { data: run } = await admin.from('pipeline_runs').select('status').eq('id', runId).single();

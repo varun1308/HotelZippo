@@ -25,6 +25,7 @@ import {
   buildGoogleReviewsInput,
   mapTripadvisorReviewItem,
   mapGoogleReviewItem,
+  extractReviewExternalId,
 } from './apify-mapper';
 
 export type ReviewSource = 'tripadvisor' | 'google';
@@ -37,10 +38,21 @@ export interface ScrapeTarget {
   googlePlaceId: string | null;
 }
 
+/** One untouched actor item, banked to raw_review_payloads so the mapper can be re-run later
+ * WITHOUT a paid re-scrape. `payload` is the original item (or, for the mock/test-fake path,
+ * the RawReviewInput itself); `external_id` is the item's own id when present (dedup key). */
+export interface RawPayloadItem {
+  source: ReviewSource;
+  external_id: string | null;
+  payload: unknown;
+}
+
 export interface SourceOutcome {
   source: ReviewSource;
   ok: boolean;
   reviews: RawReviewInput[];
+  /** Original actor items for this source (for re-map; all items, even mapper-skipped ones). */
+  payloads: RawPayloadItem[];
   /** When ok=false, why — recorded as the gap for partial-failure reporting. */
   error?: string;
   /** Which layer produced the reviews. */
@@ -50,10 +62,18 @@ export interface SourceOutcome {
 export interface ScrapeResult {
   hotelId: string;
   reviews: RawReviewInput[];
+  /** Original actor items across both sources (for re-map; persisted to raw_review_payloads). */
+  payloads: RawPayloadItem[];
   /** Per-source outcomes (for the gap record on partial failure). */
   sources: SourceOutcome[];
   /** True if at least one source failed while another succeeded (TC-P3). */
   partial: boolean;
+}
+
+/** Internal bundle returned by each source scraper: mapped reviews + their raw payloads. */
+interface SourceScrape {
+  reviews: RawReviewInput[];
+  payloads: RawPayloadItem[];
 }
 
 const rawReviewSchema = z.object({
@@ -69,16 +89,19 @@ function slug(name: string): string {
 }
 
 /** Mock fixtures: a hotel's reviews keyed by source. Missing file → no reviews (not an error
- * for mock; lets a hotel with no fixture behave as "zero reviews" for TC-P1). */
-async function scrapeFromMock(target: ScrapeTarget): Promise<RawReviewInput[]> {
+ * for mock; lets a hotel with no fixture behave as "zero reviews" for TC-P1). The "raw payload"
+ * for a mock review is the RawReviewInput itself (fixtures aren't rich), external_id null. */
+async function scrapeFromMock(target: ScrapeTarget): Promise<SourceScrape> {
   const file = path.join(process.cwd(), 'scripts', 'pipeline', 'fixtures', 'reviews', `${slug(target.hotelName)}.json`);
   let raw: string;
   try {
     raw = await fs.readFile(file, 'utf8');
   } catch {
-    return []; // no fixture → zero reviews
+    return { reviews: [], payloads: [] }; // no fixture → zero reviews
   }
-  return rawReviewSchema.array().parse(JSON.parse(raw));
+  const reviews = rawReviewSchema.array().parse(JSON.parse(raw));
+  const payloads = reviews.map((r) => ({ source: r.source, external_id: null, payload: r }));
+  return { reviews, payloads };
 }
 
 // Live Apify per-source scrape — only runs when a token + the source's actor id exist (hasApifyFor).
@@ -87,33 +110,43 @@ async function scrapeFromMock(target: ScrapeTarget): Promise<RawReviewInput[]> {
 // to 12mo + per-segment caps at synthesis, so the wide window here is safe.
 const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
 
-async function scrapeFromApify(target: ScrapeTarget, source: ReviewSource): Promise<RawReviewInput[]> {
+async function scrapeFromApify(target: ScrapeTarget, source: ReviewSource): Promise<SourceScrape> {
   const since = new Date(Date.now() - TWELVE_MONTHS_MS);
   const maxResults = Number(process.env.APIFY_REVIEWS_MAX_RESULTS ?? 600);
 
+  let items: unknown[];
+  let mapItem: (item: unknown) => RawReviewInput | null;
   if (source === 'tripadvisor') {
     if (!target.tripadvisorUrl) throw new Error('no tripadvisor_url for hotel');
-    const actorId = process.env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID!;
-    const items = await runActorGetItems({
-      actorId,
+    items = await runActorGetItems({
+      actorId: process.env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID!,
       input: buildTripadvisorReviewsInput(target.tripadvisorUrl, { maxResults, since }),
       limit: maxResults,
     });
-    return items.map(mapTripadvisorReviewItem).filter((r): r is RawReviewInput => r !== null);
+    mapItem = mapTripadvisorReviewItem;
+  } else {
+    if (!target.googlePlaceId) throw new Error('no google_place_id for hotel');
+    items = await runActorGetItems({
+      actorId: process.env.APIFY_GOOGLE_REVIEWS_ACTOR_ID!,
+      input: buildGoogleReviewsInput(target.googlePlaceId, { maxResults, since }),
+      limit: maxResults,
+    });
+    mapItem = mapGoogleReviewItem;
   }
 
-  // google
-  if (!target.googlePlaceId) throw new Error('no google_place_id for hotel');
-  const actorId = process.env.APIFY_GOOGLE_REVIEWS_ACTOR_ID!;
-  const items = await runActorGetItems({
-    actorId,
-    input: buildGoogleReviewsInput(target.googlePlaceId, { maxResults, since }),
-    limit: maxResults,
-  });
-  return items.map(mapGoogleReviewItem).filter((r): r is RawReviewInput => r !== null);
+  // One pass so the payload and its mapped review stay aligned. Bank the payload for EVERY item —
+  // even ones the mapper currently skips — so a future mapper fix can rescue them on re-map.
+  const reviews: RawReviewInput[] = [];
+  const payloads: RawPayloadItem[] = [];
+  for (const item of items) {
+    payloads.push({ source, external_id: extractReviewExternalId(item), payload: item });
+    const mapped = mapItem(item);
+    if (mapped) reviews.push(mapped);
+  }
+  return { reviews, payloads };
 }
 
-async function scrapeFromPlaywright(_target: ScrapeTarget, _source: ReviewSource): Promise<RawReviewInput[]> {
+async function scrapeFromPlaywright(_target: ScrapeTarget, _source: ReviewSource): Promise<SourceScrape> {
   throw new Error('playwright-not-implemented');
 }
 
@@ -137,30 +170,36 @@ async function scrapeOneSource(
   source: ReviewSource,
   deps: ScrapeDeps,
 ): Promise<SourceOutcome> {
-  // A test override replaces the whole chain for that source.
+  // A test override replaces the whole chain for that source. The fake keeps its RawReviewInput[]
+  // signature; we synthesise payloads from the returned reviews so the worker path stays uniform.
   if (deps.scrapeSource) {
     try {
-      return { source, ok: true, reviews: await deps.scrapeSource(target, source), via: 'mock' };
+      const reviews = await deps.scrapeSource(target, source);
+      const payloads = reviews.map((r) => ({ source: r.source, external_id: null, payload: r }));
+      return { source, ok: true, reviews, payloads, via: 'mock' };
     } catch (e) {
-      return { source, ok: false, reviews: [], error: e instanceof Error ? e.message : String(e) };
+      return { source, ok: false, reviews: [], payloads: [], error: e instanceof Error ? e.message : String(e) };
     }
   }
 
   if (hasApifyFor(source)) {
     try {
-      return { source, ok: true, reviews: await scrapeFromApify(target, source), via: 'apify' };
+      const { reviews, payloads } = await scrapeFromApify(target, source);
+      return { source, ok: true, reviews, payloads, via: 'apify' };
     } catch {
       try {
-        return { source, ok: true, reviews: await scrapeFromPlaywright(target, source), via: 'playwright' };
+        const { reviews, payloads } = await scrapeFromPlaywright(target, source);
+        return { source, ok: true, reviews, payloads, via: 'playwright' };
       } catch {
         /* fall through to mock */
       }
     }
   }
   try {
-    return { source, ok: true, reviews: await scrapeFromMock(target), via: 'mock' };
+    const { reviews, payloads } = await scrapeFromMock(target);
+    return { source, ok: true, reviews, payloads, via: 'mock' };
   } catch (e) {
-    return { source, ok: false, reviews: [], error: e instanceof Error ? e.message : String(e) };
+    return { source, ok: false, reviews: [], payloads: [], error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -182,18 +221,23 @@ export async function scrapeHotelReviews(
       }
 
       // Mock fixtures carry their own `source` field; filter each outcome to its source so a
-      // single fixture file can hold both sources without double-counting.
-      for (const o of sources) o.reviews = o.reviews.filter((r) => r.source === o.source);
+      // single fixture file can hold both sources without double-counting (reviews + payloads).
+      for (const o of sources) {
+        o.reviews = o.reviews.filter((r) => r.source === o.source);
+        o.payloads = o.payloads.filter((p) => p.source === o.source);
+      }
 
       const reviews = sources.flatMap((s) => s.reviews);
+      const payloads = sources.flatMap((s) => s.payloads);
       const anyOk = sources.some((s) => s.ok);
       const anyFail = sources.some((s) => !s.ok);
       const partial = anyOk && anyFail;
 
       span.setAttribute('review_count', reviews.length);
+      span.setAttribute('payload_count', payloads.length);
       span.setAttribute('partial', partial);
       span.setStatus({ code: SpanStatusCode.OK });
-      return { hotelId: target.hotelId, reviews, sources, partial };
+      return { hotelId: target.hotelId, reviews, payloads, sources, partial };
     } catch (e) {
       span.recordException(e as Error);
       span.setStatus({ code: SpanStatusCode.ERROR });

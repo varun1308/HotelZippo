@@ -18,7 +18,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { scrapeHotelReviews, type ScrapeDeps, type ScrapeTarget } from './apify';
 import { tagReviews } from './tagging';
-import { storeRawReviews, loadHotelReviews } from './store';
+import { storeRawReviews, storeRawPayloads, loadHotelReviews } from './store';
 import { prepareForSynthesis, buildSynthesisInput } from './format';
 import { synthesise, type SynthesiseDeps, type SynthesisOutput } from './synthesis';
 
@@ -108,6 +108,19 @@ export async function processHotel(
     }
 
     await setStatus('processing', { reviews_scraped: scraped.reviews.length });
+
+    // Best-effort: bank the untouched actor payloads so the mapper can be re-run later WITHOUT a
+    // paid re-scrape (npm run pipeline:remap). A payload-store failure must NOT fail an otherwise
+    // healthy hotel — payloads are a re-map convenience; raw_reviews + synthesis are the product.
+    try {
+      await storeRawPayloads(client, hotel.id, runId, scraped.payloads);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[pipeline] raw_review_payloads store failed for ${hotel.id}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+
     const tagged = tagReviews(scraped.reviews, { indian: deps.indianTagging });
     await storeRawReviews(client, hotel.id, runId, tagged);
 
