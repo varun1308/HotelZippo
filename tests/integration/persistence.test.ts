@@ -10,7 +10,11 @@ import {
   toRow,
   fromRow,
 } from '@/lib/db/persistence/family-profiles';
-import { saveShortlist, loadShortlistHotelIds } from '@/lib/db/persistence/shortlists';
+import {
+  saveShortlist,
+  loadShortlistHotelIds,
+  loadShortlistHotels,
+} from '@/lib/db/persistence/shortlists';
 import type { FamilyProfile } from '@/components/profile';
 
 jest.setTimeout(30_000);
@@ -87,6 +91,55 @@ describe('shortlists persistence', () => {
       expect(token2).toBe(shareToken);
       const loaded2 = await loadShortlistHotelIds(user.client);
       expect(loaded2).toEqual([ids[0]]);
+    } finally {
+      await admin.from('hotels').delete().in('id', ids);
+    }
+  });
+
+  it('re-hydrates display-ready SavedHotel rows in saved order (the reload-survives path)', async () => {
+    const admin = serviceClient();
+    const { data: hotels } = await admin
+      .from('hotels')
+      .insert([
+        {
+          name: 'Rehydrate A',
+          destination: 'Phuket',
+          area: 'Patong',
+          star_rating: 5,
+          price_tier: 'luxury',
+          images: ['https://example.test/a.jpg'],
+        },
+        {
+          name: 'Rehydrate B',
+          destination: 'Phuket',
+          area: 'Kata',
+          star_rating: 4,
+          price_tier: 'mid-range',
+          images: [],
+        },
+      ])
+      .select('id');
+    const ids = (hotels ?? []).map((h) => h.id as string);
+
+    try {
+      // Save in B,A order — re-hydration must preserve the SAVED order, not the DB order.
+      await saveShortlist([ids[1], ids[0]], user.id, { client: user.client });
+
+      const rows = await loadShortlistHotels(user.client);
+      expect(rows.map((r) => r.hotelName)).toEqual(['Rehydrate B', 'Rehydrate A']);
+      // Display mapping: price tier → label, images[0] → hero, area passed through.
+      expect(rows[0]).toMatchObject({
+        hotelId: ids[1],
+        hotelName: 'Rehydrate B',
+        destination: 'Phuket',
+        area: 'Kata',
+        priceTierLabel: 'Comfort', // 'mid-range' → 'Comfort'
+        heroImageUrl: null, // empty images → null (never a broken img)
+      });
+      expect(rows[1]).toMatchObject({
+        priceTierLabel: 'Luxury',
+        heroImageUrl: 'https://example.test/a.jpg',
+      });
     } finally {
       await admin.from('hotels').delete().in('id', ids);
     }

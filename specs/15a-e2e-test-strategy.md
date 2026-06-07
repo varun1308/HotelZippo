@@ -134,8 +134,9 @@ Maps spec-15 Phase 3 (the headline journey).
 
 ### J3 — Shortlist + profile persistence (`e2e/persistence.spec.ts`)
 Maps spec-15 Phase 4 persistence (real Supabase, real RLS).
-- **AC3.1** Save a recommended hotel → it appears in the shortlist panel; **reload the page**
-  → the shortlist still contains it (persisted to `shortlists`, RLS-scoped, reloaded on mount).
+- **AC3.1** Save a recommended hotel → it appears in the shortlist panel (real RLS write).
+- **AC3.1b** **Reload the page** → the shortlist still contains it (persisted to `shortlists`,
+  RLS-scoped, re-hydrated on mount via `loadShortlistHotels` → display-ready rows from `hotels`).
 - **AC3.2** Open Edit profile, change a field (e.g. add a child / set hometown), submit →
   **reload** → the new values are prefilled (persisted to `family_profiles`).
 - **AC3.3** (Isolation, lightweight) A second seeded dev user does **not** see user one's
@@ -188,11 +189,13 @@ script exists (it currently no-ops with an explicit "E2E deferred" notice). The 
 - [x] Author the four spec files (§4): `e2e/{auth-gate,recommendations,persistence,booking}.spec.ts`.
 - [x] Wire `test:e2e` + extend the CI `e2e` job (§5).
 - [x] Update `specs/15-test-strategy.md`: E2E is no longer "deferred" — links here.
-- [x] `qa-gate` gate: all four journeys green in CI (17 passed + 1 honest `test.fixme`).
+- [x] `qa-gate` gate: all four journeys green in CI (**18 passed**, no fixme).
 
-### Known gap surfaced by E2E (tracked, not yet fixed)
-- **Shortlist does not survive a page reload.** The chat page persists `hotel_ids[]` to
-  `shortlists` but never re-hydrates on mount, and stores only ids (not the card data the
-  panel renders). `loadShortlistHotelIds` exists but is uncalled. AC3.1b is a `test.fixme`
-  documenting this. A separate fix PR (re-hydrate on mount + re-fetch hotels by id) would
-  flip that fixme to a passing test.
+### Gap surfaced by E2E — now FIXED
+- **Shortlist now survives a page reload.** Originally the chat page persisted `hotel_ids[]`
+  to `shortlists` but never re-hydrated on mount (and stored only ids, not card data), so a
+  saved shortlist was lost on reload — caught by E2E as a `test.fixme`. **Fixed:**
+  `loadShortlistHotels()` loads the saved ids → reads `hotels` → maps to display-ready
+  `SavedHotel` rows (saved order preserved); `useShortlist` gained `hydrate()`; the chat page
+  re-hydrates once on mount (and the persist effect waits for that load to settle). AC3.1b is
+  now a passing test, not a fixme.

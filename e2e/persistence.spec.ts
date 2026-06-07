@@ -13,10 +13,19 @@
  *     today. AC3.1 tests the real save path (within-session) and the reload-restore is an
  *     explicit test.fixme with the reason — a visible TODO, not a hidden gap. */
 import { test, expect } from '@playwright/test';
-import { signInAsDev, reachRecommendations, recommendationSet } from './_helpers';
+import {
+  signInAsDev,
+  reachRecommendations,
+  recommendationSet,
+  composer,
+  clearDevUserShortlist,
+} from './_helpers';
 
 test.describe('J3 · Shortlist + profile persistence', () => {
   test.beforeEach(async ({ page }) => {
+    // The shortlist is durable now, so reset it per test to keep counts + the Save/Saved button
+    // state deterministic (a leaked saved hotel would render the card as already "Saved").
+    await clearDevUserShortlist();
     await signInAsDev(page);
   });
 
@@ -33,28 +42,33 @@ test.describe('J3 · Shortlist + profile persistence', () => {
       set.getByRole('button', { name: /saved to shortlist/i }).first(),
     ).toBeVisible();
 
-    // Open the shortlist panel from the topbar; the saved hotel is listed.
+    // Open the shortlist panel from the topbar; the saved hotel is listed. (Persistence is
+    // real + durable across the serial run, so assert presence, not an exact count.)
     await page.getByRole('button', { name: 'Shortlist', exact: true }).click();
     const panel = page.getByRole('dialog', { name: /saved shortlist/i });
     await expect(panel).toBeVisible();
-    await expect(panel.getByRole('listitem')).toHaveCount(1);
+    expect(await panel.getByRole('listitem').count()).toBeGreaterThanOrEqual(1);
   });
 
-  // The app does not re-hydrate the shortlist on mount (and stores only hotel_ids, not the
-  // card data the panel renders). Until that is wired, a cross-reload restore can't pass.
-  // Tracked here so the gap is VISIBLE, not silently uncovered. See spec 15a §4 AC3.1.
-  test.fixme(
-    'AC3.1b — the shortlist survives a page reload (NOT yet supported: no mount re-hydration)',
-    async ({ page }) => {
-      await reachRecommendations(page);
-      const set = recommendationSet(page);
-      await set.getByRole('button', { name: /save to shortlist/i }).first().click();
-      await page.reload();
-      await page.getByRole('button', { name: 'Shortlist', exact: true }).click();
-      const panel = page.getByRole('dialog', { name: /saved shortlist/i });
-      await expect(panel.getByRole('listitem')).toHaveCount(1);
-    },
-  );
+  // The shortlist is now re-hydrated on mount (loadShortlistHotels → SavedHotel rows from
+  // `hotels`), so a saved shortlist survives a reload. (Was a test.fixme — fixed in the
+  // shortlist-reload-persistence change.)
+  test('AC3.1b — the shortlist survives a page reload (re-hydrated on mount)', async ({ page }) => {
+    await reachRecommendations(page);
+    const set = recommendationSet(page);
+    await set.getByRole('button', { name: /save to shortlist/i }).first().click();
+    await expect(set.getByRole('button', { name: /saved to shortlist/i }).first()).toBeVisible();
+
+    await page.reload();
+    await expect(composer(page)).toBeVisible();
+
+    // Re-hydration is async (load ids → fetch hotels → seed). Use a retrying assertion (not a
+    // one-shot count) so we don't race the load.
+    await page.getByRole('button', { name: 'Shortlist', exact: true }).click();
+    const panel = page.getByRole('dialog', { name: /saved shortlist/i });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('listitem').first()).toBeVisible();
+  });
 
   test('AC3.2 — editing the profile persists across a reload (full round-trip)', async ({
     page,

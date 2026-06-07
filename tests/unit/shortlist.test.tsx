@@ -49,6 +49,17 @@ describe('useShortlist', () => {
     act(() => result.current.toggle(HOTEL_A));
     expect(result.current.isSaved('a')).toBe(false);
   });
+
+  it('hydrate replaces the whole set (used to re-seed the persisted shortlist on mount)', () => {
+    const { result } = renderHook(() => useShortlist());
+    act(() => result.current.save(HOTEL_A));
+    expect(result.current.count).toBe(1);
+    // Re-hydration from persistence overwrites the in-memory set wholesale.
+    act(() => result.current.hydrate([HOTEL_B]));
+    expect(result.current.count).toBe(1);
+    expect(result.current.isSaved('a')).toBe(false);
+    expect(result.current.isSaved('b')).toBe(true);
+  });
 });
 
 describe('ShortlistPanel', () => {

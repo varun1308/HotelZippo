@@ -16,6 +16,8 @@ export interface UseShortlist {
   remove: (hotelId: string) => void;
   toggle: (hotel: SavedHotel) => void;
   isSaved: (hotelId: string) => boolean;
+  /** Replace the whole set — used once on mount to re-hydrate the persisted shortlist. */
+  hydrate: (items: SavedHotel[]) => void;
 }
 
 export function useShortlist(initial: SavedHotel[] = []): UseShortlist {
@@ -39,10 +41,12 @@ export function useShortlist(initial: SavedHotel[] = []): UseShortlist {
 
   const isSaved = useCallback((hotelId: string) => items.some((h) => h.hotelId === hotelId), [items]);
 
+  const hydrate = useCallback((next: SavedHotel[]) => setItems(next), []);
+
   const count = items.length;
 
   return useMemo(
-    () => ({ items, count, save, remove, toggle, isSaved }),
-    [items, count, save, remove, toggle, isSaved],
+    () => ({ items, count, save, remove, toggle, isSaved, hydrate }),
+    [items, count, save, remove, toggle, isSaved, hydrate],
   );
 }

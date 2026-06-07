@@ -103,6 +103,38 @@ Prerequisites: **Docker**, the **Supabase CLI**, and an **Anthropic API key**.
 | `npm run test` | Jest (all projects) |
 | `npm run test:unit` | Unit / contract / smoke (jsdom — no DB) |
 | `npm run test:integration` | Integration (node — needs local Supabase running) |
+| `npm run test:e2e` | End-to-end (Playwright, headless) — see below |
+| `npm run test:e2e:ui` | End-to-end in **Playwright UI mode** (watch / step / time-travel) |
+
+## End-to-end tests (Playwright)
+
+The E2E suite (`e2e/*.spec.ts`, contract: [`specs/15a-e2e-test-strategy.md`](./specs/15a-e2e-test-strategy.md)) drives the four critical journeys — **J1** auth + landing, **J2** onboarding → recommendations, **J3** shortlist + profile persistence, **J4** booking room-picker — against a **real** production server + **real** local Supabase. It is deterministic and **key-free**: auth is real (dev-login → a real cookie session), and only the non-deterministic providers (the Claude agent + RouteStack booking) are stubbed via the `NEXT_PUBLIC_E2E` flag. No `ANTHROPIC` / `APIFY` / `ROUTESTACK` / Google secret is needed.
+
+**One-time:** install the browser.
+```bash
+npx playwright install chromium
+```
+
+**Setup (each run needs a built app + a seeded local DB + the dev user):**
+```bash
+# 1. local Supabase running + seeded with the 10 demo hotels
+supabase start            # if not already up
+npm run dev:db            # generate seed.sql + reset (10 hotels + intelligence)
+npm run e2e:user          # seed the dev user E2E signs in as (idempotent)
+
+# 2. build with the E2E env so the NEXT_PUBLIC_* flags bake in
+set -a && . ./.env.e2e && set +a && npm run e2e:build
+```
+
+**Run:**
+```bash
+npm run test:e2e            # headless (what CI runs)
+npm run test:e2e:ui        # Playwright UI — pick/inspect/re-run tests, time-travel each step
+npx playwright test --headed   # watch a normal run in a visible browser
+npx playwright test booking    # one journey (auth-gate | recommendations | persistence | booking)
+```
+
+Playwright starts the server itself (`next start` on port `3100` from `.env.e2e`) and reuses a running one locally. `.env.e2e` is committed but holds **only** the public localhost-only Supabase demo keys + the E2E/dev-login flags — no secrets. The CI `e2e` job does the same setup automatically (boot Supabase → seed → build → run → upload the report).
 
 ## Build phases
 0 Scaffold · 1 Data · 2 Recommendation engine · 3 Conversational UI · 4 Auth · 5 Session memory · 6 Review pipeline · 7 Booking · 8 Polish. See [Notion 11 · Build Sequence] and [`docs/spec-coverage.md`](./docs/spec-coverage.md). **Current: Phases 0–3 complete** (the conversational UI runs end-to-end against seeded demo data); Phase 4 (auth) is next.
