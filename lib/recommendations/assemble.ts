@@ -4,7 +4,7 @@
  * against the contract. Malformed output FAILS (spec 14) — never a partial recommendation.
  *
  * The model call is INJECTABLE (deps.callModel): the default implementation calls
- * Anthropic (claude-sonnet-4-20250514, ANTHROPIC_API_KEY server-side only); tests inject
+ * Anthropic (claude-sonnet-4-6, ANTHROPIC_API_KEY server-side only); tests inject
  * a fake so the contract tests + CI run with no API key. */
 import 'server-only';
 import { promises as fs } from 'node:fs';
@@ -15,7 +15,7 @@ import {
 } from '@/lib/contracts/recommendation-assembly';
 import type { Candidate } from '@/lib/review-intelligence/query';
 
-export const ASSEMBLY_MODEL = 'claude-sonnet-4-20250514';
+export const ASSEMBLY_MODEL = 'claude-sonnet-4-6';
 const PROMPT_PATH = path.join(
   process.cwd(),
   'prompts',

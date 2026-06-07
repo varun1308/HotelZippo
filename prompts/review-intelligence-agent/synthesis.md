@@ -1,7 +1,7 @@
 # Review Intelligence Synthesis Prompt
 
 - **Spec:** specs/02-review-intelligence-pipeline.md (Notion 08a-1, v1.0.0)
-- **Model:** claude-sonnet-4-20250514
+- **Model:** claude-sonnet-4-6
 - **Output:** valid JSON only — no prose, no markdown fences. Validated against the synthesis output schema; on malformed output the hotel fails with no partial write.
 
 ---

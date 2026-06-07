@@ -136,7 +136,7 @@ The original handoff's broader amenity/age-pattern terms (playground, pram, cot,
    If a segment is under its cap, the remaining budget is **NOT** redistributed.
 3. Format each review as a single line: `[YYYY-MM-DD] [rating/5] {text}`; **strip reviewer name, management responses, and HTML**. Date ISO `YYYY-MM-DD`, rating integer 1–5.
 
-**Call:** the 08a-1 synthesis prompt, model `claude-sonnet-4-20250514`, **server-side only**. Parse JSON; on malformed output, **fail the hotel (no partial write)** and log the full response via OTEL (per 14).
+**Call:** the 08a-1 synthesis prompt, model `claude-sonnet-4-6`, **server-side only**. Parse JSON; on malformed output, **fail the hotel (no partial write)** and log the full response via OTEL (per 14).
 
 **Confidence gate (08a-2):**
 - `high` → publish immediately.
@@ -242,7 +242,7 @@ When a trip brief is complete (destination + trip type), the Conversation Agent:
 
 ### Synthesis-prompt test cases (08a-3 · 7 cases — pointer)
 
-Synthesis correctness is owned by 08a-3 (https://app.notion.com/p/3754958429ac8101ae88f1890acd057a). Run all 7 against `claude-sonnet-4-20250514` before the full pipeline run:
+Synthesis correctness is owned by 08a-3 (https://app.notion.com/p/3754958429ac8101ae88f1890acd057a). Run all 7 against `claude-sonnet-4-6` before the full pipeline run:
 1. Normal hotel, strong family signal (Anantara Mai Khao) — `high`, all `strong`, no flags.
 2. **Hard flags (Holiday Inn Resort Phuket Karon Beach)** — ≥3 hard flags (Active Refurbishment severe, Facility Closure / kids club, Room Quality Deterioration, optional Pest Reports) present **despite a positive rating mix**; `medium`. **This is the load-bearing hard-flag case.**
 3. Thin family signal (The Fullerton Singapore) — `thin`, "Based on general guest reviews (family signal: thin) —" prefix.
@@ -260,7 +260,7 @@ Synthesis correctness is owned by 08a-3 (https://app.notion.com/p/3754958429ac81
    - `apify.ts` — two review actors (`APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID` + `APIFY_GOOGLE_REVIEWS_ACTOR_ID`) + Playwright/mock fallback (curation pattern, 12a).
    - `tagging.ts` — family (canonical 08a-2 keyword list, case-insensitive, do-not-expand) + optional Indian (O1).
    - `format.ts` — 12-month + <20-char filters, per-segment caps (150/100/250, ≤500 total, most-recent-first, no redistribution), `[YYYY-MM-DD] [rating/5] {text}` line format, strip name/mgmt-responses/HTML.
-   - `synthesis.ts` — calls `/prompts/review-intelligence-agent/synthesis.md` via `claude-sonnet-4-20250514` server-side, parses JSON (malformed → fail hotel, no partial write, OTEL log), applies the confidence gate, upserts `hotel_intelligence` on `hotel_id` + sets `last_refreshed`.
+   - `synthesis.ts` — calls `/prompts/review-intelligence-agent/synthesis.md` via `claude-sonnet-4-6` server-side, parses JSON (malformed → fail hotel, no partial write, OTEL log), applies the confidence gate, upserts `hotel_intelligence` on `hotel_id` + sets `last_refreshed`.
    - `query.ts` — **ALREADY BUILT** (Phase 2; consumption contract above).
 3. **Prompt (NEW):** author `/prompts/review-intelligence-agent/synthesis.md` **verbatim from 08a-1** (directory does not exist yet).
 4. **Admin UI (NEW):** `/app/admin/review-intelligence/` page + `/app/api/admin/pipeline/{run,status,retry}/route.ts`.

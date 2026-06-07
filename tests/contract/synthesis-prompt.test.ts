@@ -26,7 +26,7 @@ describe('synthesis prompt artifact (contract)', () => {
 
   it('pins the spec and the server-side model', () => {
     expect(prompt).toMatch(/specs\/02-review-intelligence-pipeline\.md/);
-    expect(prompt).toMatch(/claude-sonnet-4-20250514/);
+    expect(prompt).toMatch(/claude-sonnet-4-6/);
   });
 
   it('encodes the valid-JSON-only rule (no prose, no markdown fences)', () => {

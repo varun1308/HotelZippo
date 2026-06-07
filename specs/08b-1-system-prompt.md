@@ -3,7 +3,7 @@
 - **Notion:** https://app.notion.com/p/3754958429ac812fbb98c107e4c9734d
 - **Phase:** 3 · **Status:** specced (v1.0.0)
 - **Prompt artifact:** `/prompts/conversation-agent/system-prompt.md`
-- **Model:** `claude-sonnet-4-20250514`
+- **Model:** `claude-sonnet-4-6`
 
 The HotelZippo concierge for Indian families travelling to Asian destinations with young children. Voice: warm, direct, considered.
 
