@@ -14,24 +14,28 @@ describe('buildSearchInput', () => {
 });
 
 describe('mapSearchItem', () => {
-  it('maps a full item (name/url/rank/reviews/stars/brand/price/images)', () => {
+  // items[0] is a REAL TripAdvisor hotel-search dataset row (Hilton Chicago) — verifies the
+  // mapper against the live actor's exact field names + value formats.
+  it('maps a real actor row: webUrl, hotelClass "4.0"→4, priceLevel "$$$"→luxury, angle-bracket-wrapped url+image stripped', () => {
     const h = mapSearchItem(items[0], 'Phuket');
     expect(h).not.toBeNull();
     expect(h).toMatchObject({
-      name: 'JW Marriott Phuket Resort & Spa',
+      name: 'Hilton Chicago',
       destination: 'Phuket',
-      tripadvisor_url: 'https://www.tripadvisor.com/Hotel_Review-JW-Marriott-Phuket',
-      tripadvisor_rank: 3,
-      review_count: 4200,
-      star_rating: 5,
-      brand: 'Marriott',
+      tripadvisor_url:
+        'https://www.tripadvisor.com/Hotel_Review-g35805-d87590-Reviews-Hilton_Chicago-Chicago_Illinois.html',
+      tripadvisor_rank: 129,
+      review_count: 6717,
+      star_rating: 4,
       price_tier: 'luxury',
       google_place_id: null,
+      brand: null, // the actor has no brand/chain field
     });
-    expect(h!.images).toEqual(['https://example.com/jw1.jpg', 'https://example.com/jw2.jpg']);
+    // image was wrapped in <…>; bracket stripped, no trailing '>'.
+    expect(h!.images).toEqual(['https://media-cdn.tripadvisor.com/media/photo-o/28/6c/18/b7/exterior.jpg']);
   });
 
-  it('handles alternate field names + string/decimal coercion (title/webUrl/rank string, "3,100", stars 4.5→4)', () => {
+  it('handles alternate field names + coercion (title/url, rank "7", "3,100", stars 4.5→4, "$$$$"→ultra-luxury)', () => {
     const h = mapSearchItem(items[1], 'Phuket');
     expect(h).not.toBeNull();
     expect(h).toMatchObject({
@@ -39,8 +43,9 @@ describe('mapSearchItem', () => {
       tripadvisor_rank: 7,
       review_count: 3100,
       star_rating: 4,
+      price_tier: 'ultra-luxury',
     });
-    expect(h!.images).toEqual(['https://example.com/angsana.jpg']);
+    expect(h!.images).toEqual(['https://example.com/angsana1.jpg', 'https://example.com/angsana2.jpg']);
   });
 
   it('always sets destination from the arg, not the row', () => {

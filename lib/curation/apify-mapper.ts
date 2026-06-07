@@ -27,7 +27,10 @@ export function buildSearchInput(destination: string, maxResults: number): Recor
 }
 
 function asString(v: unknown): string | null {
-  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+  if (typeof v !== 'string') return null;
+  // Some actor builds wrap URLs in angle brackets ("<https://…>"); strip them defensively.
+  const s = v.trim().replace(/^<(.*)>$/, '$1').trim();
+  return s.length > 0 ? s : null;
 }
 
 function asInt(v: unknown): number | null {
@@ -48,11 +51,18 @@ function asStarRating(v: unknown): 3 | 4 | 5 | null {
   return null;
 }
 
+/** Coerce a raw price-level value → our price_tier enum. Accepts our own enum strings (mock
+ * fixtures) AND TripAdvisor's "$"-scale: $/$$ → mid-range, $$$ → luxury, $$$$ → ultra-luxury.
+ * (The founder can override per-hotel in curation before publishing.) */
 function asPriceTier(v: unknown): (typeof PRICE_TIERS)[number] | null {
   const s = asString(v)?.toLowerCase();
-  return s && (PRICE_TIERS as readonly string[]).includes(s)
-    ? (s as (typeof PRICE_TIERS)[number])
-    : null;
+  if (!s) return null;
+  if ((PRICE_TIERS as readonly string[]).includes(s)) return s as (typeof PRICE_TIERS)[number];
+  const dollars = (s.match(/\$/g) ?? []).length;
+  if (dollars >= 4) return 'ultra-luxury';
+  if (dollars === 3) return 'luxury';
+  if (dollars >= 1) return 'mid-range';
+  return null;
 }
 
 /** Collect image URLs from a few likely fields (single `image`, `photos[]`, or `images[]`). */
