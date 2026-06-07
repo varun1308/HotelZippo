@@ -36,10 +36,31 @@ export function googleSignIn(page: Page) {
   return page.getByRole('button', { name: /sign up to try/i }).first();
 }
 
-/** Send one user message through the composer (Enter sends). */
+/** Send one user message through the composer (Enter sends). Waits for the composer to be
+ * re-enabled afterwards (it's disabled while the assistant streams) so sequential sends are
+ * safe — the stubbed stream settles near-instantly. */
 export async function sendMessage(page: Page, text: string): Promise<void> {
   const box = composer(page);
   await box.click();
   await box.fill(text);
   await box.press('Enter');
+  await expect(box).toBeEnabled();
+}
+
+/** The recommendation set rendered inline in the conversation (J2+). */
+export function recommendationSet(page: Page) {
+  return page.getByTestId('recommendation-set');
+}
+
+/** Drive the conversation until a recommendation-set renders inline, then return it.
+ * The deterministic stub clamps to its final (recommendation) turn after enough user
+ * turns, so a bounded loop of sends always reaches cards. */
+export async function reachRecommendations(page: Page) {
+  const set = recommendationSet(page);
+  for (let i = 0; i < 8; i += 1) {
+    if (await set.count()) break;
+    await sendMessage(page, i === 0 ? 'Phuket, beach resort in December' : 'go on');
+  }
+  await expect(set).toBeVisible();
+  return set;
 }

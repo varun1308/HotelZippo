@@ -107,7 +107,10 @@ export function TopPickCard(props: TopPickCardProps) {
   } = props;
 
   return (
-    <article className="overflow-hidden rounded-card border border-primary-200 bg-surface shadow-lg">
+    <article
+      data-testid="top-pick-card"
+      className="overflow-hidden rounded-card border border-primary-200 bg-surface shadow-lg"
+    >
       <div className="relative h-[240px] sm:h-[300px]">
         <Hero src={heroImageUrl} alt={hotelName} label={heroLabel} />
         <div
@@ -182,7 +185,10 @@ export function StandardCard(props: StandardCardProps) {
   }
 
   return (
-    <article className="overflow-hidden rounded-card border border-border bg-surface shadow-sm transition-shadow duration-base hover:shadow-md">
+    <article
+      data-testid="alt-card"
+      className="overflow-hidden rounded-card border border-border bg-surface shadow-sm transition-shadow duration-base hover:shadow-md"
+    >
       <div className="relative h-[170px] sm:h-[188px]">
         <Hero src={heroImageUrl} alt={hotelName} label={heroLabel} />
         <div

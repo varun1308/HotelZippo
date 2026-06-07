@@ -65,7 +65,10 @@ export function MessageRow({ message, streaming = false }: MessageRowProps) {
   }
 
   return (
-    <div className="mb-[26px] flex items-start gap-[14px] motion-safe:animate-rise">
+    <div
+      data-testid="assistant-message"
+      className="mb-[26px] flex items-start gap-[14px] motion-safe:animate-rise"
+    >
       <span className="grid h-9 w-9 flex-none place-items-center rounded-[10px] bg-gradient-to-br from-primary-400 to-primary-600 text-white shadow-sm">
         <ConciergeBell aria-hidden className="h-[18px] w-[18px]" strokeWidth={1.75} />
       </span>
