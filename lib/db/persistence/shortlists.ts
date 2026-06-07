@@ -12,6 +12,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/db/ssr';
+import { PRICE_TIER_LABELS } from '@/components/recommendation/types';
+import type { SavedHotel } from '@/lib/shortlist/types';
 
 /** A short, URL-safe share token. Not security-sensitive (the share link is the
  * capability); just needs to be unique enough for the shortlists.share_token column. */
@@ -66,4 +68,48 @@ export async function loadShortlistHotelIds(
     .maybeSingle();
   if (error) throw error;
   return (data?.hotel_ids as string[] | undefined) ?? [];
+}
+
+/** A `hotels` row as read for shortlist re-hydration (the display-ready subset). */
+interface ShortlistHotelRow {
+  id: string;
+  name: string;
+  destination: string;
+  area: string | null;
+  price_tier: string | null;
+  images: string[] | null;
+}
+
+/** Re-hydrate the working shortlist into display-ready `SavedHotel` rows: load the saved
+ * hotel ids, then read those hotels (RLS: `hotels` is reference-readable) and map them to the
+ * panel's shape — preserving the SAVED order (not the DB order). This is the read half the
+ * persistence header always intended; the chat page calls it on mount so a saved shortlist
+ * survives a reload. Missing/unpublished ids are simply dropped (never a broken row). */
+export async function loadShortlistHotels(
+  client: SupabaseClient = createSupabaseBrowserClient(),
+): Promise<SavedHotel[]> {
+  const ids = await loadShortlistHotelIds(client);
+  if (ids.length === 0) return [];
+
+  const { data, error } = await client
+    .from('hotels')
+    .select('id, name, destination, area, price_tier, images')
+    .in('id', ids);
+  if (error) throw error;
+
+  const byId = new Map<string, ShortlistHotelRow>(
+    ((data as ShortlistHotelRow[] | null) ?? []).map((h) => [h.id, h]),
+  );
+  // Map in the saved order; drop ids that no longer resolve to a hotel.
+  return ids
+    .map((id) => byId.get(id))
+    .filter((h): h is ShortlistHotelRow => Boolean(h))
+    .map((h) => ({
+      hotelId: h.id,
+      hotelName: h.name,
+      destination: h.destination,
+      area: h.area,
+      priceTierLabel: h.price_tier ? PRICE_TIER_LABELS[h.price_tier] ?? h.price_tier : null,
+      heroImageUrl: h.images?.[0] ?? null,
+    }));
 }

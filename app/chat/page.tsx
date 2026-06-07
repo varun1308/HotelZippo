@@ -39,7 +39,7 @@ import { RoomPickerModal } from '@/components/booking/RoomPickerModal';
 import { useUser } from '@/lib/auth/useUser';
 import { signOut } from '@/lib/auth/signIn';
 import { loadFamilyProfile, saveFamilyProfile } from '@/lib/db/persistence/family-profiles';
-import { saveShortlist } from '@/lib/db/persistence/shortlists';
+import { saveShortlist, loadShortlistHotels } from '@/lib/db/persistence/shortlists';
 import { loadLatestSnapshot } from '@/lib/db/persistence/sessions';
 import { createSupabaseBrowserClient } from '@/lib/db/ssr';
 import { useSessionSnapshot } from '@/lib/chat/useSessionSnapshot';
@@ -212,17 +212,39 @@ export default function ChatPage() {
   const bookingFlow = useBookingFlow({ profile: savedProfile, dates: null });
   const bookingActions = useMemo(() => ({ proceed: bookingFlow.proceed }), [bookingFlow.proceed]);
 
-  // Persist the shortlist (saved hotel ids) whenever it changes, keyed to the user.
-  // Skip the initial empty render; best-effort (never blocks the UX). A leading ref
-  // avoids writing an empty row before the user has saved anything.
+  // Re-hydrate the working shortlist from Supabase on mount (keyed to the user), so a saved
+  // shortlist survives a page reload. We load the saved ids → display-ready SavedHotel rows
+  // (from `hotels`) and seed the in-memory shortlist ONCE. Best-effort: a failure leaves an
+  // empty shortlist rather than crashing. `shortlistHydrated` flips true when the load settles
+  // — the persist effect below waits for it, so re-hydration never round-trips back to a write.
   const shortlistHydrated = useRef(false);
+  const { hydrate: hydrateShortlist } = shortlist;
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    loadShortlistHotels()
+      .then((saved) => {
+        if (cancelled) return;
+        if (saved.length > 0) hydrateShortlist(saved);
+      })
+      .catch(() => {
+        /* warm-fail: start with an empty shortlist */
+      })
+      .finally(() => {
+        if (!cancelled) shortlistHydrated.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, hydrateShortlist]);
+
+  // Persist the shortlist (saved hotel ids) whenever it changes, keyed to the user — but only
+  // AFTER the initial re-hydration has settled, so loading the saved set doesn't immediately
+  // re-write it (and an empty first render never clobbers a stored shortlist). Best-effort.
   const shortlistIds = shortlist.items.map((h) => h.hotelId).join(',');
   useEffect(() => {
     if (!user) return;
-    if (!shortlistHydrated.current) {
-      shortlistHydrated.current = true;
-      if (shortlist.items.length === 0) return; // nothing to persist yet
-    }
+    if (!shortlistHydrated.current) return; // wait for the load to settle
     const ids = shortlistIds ? shortlistIds.split(',') : [];
     saveShortlist(ids, user.id).catch(() => {
       /* warm-fail: keep the in-memory shortlist; do not crash */

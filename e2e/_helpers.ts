@@ -12,6 +12,27 @@ export const DEV_USER = {
   name: 'Raj',
 } as const;
 
+// Local Supabase URL + the PUBLIC well-known service-role demo key (localhost-only; the same
+// value in .env.e2e). Used only to reset per-test DB state — never a real secret.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321';
+const SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+
+/** Reset the dev user's working shortlist so each persistence test starts clean (the shortlist
+ * is now durable, so prior runs would otherwise leak saved hotels into the next test). Deletes
+ * via the service role over REST — localhost demo key only. Best-effort. */
+export async function clearDevUserShortlist(): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/shortlists?hotel_ids=not.is.null`, {
+      method: 'DELETE',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'return=minimal' },
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Sign in via the landing-page Dev sign-in form (flag-gated; present under NEXT_PUBLIC_ENABLE_DEV_LOGIN).
  * Lands on /chat with a real cookie session, then waits for the composer to confirm arrival. */
 export async function signInAsDev(page: Page): Promise<void> {
