@@ -14,6 +14,7 @@
 // tsx). Server-side by construction (service client); never imported by a client component.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TaggedReview } from './tagging';
+import type { RawPayloadItem, ReviewSource } from './apify';
 
 export interface StoreResult {
   /** Rows attempted (after de-duping the in-batch collisions). */
@@ -27,7 +28,7 @@ export interface StoreResult {
 export async function storeRawReviews(
   client: SupabaseClient,
   hotelId: string,
-  pipelineRunId: string,
+  pipelineRunId: string | null,
   reviews: TaggedReview[],
 ): Promise<StoreResult> {
   if (reviews.length === 0) return { attempted: 0 };
@@ -75,4 +76,61 @@ export async function loadHotelReviews(
     .order('review_date', { ascending: false });
   if (error) throw new Error(`raw_reviews load failed: ${error.message}`);
   return (data ?? []) as TaggedReview[];
+}
+
+/** A stored raw payload row (what loadRawPayloads returns — enough to re-run a mapper). */
+export interface StoredPayload {
+  source: ReviewSource;
+  external_id: string | null;
+  payload: unknown;
+}
+
+/** Bank the untouched actor payloads for a hotel under a run, so mappings can be re-run later
+ * WITHOUT a paid re-scrape. ON CONFLICT DO NOTHING on (hotel_id, source, external_id) — re-running
+ * a hotel never duplicates a payload with a known id (null ids are distinct, so anonymous/idless
+ * items aren't the dedup target, mirroring raw_reviews). Caller decides fatal vs best-effort. */
+export async function storeRawPayloads(
+  client: SupabaseClient,
+  hotelId: string,
+  pipelineRunId: string,
+  payloads: RawPayloadItem[],
+): Promise<StoreResult> {
+  if (payloads.length === 0) return { attempted: 0 };
+
+  // De-dupe within the batch first so a single insert doesn't carry in-payload conflicts.
+  const seen = new Set<string>();
+  const rows = payloads
+    .filter((p) => {
+      const key = `${p.source}|${p.external_id ?? ''}`;
+      // Keep all null-id rows (they don't dedup); dedup only on a real external_id.
+      if (p.external_id != null && seen.has(key)) return false;
+      if (p.external_id != null) seen.add(key);
+      return true;
+    })
+    .map((p) => ({
+      hotel_id: hotelId,
+      pipeline_run_id: pipelineRunId,
+      source: p.source,
+      external_id: p.external_id,
+      payload: p.payload,
+    }));
+
+  const { error } = await client
+    .from('raw_review_payloads')
+    .upsert(rows, { onConflict: 'hotel_id,source,external_id', ignoreDuplicates: true });
+  if (error) throw new Error(`raw_review_payloads insert failed: ${error.message}`);
+
+  return { attempted: rows.length };
+}
+
+/** Load stored raw payloads for re-mapping (all hotels, or one). Service client. */
+export async function loadRawPayloads(
+  client: SupabaseClient,
+  hotelId?: string,
+): Promise<Array<StoredPayload & { hotel_id: string }>> {
+  let query = client.from('raw_review_payloads').select('hotel_id, source, external_id, payload');
+  if (hotelId) query = query.eq('hotel_id', hotelId);
+  const { data, error } = await query;
+  if (error) throw new Error(`raw_review_payloads load failed: ${error.message}`);
+  return (data ?? []) as Array<StoredPayload & { hotel_id: string }>;
 }

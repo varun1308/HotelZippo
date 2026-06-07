@@ -66,8 +66,11 @@ function normaliseDate(v: unknown): string | null {
   return null;
 }
 
-/** Normalise a rating to a 1–5 number, or null. TripAdvisor sometimes reports a 0–50 (×10)
- * scale; collapse >5 by dividing by 10. Out-of-range → null. */
+/** Normalise a rating to an INTEGER 1–5 (the `raw_reviews.rating` column is integer, and
+ * format.ts already rounds when building the synthesis line). TripAdvisor sometimes reports a
+ * 0–50 (×10) scale; collapse >5 by dividing by 10, then round (e.g. 45 → 4.5 → 5; 44 → 4.4 → 4).
+ * The exact pre-round value is preserved in raw_review_payloads, so no fidelity is lost.
+ * Out-of-range → null. */
 function normaliseRating(v: unknown): number | null {
   let n: number;
   if (typeof v === 'number') n = v;
@@ -76,7 +79,7 @@ function normaliseRating(v: unknown): number | null {
   if (!Number.isFinite(n)) return null;
   if (n > 5) n = n / 10; // 10-scale (e.g. 45 → 4.5)
   if (n < 0 || n > 5) return null;
-  return n;
+  return Math.round(n);
 }
 
 function pickText(row: Record<string, unknown>): string | null {
@@ -100,6 +103,16 @@ function pickName(row: Record<string, unknown>): string | null {
     asString(row.reviewerName) ??
     asString(row.author)
   );
+}
+
+/** Extract the actor item's own id (TripAdvisor review id at `item.id`; Google may use `id`/
+ * `reviewId`) → trimmed non-empty string, else null. Used as the raw_review_payloads dedup key
+ * so re-running a hotel doesn't re-store the same payload. Source-agnostic — the caller supplies
+ * the source. Lives here beside the mappers because it's actor-shape knowledge. */
+export function extractReviewExternalId(item: unknown): string | null {
+  if (!item || typeof item !== 'object') return null;
+  const row = item as Record<string, unknown>;
+  return asString(row.id) ?? asString(row.reviewId);
 }
 
 /** Map one TripAdvisor-reviews dataset item → RawReviewInput (source='tripadvisor'). */

@@ -6,9 +6,21 @@ import {
   buildGoogleReviewsInput,
   mapTripadvisorReviewItem,
   mapGoogleReviewItem,
+  extractReviewExternalId,
 } from '@/lib/review-intelligence/apify-mapper';
 import taItems from '../fixtures/apify/tripadvisor-reviews.json';
 import gItems from '../fixtures/apify/google-reviews.json';
+
+describe('extractReviewExternalId', () => {
+  it('reads the actor item id (TripAdvisor review id)', () => {
+    expect(extractReviewExternalId(taItems[0])).toBe('895958274');
+  });
+  it('falls back to reviewId, returns null when absent / non-object', () => {
+    expect(extractReviewExternalId({ reviewId: 'g-42' })).toBe('g-42');
+    expect(extractReviewExternalId({ text: 'no id here' })).toBeNull();
+    expect(extractReviewExternalId(null)).toBeNull();
+  });
+});
 
 describe('build*ReviewsInput', () => {
   const since = new Date('2025-06-07T00:00:00.000Z');
@@ -39,9 +51,9 @@ describe('mapTripadvisorReviewItem', () => {
     });
   });
 
-  it('normalises a 10-scale rating (45 → 4.5) and alt flat field names', () => {
+  it('normalises a 10-scale rating to an integer (45 → 4.5 → 5) and alt flat field names', () => {
     const r = mapTripadvisorReviewItem(taItems[1])!;
-    expect(r.rating).toBe(4.5);
+    expect(r.rating).toBe(5); // raw_reviews.rating is integer; exact 4.5 stays in the payload
     expect(r.reviewer_name).toBe('David Lee');
     expect(r.review_date).toBe('2023-04-02');
   });

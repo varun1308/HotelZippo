@@ -3,8 +3,9 @@
  * and run linkage (every row carries its pipeline_run_id). Service client (raw_reviews is
  * service-role only). */
 import { serviceClient } from './helpers';
-import { storeRawReviews, loadHotelReviews } from '@/lib/review-intelligence/store';
+import { storeRawReviews, storeRawPayloads, loadRawPayloads, loadHotelReviews } from '@/lib/review-intelligence/store';
 import type { TaggedReview } from '@/lib/review-intelligence/tagging';
+import type { RawPayloadItem } from '@/lib/review-intelligence/apify';
 
 jest.setTimeout(30_000);
 const admin = serviceClient();
@@ -34,6 +35,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await admin.from('raw_reviews').delete().eq('hotel_id', hotelId);
+  await admin.from('raw_review_payloads').delete().eq('hotel_id', hotelId);
   await admin.from('pipeline_runs').delete().in('id', [runA, runB]);
   await admin.from('hotels').delete().eq('id', hotelId);
 });
@@ -68,5 +70,31 @@ describe('storeRawReviews', () => {
     expect(all.some((r) => r.review_date === '2024-01-01')).toBe(true);
     // loadHotelReviews returns most-recent-first.
     expect(all[0].review_date! >= all[all.length - 1].review_date!).toBe(true);
+  });
+});
+
+describe('storeRawPayloads', () => {
+  const payloads: RawPayloadItem[] = [
+    { source: 'tripadvisor', external_id: 'rev-1', payload: { id: 'rev-1', text: 'kids loved it', rating: 5 } },
+    { source: 'google', external_id: 'rev-2', payload: { id: 'rev-2', text: 'comfy', stars: 4 } },
+    { source: 'tripadvisor', external_id: null, payload: { text: 'anonymous, no id', rating: 3 } },
+  ];
+
+  it('persists payloads with run linkage; loadRawPayloads round-trips them', async () => {
+    await storeRawPayloads(admin, hotelId, runA, payloads);
+    const { data } = await admin.from('raw_review_payloads').select('pipeline_run_id').eq('hotel_id', hotelId);
+    expect((data ?? []).length).toBe(3);
+    expect((data ?? []).every((r) => r.pipeline_run_id === runA)).toBe(true);
+
+    const loaded = await loadRawPayloads(admin, hotelId);
+    expect(loaded).toHaveLength(3);
+    expect(loaded.some((p) => p.source === 'google')).toBe(true);
+  });
+
+  it('dedups on (hotel, source, external_id) — re-store adds only the null-id row (NULLs distinct)', async () => {
+    await storeRawPayloads(admin, hotelId, runB, payloads);
+    const { data } = await admin.from('raw_review_payloads').select('id').eq('hotel_id', hotelId);
+    // The two id'd rows dedup; the null-id row is distinct each time → 3 + 1 = 4.
+    expect((data ?? []).length).toBe(4);
   });
 });
