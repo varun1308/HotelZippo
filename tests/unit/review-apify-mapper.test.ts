@@ -26,26 +26,27 @@ describe('build*ReviewsInput', () => {
 });
 
 describe('mapTripadvisorReviewItem', () => {
-  it('maps an ISO-date item, hard-codes source=tripadvisor', () => {
+  // taItems[0] is a REAL TripAdvisor reviews-actor row: nested `user` object (name=null,
+  // username set), tz-offset publishedDate, integer rating.
+  it('maps a real actor row: nested user → username, tz-offset publishedDate → ISO date, source=tripadvisor', () => {
     const r = mapTripadvisorReviewItem(taItems[0])!;
     expect(r).toEqual({
       source: 'tripadvisor',
-      review_date: '2026-05-18',
-      reviewer_name: 'Meera Iyer',
-      review_text: expect.stringContaining('kids club'),
-      rating: 5,
+      review_date: '2023-06-19',
+      reviewer_name: '647ANANDP', // user.name is null → falls back to user.username
+      review_text: expect.stringContaining('magnificent views'),
+      rating: 3,
     });
   });
 
-  it('normalises a 10-scale rating (45 → 4.5) and alt field names', () => {
+  it('normalises a 10-scale rating (45 → 4.5) and alt flat field names', () => {
     const r = mapTripadvisorReviewItem(taItems[1])!;
     expect(r.rating).toBe(4.5);
     expect(r.reviewer_name).toBe('David Lee');
-    expect(r.review_date).toBe('2026-04-02');
+    expect(r.review_date).toBe('2023-04-02');
   });
 
-  it('keeps a row with an unparseable date but drops the date to null; skips no-signal rows', () => {
-    // taItems[2] has no text and no rating → no signal → null.
+  it('skips a no-signal row (no text, no rating; user.name + username both null)', () => {
     expect(mapTripadvisorReviewItem(taItems[2])).toBeNull();
     expect(mapTripadvisorReviewItem(null)).toBeNull();
   });

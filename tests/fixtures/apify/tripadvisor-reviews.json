@@ -1,18 +1,30 @@
 [
   {
-    "publishedDate": "2026-05-18",
-    "user": "Meera Iyer",
-    "text": "Wonderful family stay — the kids club and shallow pool were perfect for our two little ones.",
-    "rating": 5
+    "id": "895958274",
+    "publishedDate": "2023-06-19T13:52:40-04:00",
+    "publishedPlatform": "Mobile",
+    "rating": 3,
+    "travelDate": "2023-06",
+    "title": "Rooms 5/ 5 , Location 6/ 5",
+    "text": "Mainly because of the USD 35 dollars per day charge. Front office staff looked overworked. Rooms are large and simply fabulous with their magnificent views.",
+    "user": {
+      "userId": "12BA071C06A260962DFC7F8B073993D3",
+      "firstName": null,
+      "lastInitial": null,
+      "name": null,
+      "username": "647ANANDP",
+      "userLocation": { "name": "Singapore, Singapore", "id": "294265" }
+    },
+    "ownerResponse": null
   },
   {
-    "date": "2026-04-02T00:00:00.000Z",
+    "date": "2023-04-02T00:00:00.000Z",
     "userName": "David Lee",
     "reviewText": "Spacious, clean rooms and an excellent breakfast.",
     "bubbleRating": 45
   },
   {
     "reviewDate": "not a date",
-    "author": "Anon"
+    "user": { "name": null, "username": null }
   }
 ]

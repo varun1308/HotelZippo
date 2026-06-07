@@ -84,6 +84,15 @@ function pickText(row: Record<string, unknown>): string | null {
 }
 
 function pickName(row: Record<string, unknown>): string | null {
+  // TripAdvisor nests the reviewer under `user` as an object: prefer the display name, then the
+  // username handle (the tagging step's Indian-name heuristic reads whatever we surface here).
+  if (row.user && typeof row.user === 'object') {
+    const u = row.user as Record<string, unknown>;
+    const fromParts = [asString(u.firstName), asString(u.lastInitial)].filter(Boolean).join(' ').trim();
+    const display = asString(u.name) ?? (fromParts || null) ?? asString(u.username);
+    if (display) return display;
+  }
+  // Flat-string variants (Google actor / alternative TA builds).
   return (
     asString(row.user) ??
     asString(row.userName) ??
