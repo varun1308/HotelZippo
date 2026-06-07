@@ -65,18 +65,38 @@ describe('mapTripadvisorReviewItem', () => {
 });
 
 describe('mapGoogleReviewItem', () => {
-  it('maps an ISO-date item, hard-codes source=google', () => {
+  // gItems[0] is derived from a REAL Google-Maps-reviews dataset row (a Spanish review with an
+  // English `textTranslated`): verifies field names + value formats against the live actor.
+  it('maps a real actor row: prefers textTranslated over the original-language text, source=google', () => {
     const r = mapGoogleReviewItem(gItems[0])!;
     expect(r.source).toBe('google');
+    // The original `text` is "Genial" (Spanish); we surface the English translation for synthesis.
+    expect(r.review_text).toBe('Brilliant');
+    // Real ISO timestamp from `publishedAtDate` — NOT the relative `publishAt` ("51 minutes ago").
     expect(r.review_date).toBe('2026-03-10');
-    expect(r.reviewer_name).toBe('Priya Sharma');
+    expect(r.reviewer_name).toBe('TALENTO HUMANO');
+    // The live actor carries the star value in `stars`; `rating` is null and must not win.
     expect(r.rating).toBe(4);
   });
 
-  it('normalises an epoch-seconds date + string rating', () => {
+  it('falls back to the original text when there is no translation', () => {
     const r = mapGoogleReviewItem(gItems[1])!;
+    expect(r.review_text).toBe('Lovely pool and very helpful staff with our toddler.');
+    expect(r.review_date).toBe('2026-03-08');
+    expect(r.rating).toBe(5);
+    expect(r.reviewer_name).toBe('Priya Sharma');
+  });
+
+  it('handles epoch-seconds dates + string ratings + flat `user` (alternative actor builds)', () => {
+    const r = mapGoogleReviewItem({
+      user: 'John Smith',
+      review: 'Great location near the beach.',
+      publishAt: 1735689600,
+      rating: '5',
+    })!;
     expect(r.review_date).toBe('2025-01-01'); // 1735689600s = 2025-01-01
     expect(r.rating).toBe(5);
     expect(r.review_text).toBe('Great location near the beach.');
+    expect(r.reviewer_name).toBe('John Smith');
   });
 });
