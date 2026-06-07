@@ -17,6 +17,8 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID` | server-only | TripAdvisor Reviews Scraper actor (Phase 6) |
 | `APIFY_GOOGLE_REVIEWS_ACTOR_ID` | server-only | Google Maps Reviews Scraper actor (Phase 6) |
 | `APIFY_TRIPADVISOR_SEARCH_ACTOR_ID` | server-only | TripAdvisor Hotel **Search** actor used by curation tool (12a). Confirm exact name against 12a. |
+| `APIFY_SEARCH_MAX_RESULTS` | server-only | Curation hotel-search over-fetch cap (`lib/curation/fetch.ts`; optional, default 50) |
+| `APIFY_REVIEWS_MAX_RESULTS` | server-only | Per-source review-scrape over-fetch cap (`lib/review-intelligence/apify.ts`; optional, default 600) |
 | `ROUTESTACK_API_KEY` | server-only | RouteStack partner API key (public identifier) — used in the HMAC token exchange (Phase 7) |
 | `ROUTESTACK_API_SECRET` | server-only | RouteStack partner secret — signs the HMAC (`apiKey:timestamp:nonce`) for the partner-token exchange; never exposed to client (Phase 7) |
 | `ROUTESTACK_API_URL` | server-only | RouteStack HTTP base URL — sandbox `https://evolvemcp.routestack.ai` (Phase 7) |
@@ -25,7 +27,7 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `GOOGLE_PLACES_API_KEY` | server-only | Google Places **Text Search (New)**, ID-only field mask — resolves curated hotels → `google_place_id` (12a). Free 10k/mo SKU. Distinct from the OAuth creds. |
 | `DASH0_API_KEY` | server-only | OTEL export to Dash0 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | server-only | Dash0 OTLP endpoint URL |
-| `NEXT_PUBLIC_APP_URL` | public | Public base URL — OAuth redirect + shareable shortlist links |
+| `PIPELINE_POLL_MS` | server-only | Review-intelligence worker poll interval, ms (`scripts/pipeline/run-worker.ts`; optional, default 5000) |
 
 ## Rules
 

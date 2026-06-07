@@ -46,7 +46,6 @@ describe('Phase 0 scaffold', () => {
       'GOOGLE_CLIENT_SECRET',
       'DASH0_API_KEY',
       'OTEL_EXPORTER_OTLP_ENDPOINT',
-      'NEXT_PUBLIC_APP_URL',
     ];
     for (const key of required) {
       expect(env).toContain(key);

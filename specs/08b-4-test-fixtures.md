@@ -26,6 +26,6 @@ Structured fixtures for the three Conversation Agent prompts. Tests validate **s
 
 ## Action items
 
-- Materialise fixtures in `/tests/fixtures/` (standard family profile + trip brief; RA candidate intelligence sets).
-- Author `/prompts/conversation-agent/test-fixtures.md`.
-- These fixtures back the Phase 2 contract tests (RA-*) and Phase 3 E2E (SP-*).
+- ~~Materialise fixtures in `/tests/fixtures/`~~ **DONE** (`family-profile.ts`, `recommendation-assembly.ts`, `system-prompt.ts`).
+- ~~Author `/prompts/conversation-agent/test-fixtures.md`~~ **DONE** (index pointing at the code fixtures + contract tests).
+- RA-* back the **Phase 2 contract tests** (`tests/contract/recommendation-assembly.test.ts`). SP-* are exercised by `tests/unit/system-prompt-fixtures.test.ts`; the originally-planned Phase 3 **E2E** (Playwright) is **deferred post-v1** per 15.

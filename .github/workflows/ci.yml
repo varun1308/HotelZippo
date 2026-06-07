@@ -120,7 +120,7 @@ jobs:
             echo "has_e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_e2e=false" >> "$GITHUB_OUTPUT"
-            echo "No test:e2e script yet — skipping (added in Phase 3)."
+            echo "::notice title=E2E deferred::No test:e2e script — E2E (Playwright) is DEFERRED post-v1 per specs/15-test-strategy.md. This job is an intentional no-op (NOT a passing E2E suite) until a test:e2e script lands."
           fi
       - name: Setup Node
         if: steps.detect.outputs.has_e2e == 'true'
