@@ -25,7 +25,7 @@ If filtering removes all candidates → `{ "error": "no_eligible_hotels", "reaso
 | Recent family reviews | High | High | High |
 | Budget | Medium | High | Medium |
 
-**Budget matching:** `value` → mid-range only; `comfort` → mid-range or luxury; `luxury` → all tiers. No match → budget mismatch signal.
+**Budget matching:** `value` → mid-range only; `comfort` → mid-range or luxury; `luxury` → luxury or ultra-luxury. No match → budget mismatch signal. (Canonical: spec 02 §Pre-filter + `BUDGET_TO_PRICE_TIERS` in `lib/review-intelligence/query.ts`.)
 **Brand preference:** tiebreaker only; stronger signals beat a preferred brand with weaker signals; IHG lower-preference unless exceptional.
 **Kids age awareness:** <2 → crib, in-room kettle, restaurant flexibility; 5–10 → kids club, pool; grandparents → vegetarian food, accessibility.
 

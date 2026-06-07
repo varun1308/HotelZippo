@@ -9,7 +9,7 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 ## Test types
 - **Unit** — Jest; pure functions + prompt output parsers.
 - **Integration** — Jest + a dedicated Supabase **test** project (never production).
-- **E2E** — Playwright on critical user journeys.
+- **E2E** — Playwright on critical user journeys. **DEFERRED post-v1** (not yet built; the CI `e2e` job is a documented no-op until a `test:e2e` script exists — see the Phase 3 note below).
 - **Contract** — Zod schema validation.
 
 ## Test data
@@ -44,7 +44,8 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - Recommendations render as inline cards within the conversation.
 - Hard-flag alerts render prominently on relevant cards.
 - Top pick clearly distinguished from other recommendations.
-- **Test type:** E2E (Playwright: onboarding → recommendations → card rendering).
+- **Test type (current gate):** jsdom component/unit tests cover card rendering, hard-flag prominence, and top-pick distinction; the conversational flow is exercised via the chat-runtime unit/contract tests + a manual happy-path smoke against the dev server.
+- **Test type (deferred post-v1):** full E2E (Playwright: onboarding → recommendations → card rendering). Not yet built — tracked as a post-v1 follow-up; until a `test:e2e` script lands, the CI `e2e` job is an explicit no-op (it logs "E2E deferred (spec 15)").
 
 ### Phase 4 — Auth & Persistence
 (Source: `specs/04-auth-persistence.md` acceptance criteria.)
@@ -89,6 +90,6 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 Phase 8 (launch checklist — Notion 18; founder-run, not build work in this campaign). See Notion 15.
 
 ## Action items
-- Stand up Jest + Playwright + Zod with a dedicated Supabase test project.
+- Stand up Jest + Zod with a dedicated Supabase test project. **Done.** (Playwright/E2E deferred post-v1 — see Test types + Phase 3.)
 - `qa-gate` owns these criteria and refuses to mark a phase complete until they pass.
 - Materialise `/tests/fixtures/` standard profile + brief.
