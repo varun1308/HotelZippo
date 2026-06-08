@@ -1,9 +1,13 @@
-/* Google Places resolver client (curation place-id resolution, 12a). Server-side only: reads
- * GOOGLE_PLACES_API_KEY and calls Text Search (New). Env-gated like the Apify path — no key →
+/* Google Places resolver client (curation place-id resolution, 12a). Server-side by construction:
+ * reads GOOGLE_PLACES_API_KEY and calls Text Search (New). Env-gated like the Apify path — no key →
  * GooglePlacesError('no_key'), which the caller treats as "skip", so CI stays key-free. All
  * request/response shape lives in google-places-mapper.ts; this module is the network + OTEL seam
- * (mirrors lib/apify/client.ts). */
-import 'server-only';
+ * (mirrors lib/apify/client.ts).
+ *
+ * No `import 'server-only'`: like lib/apify/client.ts, this is also reached from standalone tsx
+ * dev/maintenance scripts (scripts/dev/live-curation-fetch.ts), where that guard throws. It is
+ * server-side by construction (reads a secret key) and is imported only by the admin curation route
+ * + lib/curation/resolve-places.ts — never by a client component. */
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 import { buildTextSearchBody, mapTextSearchResponse, hasGeo, type PlaceQuery } from './google-places-mapper';
 
