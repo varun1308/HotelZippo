@@ -58,12 +58,20 @@ describe('Phase 0 scaffold', () => {
     expect(gi).not.toMatch(/^\.env\.example/m);
   });
 
-  it('OTEL is initialised at the instrumentation layer with service.name hotelzippo', () => {
-    // Verify by source inspection — instrumentation.ts imports the server-only
-    // @vercel/otel module, so we assert its shape rather than executing it in jsdom.
-    const src = fs.readFileSync(path.join(root, 'instrumentation.ts'), 'utf8');
-    expect(src).toContain('export function register()');
-    expect(src).toContain('registerOTel');
-    expect(src).toContain("serviceName: 'hotelzippo'");
+  it('OTEL is initialised at the instrumentation layer via the shared bootstrap', () => {
+    // Verify by source inspection — these modules import the server-only @vercel/otel module, so we
+    // assert their shape rather than executing it in jsdom. instrumentation.ts (Next.js server) and
+    // the pipeline worker both delegate to lib/otel/register so the two processes share one config.
+    const instr = fs.readFileSync(path.join(root, 'instrumentation.ts'), 'utf8');
+    expect(instr).toContain('export function register()');
+    expect(instr).toContain('registerHotelZippoOtel');
+
+    const reg = fs.readFileSync(path.join(root, 'lib', 'otel', 'register.ts'), 'utf8');
+    expect(reg).toContain('registerOTel');
+    expect(reg).toContain("serviceName: 'hotelzippo'");
+
+    // The pipeline worker (separate process) must bootstrap OTEL FIRST, or its spans are dropped.
+    const worker = fs.readFileSync(path.join(root, 'scripts', 'pipeline', 'run-worker.ts'), 'utf8');
+    expect(worker).toContain("import './otel-bootstrap'");
   });
 });
