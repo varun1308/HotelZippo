@@ -12,6 +12,19 @@ describe('applyDash0Headers', () => {
     expect(env.OTEL_EXPORTER_OTLP_HEADERS).toBe('Authorization=Bearer dash0_tok_123');
   });
 
+  it('adds the Dash0-Dataset routing header when DASH0_DATASET is set', () => {
+    const env: Record<string, string | undefined> = { DASH0_API_KEY: 'dash0_tok_123', DASH0_DATASET: 'dev' };
+    const applied = applyDash0Headers(env);
+    expect(applied).toBe('Authorization=Bearer dash0_tok_123,Dash0-Dataset=dev');
+    expect(env.OTEL_EXPORTER_OTLP_HEADERS).toBe('Authorization=Bearer dash0_tok_123,Dash0-Dataset=dev');
+  });
+
+  it('omits the Dash0-Dataset header when DASH0_DATASET is absent', () => {
+    const env: Record<string, string | undefined> = { DASH0_API_KEY: 'dash0_tok_123' };
+    applyDash0Headers(env);
+    expect(env.OTEL_EXPORTER_OTLP_HEADERS).not.toContain('Dash0-Dataset');
+  });
+
   it('does NOT overwrite an operator-provided OTEL_EXPORTER_OTLP_HEADERS', () => {
     const env: Record<string, string | undefined> = {
       DASH0_API_KEY: 'dash0_tok_123',

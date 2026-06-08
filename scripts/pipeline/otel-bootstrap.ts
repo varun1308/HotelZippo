@@ -35,14 +35,19 @@ const provider = new NodeTracerProvider({
 
 provider.register();
 
-// Flush the batch on exit so a short single-poll run still ships its spans before the process ends.
-async function shutdown(): Promise<void> {
+/** Force-flush + shut down the exporter. The BatchSpanProcessor buffers spans, so a short-lived run
+ * (single poll, or the smoke script) must flush explicitly or the process exits before anything
+ * ships. Best-effort: never throws, never blocks exit on the exporter. Exported so callers can await
+ * it deterministically rather than rely on beforeExit timing. */
+export async function flushOtel(): Promise<void> {
   try {
     await provider.shutdown();
   } catch {
-    /* best-effort flush — never block exit on the exporter */
+    /* best-effort flush */
   }
 }
+
+// Belt-and-braces: also flush on beforeExit for paths that don't call flushOtel() themselves.
 process.once('beforeExit', () => {
-  void shutdown();
+  void flushOtel();
 });
