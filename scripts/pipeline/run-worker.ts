@@ -10,6 +10,12 @@
  * (status='running'); this worker picks it up via the DB-enforced single-active-run.
  *
  * Run with: npx tsx scripts/pipeline/run-worker.ts  (tsx loads .env.local). */
+// OTEL bootstrap MUST run before anything that creates spans (processActiveRun → apify/synthesis
+// spans). Without this, every pipeline span is created against a no-op tracer and silently dropped.
+// This side-effecting import is FIRST so ESM evaluates it ahead of the worker chain's tracers; it
+// uses the same shared config as the Next.js server (lib/otel/register) so both processes match.
+import './otel-bootstrap';
+
 import { createClient } from '@supabase/supabase-js';
 import { processActiveRun } from '@/lib/review-intelligence/worker';
 
