@@ -1,5 +1,6 @@
 /* Shared Apify client (Phase 6 live scraping). One thin wrapper over the Apify REST endpoint
- *   POST https://api.apify.com/v2/acts/<actorId>/run-sync-get-dataset-items?token=...
+ *   POST https://api.apify.com/v2/actors/<actorId>/run-sync-get-dataset-items
+ *   Authorization: Bearer <APIFY_API_TOKEN>
  * which runs an actor synchronously and returns its dataset items in one call. Reused by both
  * the curation hotel-SEARCH path (lib/curation/fetch.ts) and the review SCRAPER
  * (lib/review-intelligence/apify.ts).
@@ -40,7 +41,7 @@ export interface RunActorOptions {
   limit?: number;
 }
 
-const APIFY_BASE = 'https://api.apify.com/v2/acts';
+const APIFY_BASE = 'https://api.apify.com/v2/actors';
 
 /** Truncate an error body before it goes into an Error message / OTEL — Apify (and TripAdvisor
  * anti-bot pages) can return huge HTML bodies, and we must never echo the token. */
@@ -67,7 +68,9 @@ export async function runActorGetItems(
   const timeoutMs = opts.timeoutMs ?? 300_000;
   const runTimeoutSecs = opts.runTimeoutSecs ?? 240;
 
-  const params = new URLSearchParams({ token, timeout: String(runTimeoutSecs) });
+  // Token goes in the Authorization header, NOT the query string: the URL can land in OTEL spans
+  // and proxy/server logs, so keeping the secret out of it is the documented, safer choice.
+  const params = new URLSearchParams({ timeout: String(runTimeoutSecs) });
   if (opts.limit != null) params.set('limit', String(opts.limit));
   const url = `${APIFY_BASE}/${encodeURIComponent(opts.actorId)}/run-sync-get-dataset-items?${params}`;
 
@@ -82,7 +85,10 @@ export async function runActorGetItems(
       try {
         res = await doFetch(url, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify(opts.input),
           signal: controller.signal,
         });
