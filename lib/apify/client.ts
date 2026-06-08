@@ -14,6 +14,7 @@
  * run in the standalone tsx worker chain where that guard throws (same reasoning as
  * lib/review-intelligence/apify.ts and synthesis.ts). Never imported by a client component. */
 import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { withActorCache } from '@/lib/dev/actor-cache';
 
 export type ApifyErrorKind = 'no_token' | 'http_error' | 'timeout' | 'bad_response';
 
@@ -60,6 +61,12 @@ export async function runActorGetItems(
   opts: RunActorOptions,
   fetchImpl?: typeof fetch,
 ): Promise<unknown[]> {
+  // Dev-only file cache (CURATION_USE_CACHE=1): a HIT replays banked dataset items with NO live call
+  // (and needs no token), so the admin routes can be exercised end-to-end for free. No-op in prod.
+  return withActorCache('apify', opts.actorId, opts.input, () => runActorLive(opts, fetchImpl)) as Promise<unknown[]>;
+}
+
+async function runActorLive(opts: RunActorOptions, fetchImpl?: typeof fetch): Promise<unknown[]> {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) throw new ApifyError('APIFY_API_TOKEN is not set', 'no_token');
 

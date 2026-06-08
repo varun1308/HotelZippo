@@ -10,6 +10,7 @@
  * + lib/curation/resolve-places.ts — never by a client component. */
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 import { buildTextSearchBody, mapTextSearchResponse, hasGeo, type PlaceQuery } from './google-places-mapper';
+import { withActorCache } from '@/lib/dev/actor-cache';
 
 const SEARCH_TEXT_URL = 'https://places.googleapis.com/v1/places:searchText';
 
@@ -39,6 +40,14 @@ export async function resolveGooglePlaceId(
   query: PlaceQuery,
   fetchImpl?: typeof fetch,
 ): Promise<string | null> {
+  // Dev-only file cache (CURATION_USE_CACHE=1): a HIT replays the banked place id with NO live call
+  // (and needs no key), so the resolve-places route can be exercised end-to-end for free. No-op in prod.
+  return withActorCache('places', 'searchText', query, () => resolveGooglePlaceIdLive(query, fetchImpl)) as Promise<
+    string | null
+  >;
+}
+
+async function resolveGooglePlaceIdLive(query: PlaceQuery, fetchImpl?: typeof fetch): Promise<string | null> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) throw new GooglePlacesError('GOOGLE_PLACES_API_KEY is not set', 'no_key');
   const doFetch = fetchImpl ?? fetch;

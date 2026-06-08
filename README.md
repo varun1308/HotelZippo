@@ -105,6 +105,8 @@ Prerequisites: **Docker**, the **Supabase CLI**, and an **Anthropic API key**.
 | `npm run test:integration` | Integration (node — needs local Supabase running) |
 | `npm run test:e2e` | End-to-end (Playwright, headless) — see below |
 | `npm run test:e2e:ui` | End-to-end in **Playwright UI mode** (watch / step / time-travel) |
+| `npm run dev:curation` | Credit-safe live test of the curation Apify + Google Places calls (banks each call, replays for free) — see *Testing the admin curation pipeline against cached payloads* below |
+| `npm run dev:preseed-cache` | Copy banked payloads into the **route** cache so the admin UI replays them — see below |
 
 ## End-to-end tests (Playwright)
 
@@ -135,6 +137,36 @@ npx playwright test booking    # one journey (auth-gate | recommendations | pers
 ```
 
 Playwright starts the server itself (`next start` on port `3100` from `.env.e2e`) and reuses a running one locally. `.env.e2e` is committed but holds **only** the public localhost-only Supabase demo keys + the E2E/dev-login flags — no secrets. The CI `e2e` job does the same setup automatically (boot Supabase → seed → build → run → upload the report).
+
+## Testing the admin curation pipeline against cached payloads
+
+The admin curation flow makes **paid** external calls — Apify actors (TripAdvisor hotel search + TripAdvisor/Google reviews) and Google Places. To exercise the admin UI and routes **end-to-end without re-spending** on every click, the external clients have an opt-in file cache: with `CURATION_USE_CACHE=1`, a cache **HIT** replays a banked payload (no live call, no key needed) and a **MISS** makes the real call once and writes through. It is **off by default and prod-safe** — every wrapper is a no-op unless the flag is set; never set it in production. Caches live under `scripts/dev/.cache/` (git-ignored).
+
+### Step 1 — bank the payloads once (live, spends a little)
+`npm run dev:curation` calls each external service once for a destination and saves the raw output. Re-runs replay from those files for free. Needs the real keys in `.env.local` (`APIFY_API_TOKEN`, `APIFY_TRIPADVISOR_SEARCH_ACTOR_ID`, `APIFY_*_REVIEWS_ACTOR_ID`, `GOOGLE_PLACES_API_KEY`).
+```bash
+# curation hotel SEARCH (one actor run) + Google place-id RESOLVE + REVIEWS for one hotel, all cached
+npm run dev:curation -- --destination Phuket --live --places --reviews --hotel "Splash Beach Resort"
+
+# thereafter, replay everything with NO network (iterate on mapping logic for free):
+npm run dev:curation -- --destination Phuket --places --reviews --hotel "Splash Beach Resort"
+```
+> The first reviews run may need a one-time Apify **actor permission approval** (the error gives the URL) and the **Places API (New)** enabled on your Google Cloud project. Both are account config, not code.
+
+### Step 2 — make the **admin UI** use those payloads
+The script cache and the routes use different keys, so a tiny zero-spend pre-seed copies the banked payloads into the **route** cache under the keys the routes send. Keep `.env.local`'s `APIFY_SEARCH_MAX_RESULTS` / `APIFY_REVIEWS_MAX_RESULTS` matching the sizes you banked (default `10` / `30`), since the request size is part of the cache key.
+```bash
+npm run dev:preseed-cache -- --destination Phuket --hotel "Splash Beach Resort"
+```
+
+### Step 3 — run the UI in replay mode
+```bash
+npm run dev:db                        # local Supabase + demo seed (if not already up)
+CURATION_USE_CACHE=1 npm run dev      # the flag turns on cache-replay
+```
+Open [`/admin/curation`](http://localhost:3000/admin/curation) (no auth in v1) and use it normally — **Fetch hotels → Phuket**, **Resolve place IDs**, then the review pipeline at [`/admin/review-intelligence`](http://localhost:3000/admin/review-intelligence). The server console logs `[actor-cache] HIT …` for every call served from cache (zero live spend).
+
+> For a **new** destination you can skip the pre-seed: run the UI once with `CURATION_USE_CACHE=1` and the first (live) click self-banks via write-through; every later click replays for free. Remember to raise `APIFY_*_MAX_RESULTS` back to their production sizes (`50` / `600`) before any real live run.
 
 ## Build phases
 0 Scaffold · 1 Data · 2 Recommendation engine · 3 Conversational UI · 4 Auth · 5 Session memory · 6 Review pipeline · 7 Booking · 8 Polish. See [Notion 11 · Build Sequence] and [`docs/spec-coverage.md`](./docs/spec-coverage.md). **Current: Phases 0–3 complete** (the conversational UI runs end-to-end against seeded demo data); Phase 4 (auth) is next.
