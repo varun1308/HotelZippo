@@ -15,6 +15,8 @@
     "pipeline:remap": "tsx --env-file=.env.local scripts/pipeline/remap.ts",
     "booking:capture": "tsx --env-file=.env.local scripts/booking/capture-rates.ts",
     "dev:user": "tsx --env-file=.env.local scripts/dev/seed-dev-user.ts",
+    "dev:curation": "tsx --env-file=.env.local scripts/dev/live-curation-fetch.ts",
+    "dev:preseed-cache": "tsx --env-file=.env.local scripts/dev/preseed-route-cache.ts",
     "dev:gen-seed": "tsx scripts/dev/gen-seed-sql.ts",
     "dev:db": "npm run dev:gen-seed && supabase db reset",
     "e2e:user": "tsx --env-file=.env.e2e scripts/dev/seed-dev-user.ts",

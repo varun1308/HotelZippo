@@ -32,6 +32,9 @@ next-env.d.ts
 /playwright/.cache/
 /test-results/
 
+# Dev-only cached Apify actor output (banked once, replayed for free — never re-spend credits).
+scripts/dev/.cache/
+
 # Supabase local
 .branches
 .temp

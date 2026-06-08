@@ -26,7 +26,7 @@ describe('runActorGetItems', () => {
     });
   });
 
-  it('POSTs to run-sync-get-dataset-items with the token, run timeout, limit, and JSON body', async () => {
+  it('POSTs to run-sync-get-dataset-items with a Bearer token, run timeout, limit, and JSON body', async () => {
     let seenUrl = '';
     let seenInit: RequestInit | undefined;
     const fetchImpl = (async (url: string, init?: RequestInit) => {
@@ -41,12 +41,16 @@ describe('runActorGetItems', () => {
     );
 
     expect(items).toEqual([{ a: 1 }]);
-    expect(seenUrl).toContain(`/acts/${encodeURIComponent(ACTOR)}/run-sync-get-dataset-items`);
-    expect(seenUrl).toContain('token=tok_test');
+    expect(seenUrl).toContain(`/actors/${encodeURIComponent(ACTOR)}/run-sync-get-dataset-items`);
     expect(seenUrl).toContain('timeout=120');
     expect(seenUrl).toContain('limit=50');
     expect(seenInit?.method).toBe('POST');
     expect(JSON.parse(String(seenInit?.body))).toEqual({ q: 'hotels in Phuket' });
+    // Token travels in the Authorization header, NOT the URL (no secret in logs/spans).
+    const headers = seenInit?.headers as Record<string, string>;
+    expect(headers.authorization).toBe('Bearer tok_test');
+    expect(seenUrl).not.toContain('tok_test');
+    expect(seenUrl).not.toContain('token=');
   });
 
   it('omits the limit param when no limit is given', async () => {

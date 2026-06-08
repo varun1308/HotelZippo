@@ -1,11 +1,16 @@
-/* Google Places resolver client (curation place-id resolution, 12a). Server-side only: reads
- * GOOGLE_PLACES_API_KEY and calls Text Search (New). Env-gated like the Apify path — no key →
+/* Google Places resolver client (curation place-id resolution, 12a). Server-side by construction:
+ * reads GOOGLE_PLACES_API_KEY and calls Text Search (New). Env-gated like the Apify path — no key →
  * GooglePlacesError('no_key'), which the caller treats as "skip", so CI stays key-free. All
  * request/response shape lives in google-places-mapper.ts; this module is the network + OTEL seam
- * (mirrors lib/apify/client.ts). */
-import 'server-only';
+ * (mirrors lib/apify/client.ts).
+ *
+ * No `import 'server-only'`: like lib/apify/client.ts, this is also reached from standalone tsx
+ * dev/maintenance scripts (scripts/dev/live-curation-fetch.ts), where that guard throws. It is
+ * server-side by construction (reads a secret key) and is imported only by the admin curation route
+ * + lib/curation/resolve-places.ts — never by a client component. */
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 import { buildTextSearchBody, mapTextSearchResponse, hasGeo, type PlaceQuery } from './google-places-mapper';
+import { withActorCache } from '@/lib/dev/actor-cache';
 
 const SEARCH_TEXT_URL = 'https://places.googleapis.com/v1/places:searchText';
 
@@ -35,6 +40,14 @@ export async function resolveGooglePlaceId(
   query: PlaceQuery,
   fetchImpl?: typeof fetch,
 ): Promise<string | null> {
+  // Dev-only file cache (CURATION_USE_CACHE=1): a HIT replays the banked place id with NO live call
+  // (and needs no key), so the resolve-places route can be exercised end-to-end for free. No-op in prod.
+  return withActorCache('places', 'searchText', query, () => resolveGooglePlaceIdLive(query, fetchImpl)) as Promise<
+    string | null
+  >;
+}
+
+async function resolveGooglePlaceIdLive(query: PlaceQuery, fetchImpl?: typeof fetch): Promise<string | null> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) throw new GooglePlacesError('GOOGLE_PLACES_API_KEY is not set', 'no_key');
   const doFetch = fetchImpl ?? fetch;
