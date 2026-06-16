@@ -52,6 +52,19 @@ function RankPill({ label }: { label: string }) {
   );
 }
 
+/* 12i — preview tier. NEUTRAL, honest label (no hard-flag amber/red): this hotel is bookable but
+ * not yet review-intelligence-backed. */
+function PreviewBadge() {
+  return (
+    <span
+      title="Bookable now — full review intelligence coming soon"
+      className="inline-flex items-center whitespace-nowrap rounded-pill border border-white/[0.28] bg-white/[0.16] px-3 py-[6px] text-[11px] font-semibold uppercase tracking-[0.06em] text-white backdrop-blur-md"
+    >
+      Preview
+    </span>
+  );
+}
+
 /* CTA buttons mirror .hz-btn from the prototype. */
 function CTAs({
   onSave,
@@ -123,7 +136,10 @@ export function TopPickCard(props: TopPickCardProps) {
         />
         <div className="absolute left-[18px] right-[18px] top-[18px] flex items-start justify-between gap-3">
           <TopPickBadge />
-          {brandNote && <LoyaltyPill note={brandNote} />}
+          <div className="flex items-start gap-2">
+            {props.isPreview && <PreviewBadge />}
+            {brandNote && <LoyaltyPill note={brandNote} />}
+          </div>
         </div>
         <div className="absolute bottom-[22px] left-6 right-6">
           <h2 className="font-serif text-[26px] font-medium leading-[1.1] tracking-[-0.02em] text-white sm:text-[32px]">
@@ -201,7 +217,10 @@ export function StandardCard(props: StandardCardProps) {
         />
         <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-3">
           {rankLabel ? <RankPill label={rankLabel} /> : <span />}
-          {brandNote && <LoyaltyPill note={brandNote} />}
+          <div className="flex items-start gap-2">
+            {props.isPreview && <PreviewBadge />}
+            {brandNote && <LoyaltyPill note={brandNote} />}
+          </div>
         </div>
         <div className="absolute bottom-[18px] left-[22px] right-[22px]">
           <h3 className="font-serif text-[22px] font-medium leading-[1.1] tracking-[-0.02em] text-white">

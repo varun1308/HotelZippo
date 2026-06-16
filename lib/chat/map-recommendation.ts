@@ -19,6 +19,9 @@ export interface HydratedHotel {
   price_tier: string | null;
   star_rating: 3 | 4 | 5 | null;
   images: string[] | null;
+  /** Provenance tier (12i). 'preview' = Claude-proposed + RouteStack-verified, NOT review-intelligence
+   * -backed → the card shows an honest "Preview" badge. Absent/'curated' → no badge. */
+  source?: 'curated' | 'preview' | null;
 }
 
 interface PickLike {
@@ -38,6 +41,7 @@ function hotelDisplay(id: string, name: string, h?: HydratedHotel | null) {
     priceTierLabel: h?.price_tier ? PRICE_TIER_LABELS[h.price_tier] ?? h.price_tier : null,
     starRating: h?.star_rating ?? null,
     heroImageUrl: h?.images?.[0] ?? null,
+    isPreview: h?.source === 'preview',
   };
 }
 

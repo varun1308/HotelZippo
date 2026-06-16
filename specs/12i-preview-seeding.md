@@ -112,8 +112,8 @@ alter table public.hotels
 2. Migration `0013` — `hotels.source` tier column.
 3. `lib/preview/propose.ts` (Claude, injectable model) + tests.
 4. `lib/preview/verify.ts` (RouteStack-verified staging) + tests; guard: no `hotel_intelligence` for preview.
-5. Admin route + `/admin/curation` "Seed preview" button (operator-only flag first).
-6. Recommendation/UI preview-tier framing + neutral badge; flip to user-facing when proven.
+5. ✅ Admin route `POST /api/admin/preview/seed` (operator-gated by `PREVIEW_SEEDING_ENABLED=1`) + `/admin/curation` "Seed preview (Claude + RouteStack)" button (reuses the PR #50 notice UX; reports proposed → verified → dropped).
+6. ✅ Recommendation preview-tier: `hotels.source` threads through `hydrateHotels` → `HydratedHotel.source` → mapper `isPreview` → a neutral **Preview** badge on the card (no hard-flag colors). Phased rollout via the env gate.
 
 ## Tests (15 / 15a)
 
