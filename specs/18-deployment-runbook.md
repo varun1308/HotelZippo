@@ -88,7 +88,8 @@ and the launch-specific decisions. Actual secret **values** never appear in the 
 
 ## Execution sequence
 
-1. **Supabase:** `supabase db push` → verify bucket + RLS.
+1. **Supabase:** `supabase db push` (manual for the launch bootstrap; future migrations via the
+   `db-migrate.yml` Actions button — see "Migrations" below) → verify bucket + RLS.
 2. **Curate prod data** via the live pipeline (cache-banked first; founder-gated; costs credits).
 3. **Vercel preview deploy** → smoke test: Google login round-trip, a chat turn, a RouteStack rate
    lookup against the **prod** endpoint. Confirm `prebuild` guard passed in the build logs.
@@ -96,6 +97,17 @@ and the launch-specific decisions. Actual secret **values** never appear in the 
 5. **Production deploy.** Post-launch checks: dev-login route absent / 403, OAuth works, OTEL traces
    land in Dash0, a real booking deep-link generates.
 6. **(Later)** schedule curation refresh (Vercel Cron or a dedicated worker host).
+
+## Migrations: who applies them, and how
+- **Vercel deploys the app, NOT the database.** The Vercel GitHub integration auto-builds + serves on
+  push to `main`; it never runs `supabase db push`. The schema is a separate pipeline.
+- **First push (launch bootstrap): manual.** `supabase db push` run by a human against the empty prod
+  DB, watching the result (irreversible-DDL risk → eyes on the first one).
+- **Future migrations: GitHub Actions, manual button.** `.github/workflows/db-migrate.yml`
+  (`workflow_dispatch` only — no push/PR trigger). Default is a **dry run**; to apply, set the
+  `confirm` input to the literal `APPLY` (typo-guard). Runs in the `production` GitHub Environment so a
+  required-reviewer gate can be attached later. CLI pinned to 2.84.2 (matches `ci.yml` + local).
+  **Required repo Actions secrets:** `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`.
 
 ## Auth specifics (so redirect config is correct)
 - Sign-in starts client-side with `redirectTo = ${window.location.origin}/auth/callback`

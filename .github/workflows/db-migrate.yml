@@ -1,0 +1,87 @@
+name: DB Migrate (production)
+
+# Applies Supabase migrations to the PRODUCTION database.
+#
+# MANUAL ONLY (workflow_dispatch) — a production database write often can't be cleanly
+# rolled back (a dropped column, a type change), so every prod DDL change is a deliberate,
+# human-in-the-loop action: you click "Run workflow" in the Actions tab. There is NO push/PR
+# trigger by design. App code deploys are handled separately by Vercel's GitHub integration;
+# this workflow ONLY moves the database schema.
+#
+# Default is a DRY RUN (shows what WOULD apply, writes nothing). To actually apply, set the
+# `confirm` input to the literal word `APPLY` — a typo-guard so an accidental run can't mutate prod.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_PROJECT_REF   — the prod project ref (the xxxx in xxxx.supabase.co)
+#   SUPABASE_DB_PASSWORD   — the prod database password
+# The CLI reads SUPABASE_DB_PASSWORD from the env; the password never appears in a command line.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type APPLY to actually push migrations to prod. Anything else = dry-run only.'
+        required: true
+        default: 'dry-run'
+        type: string
+
+concurrency:
+  # Never let two migration runs hit prod at once.
+  group: db-migrate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production   # lets you attach a required-reviewer gate later if desired
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pinned to match ci.yml + local dev (a `latest` CLI once regressed local-Postgres
+          # role/grant init). Bump deliberately after verifying, never auto.
+          version: 2.84.2
+
+      - name: Guard — required secrets present
+        env:
+          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          PW: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          if [ -z "$REF" ] || [ -z "$PW" ]; then
+            echo "::error title=Missing secrets::Set SUPABASE_PROJECT_REF and SUPABASE_DB_PASSWORD in repo Actions secrets before running."
+            exit 1
+          fi
+          echo "Secrets present. Project ref: ${REF:0:6}… (masked)"
+
+      - name: Link to prod project
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
+      - name: Show pending migrations (local vs remote)
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase migration list
+
+      - name: Dry run (always)
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --dry-run
+
+      - name: Apply migrations (only when confirm == APPLY)
+        if: ${{ inputs.confirm == 'APPLY' }}
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          echo "Confirm input = APPLY → pushing migrations to PRODUCTION."
+          supabase db push
+
+      - name: Dry-run notice (when not applying)
+        if: ${{ inputs.confirm != 'APPLY' }}
+        run: |
+          echo "::notice title=Dry run only::confirm='${{ inputs.confirm }}' (not 'APPLY') — nothing was pushed. Re-run with confirm=APPLY to apply."
