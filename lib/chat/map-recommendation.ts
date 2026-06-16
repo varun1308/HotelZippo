@@ -50,12 +50,16 @@ function isError(v: unknown): v is { error: string } {
   return typeof v === 'object' && v !== null && 'error' in v;
 }
 
+/* Handles BOTH the curated assembly success shape AND the 12i-B `preview_recommendations` variant —
+ * both expose `top_pick` (+ `_hotel`) and `other_picks`. A preview top pick has a fixed honest
+ * `verdict` and NO `category_summaries`, so the card skips the category grid and shows the Preview
+ * badge (via `_hotel.source`). Error variants ({error:…}) → null (render conversationally). */
 export function toRecommendationSetProps(assembly: unknown): RecommendationSetProps | null {
   if (!assembly || typeof assembly !== 'object' || isError(assembly)) return null;
   const a = assembly as {
     top_pick?: PickLike & {
       verdict: string;
-      category_summaries: TopPickCardProps['categorySummaries'];
+      category_summaries?: TopPickCardProps['categorySummaries'];
       why_top_pick?: string;
     };
     other_picks?: Array<PickLike & { summary: string }>;

@@ -17,9 +17,9 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/db/server';
-import { runAssembly } from '@/lib/recommendations/run-assembly';
+import { runAssembly, type AssemblyOrPreview } from '@/lib/recommendations/run-assembly';
 import { DESTINATIONS, BUDGET_TIERS } from '@/lib/db/schemas';
-import type { RecommendationAssembly } from '@/lib/contracts/recommendation-assembly';
+import type { RecommendationAssembly, RecommendationSuccess } from '@/lib/contracts/recommendation-assembly';
 import {
   loadFamilyProfile,
   saveFamilyProfile,
@@ -175,16 +175,21 @@ export async function runUpdateProfile(
 }
 
 /** Attach `_hotel` display metadata to each pick (spec 03b card hydration). Single
- *  batched query by hotel_id. Error variants pass through untouched. */
+ *  batched query by hotel_id. Error variants pass through untouched; the PREVIEW variant (12i-B)
+ *  is ALREADY hydrated (it's built from `hotels` rows) so it passes through too. */
 export async function hydrateHotels(
   supabase: SupabaseClient,
-  assembly: RecommendationAssembly,
-): Promise<RecommendationAssembly> {
+  assembly: AssemblyOrPreview,
+): Promise<AssemblyOrPreview> {
+  // Preview recommendations already carry `_hotel`; nothing to hydrate. Error variants: passthrough.
+  if ('result' in assembly && assembly.result === 'preview_recommendations') return assembly;
   if ('error' in assembly) return assembly;
+  // Past the guards this is the curated success shape.
+  const success = assembly as RecommendationSuccess;
 
   const ids = [
-    assembly.top_pick.hotel_id,
-    ...assembly.other_picks.map((p) => p.hotel_id),
+    success.top_pick.hotel_id,
+    ...success.other_picks.map((p) => p.hotel_id),
   ];
   const { data } = await supabase
     .from('hotels')
@@ -198,8 +203,8 @@ export async function hydrateHotels(
   });
 
   return {
-    ...assembly,
-    top_pick: attach(assembly.top_pick),
-    other_picks: assembly.other_picks.map(attach),
+    ...success,
+    top_pick: attach(success.top_pick),
+    other_picks: success.other_picks.map(attach),
   };
 }

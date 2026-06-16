@@ -36,7 +36,13 @@ function fakeClient() {
       return {
         upsert(rows: Array<Record<string, unknown>>) {
           upserts.push({ rows });
-          return Promise.resolve({ error: null, count: rows.length });
+          // The seed now reads ids back via .select('id, name') to cache the RS-id mapping.
+          return {
+            select() {
+              const data = rows.map((r, i) => ({ id: `our-${i}`, name: r.name }));
+              return Promise.resolve({ data, error: null });
+            },
+          };
         },
       };
     },
@@ -44,7 +50,21 @@ function fakeClient() {
   return { client, upserts };
 }
 
-const deps = (fetchImpl: ReturnType<typeof makeMockFetch>['fetchImpl']) => ({ fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE });
+/** A spyable IdCache to assert the RS-id mapping is persisted. */
+function fakeCache() {
+  const saved: Array<{ ourId: string; rsId: string; name: string | null }> = [];
+  const cache = {
+    loadDestination: async () => null,
+    saveDestination: async () => {},
+    loadHotelRsId: async () => null,
+    saveHotelRsId: async (ourId: string, rsId: string, name: string | null) => {
+      saved.push({ ourId, rsId, name });
+    },
+  };
+  return { cache, saved };
+}
+
+const deps = (fetchImpl: ReturnType<typeof makeMockFetch>['fetchImpl'], cache?: ReturnType<typeof fakeCache>['cache']) => ({ fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE, cache });
 
 describe('seedPreviewFromRouteStack', () => {
   it('stages RouteStack inventory as source=preview with grounded hero images', async () => {
@@ -65,6 +85,16 @@ describe('seedPreviewFromRouteStack', () => {
     // 4★ stays 4; 3★ stays 3 (both valid); price_tier is mid-range (not 5★).
     expect(rows.find((r) => r.name === 'Alassari Plantation')?.star_rating).toBe(4);
     expect(rows.every((r) => r.price_tier === 'mid-range')).toBe(true);
+  });
+
+  it('caches the RouteStack id↔our-id mapping when a cache is provided (booking optimization)', async () => {
+    const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': SEARCH, '/mcp/hotel/get-hotel-details-and-rates': DETAILS });
+    const { client } = fakeClient();
+    const { cache, saved } = fakeCache();
+    await seedPreviewFromRouteStack(client, 'Bali', deps(fetchImpl, cache), { dates: DATES });
+    // Each staged hotel's RS id is mapped to our hotels.id.
+    expect(saved.map((s) => s.rsId).sort()).toEqual(['RS-1', 'RS-2']);
+    expect(saved.every((s) => s.ourId.startsWith('our-'))).toBe(true);
   });
 
   it('respects the limit (only stages the top N)', async () => {

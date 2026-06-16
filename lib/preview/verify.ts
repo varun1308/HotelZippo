@@ -157,8 +157,21 @@ export async function seedPreviewFromRouteStack(
     images: h.heroImage ? [h.heroImage] : null, // RouteStack's grounded hero; null → card placeholder (12g)
     source: 'preview' as const,
   }));
-  const { error, count } = await client.from('hotels').upsert(rows, { onConflict: 'name,destination', count: 'exact' });
+  // Upsert + read back our hotels.id so we can cache the RouteStack id↔our-id mapping (lets the FIRST
+  // booking of a preview hotel skip the re-search; booking still works without it via name-match).
+  const { data, error } = await client
+    .from('hotels')
+    .upsert(rows, { onConflict: 'name,destination' })
+    .select('id, name');
   if (error) throw new Error(`preview upsert failed: ${error.message}`);
+  const idByName = new Map((data ?? []).map((r) => [(r as { id: string; name: string }).name, (r as { id: string; name: string }).id]));
+  if (deps.cache) {
+    for (const h of hotels) {
+      const ourId = idByName.get(h.name);
+      if (ourId) await deps.cache.saveHotelRsId(ourId, h.rsHotelId, h.name).catch(() => {}); // best-effort
+    }
+  }
+  const count = data?.length ?? rows.length;
 
   return {
     found: hotels.length,
