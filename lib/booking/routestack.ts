@@ -386,6 +386,81 @@ export function listSearchHotels(searchResult: unknown): Array<{ id: string; nam
   return out;
 }
 
+/** Pull the grounded hero image URL from a get-hotel-details-and-rates result
+ * (`result.content.heroImage`, else the first `content.images[].links[].url`). Real CDN photo for
+ * that exact hotel — never fabricated. Returns null if none. */
+function extractHeroImage(detailsResult: unknown): string | null {
+  const content = (detailsResult as Record<string, unknown> | undefined)?.content as Record<string, unknown> | undefined;
+  if (!content) return null;
+  if (typeof content.heroImage === 'string' && content.heroImage.trim()) return content.heroImage.trim();
+  const images = content.images;
+  if (Array.isArray(images)) {
+    for (const img of images) {
+      const links = (img as Record<string, unknown>)?.links;
+      if (Array.isArray(links)) {
+        for (const l of links) {
+          const url = (l as Record<string, unknown>)?.url;
+          if (typeof url === 'string' && url.trim()) return url.trim();
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** A real, bookable RouteStack hotel ready to stage as a preview row (12i — RouteStack-first flow). */
+export interface RouteStackPreviewHotel {
+  rsHotelId: string;
+  name: string;
+  starRating: number | null;
+  heroImage: string | null;
+}
+
+/** RouteStack-FIRST preview seeding (12i, no-Claude flow): resolve a destination, list its REAL
+ * bookable inventory, take the top `limit`, and fetch each hotel's grounded hero image via
+ * get-hotel-details-and-rates. Everything returned is real + bookable by construction (it came from
+ * RouteStack) — no LLM, no fabricated facts, no hallucinated images. Image fetch is best-effort per
+ * hotel (a failed details call → null image → the card placeholder, never a broken img). */
+export async function listPreviewHotelsFromRouteStack(
+  destination: string,
+  deps: BookingDeps,
+  opts: { limit?: number; dates?: { checkIn: string; checkOut: string }; party?: SearchAndRatesInput['party'] } = {},
+): Promise<RouteStackPreviewHotel[]> {
+  const limit = opts.limit ?? 8;
+  const party = opts.party ?? { adults: 2, children: 0, childAges: [], rooms: 1 };
+  const dates = opts.dates ?? defaultPreviewDates();
+  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce });
+  const rooms = buildRoomsOccupancy(party);
+
+  const { searchResult } = await searchHotelsInDestination(destination, party, dates, deps);
+  const handles = sessionHandles(searchResult);
+  const inventory = listSearchHotels(searchResult).filter((h) => h.id && h.name).slice(0, limit);
+
+  const out: RouteStackPreviewHotel[] = [];
+  for (const h of inventory) {
+    let heroImage: string | null = null;
+    if (handles) {
+      try {
+        const det = await tracedCall(deps, 'get_hotel_details_and_rates', '/mcp/hotel/get-hotel-details-and-rates', jwt, {
+          hotelId: h.id, hotelName: h.name, token: handles.token, correlationId: handles.correlationId,
+          checkIn: dates.checkIn, checkOut: dates.checkOut, rooms,
+        }, { hotel_id: h.id });
+        heroImage = extractHeroImage(det.result);
+      } catch {
+        heroImage = null; // best-effort — a failed details call just means no image (placeholder)
+      }
+    }
+    out.push({ rsHotelId: h.id, name: h.name, starRating: h.starRating ?? null, heroImage });
+  }
+  return out;
+}
+
+function defaultPreviewDates(): { checkIn: string; checkOut: string } {
+  const base = Date.now();
+  const d = (n: number) => new Date(base + n * 86400000).toISOString().slice(0, 10);
+  return { checkIn: d(30), checkOut: d(33) };
+}
+
 export async function searchAndRates(
   input: SearchAndRatesInput,
   deps: BookingDeps,

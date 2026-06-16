@@ -12,7 +12,12 @@
  * No `import 'server-only'`: server-side by construction (service client + RouteStack creds), reached
  * by the admin route + a tsx maintenance path (the guard would break the latter). */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { searchHotelsInDestination, listSearchHotels, type BookingDeps } from '@/lib/booking/routestack';
+import {
+  searchHotelsInDestination,
+  listSearchHotels,
+  listPreviewHotelsFromRouteStack,
+  type BookingDeps,
+} from '@/lib/booking/routestack';
 import type { ProposedHotel } from './propose';
 
 /** Default party/dates for a verification search — sensible near-future window (availability is
@@ -115,6 +120,51 @@ export async function verifyAndStage(
   }
 
   return { proposed: proposals.length, verified, staged, dropped };
+}
+
+export interface SeedFromRouteStackResult {
+  /** how many real hotels RouteStack returned + we considered */
+  found: number;
+  staged: number;
+  hotels: Array<{ name: string; starRating: number | null; priceTier: string; hasImage: boolean }>;
+}
+
+/** RouteStack-FIRST preview seeding (12i, no-Claude flow — the DEFAULT going forward).
+ *
+ * Instead of asking an LLM to name hotels (which proposes famous resorts that may not be in
+ * RouteStack's inventory → 0 verified), we take the hotels RouteStack ACTUALLY returns for the
+ * destination and stage them. Every row is real + bookable by construction. Images are RouteStack's
+ * own grounded `content.heroImage` (NOT Claude — LLMs hallucinate image URLs). No `hotel_intelligence`
+ * row; honest `source='preview'` tier. */
+export async function seedPreviewFromRouteStack(
+  client: SupabaseClient,
+  destination: string,
+  deps: BookingDeps,
+  opts: VerifyOptions & { limit?: number } = {},
+): Promise<SeedFromRouteStackResult> {
+  const hotels = await listPreviewHotelsFromRouteStack(destination, deps, {
+    limit: opts.limit,
+    dates: opts.dates,
+    party: opts.party,
+  });
+  if (hotels.length === 0) return { found: 0, staged: 0, hotels: [] };
+
+  const rows = hotels.map((h) => ({
+    name: h.name,
+    destination,
+    star_rating: h.starRating === 3 || h.starRating === 4 || h.starRating === 5 ? h.starRating : null,
+    price_tier: tierFromStar(h.starRating),
+    images: h.heroImage ? [h.heroImage] : null, // RouteStack's grounded hero; null → card placeholder (12g)
+    source: 'preview' as const,
+  }));
+  const { error, count } = await client.from('hotels').upsert(rows, { onConflict: 'name,destination', count: 'exact' });
+  if (error) throw new Error(`preview upsert failed: ${error.message}`);
+
+  return {
+    found: hotels.length,
+    staged: count ?? rows.length,
+    hotels: hotels.map((h) => ({ name: h.name, starRating: h.starRating, priceTier: tierFromStar(h.starRating), hasImage: !!h.heroImage })),
+  };
 }
 
 /** +30 / +33 day window (deterministic-ish; tests inject explicit dates). */
