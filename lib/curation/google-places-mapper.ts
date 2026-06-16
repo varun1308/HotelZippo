@@ -46,3 +46,23 @@ export function mapTextSearchResponse(json: unknown): string | null {
   const id = (first as Record<string, unknown>).id;
   return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
 }
+
+/** Build the Text Search body for resolving a CITY/DESTINATION to coordinates (10c destination
+ * disambiguation, 12i). No `includedType: lodging` (we want the locality, not a hotel) and no
+ * locationBias (we have no anchor yet — this IS the anchor lookup). */
+export function buildCitySearchBody(query: string): Record<string, unknown> {
+  return { textQuery: query.trim(), pageSize: 1 };
+}
+
+/** Extract `{ lat, long }` from a Text Search response whose field mask requested
+ * `places.location`, or null (empty / malformed). Google returns `places[0].location.{latitude,
+ * longitude}`. */
+export function mapCityLocationResponse(json: unknown): { lat: number; long: number } | null {
+  if (!json || typeof json !== 'object') return null;
+  const places = (json as Record<string, unknown>).places;
+  if (!Array.isArray(places) || places.length === 0) return null;
+  const loc = (places[0] as Record<string, unknown>)?.location as Record<string, unknown> | undefined;
+  const lat = loc?.latitude;
+  const long = loc?.longitude;
+  return typeof lat === 'number' && typeof long === 'number' ? { lat, long } : null;
+}

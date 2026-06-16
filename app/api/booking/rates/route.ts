@@ -12,6 +12,7 @@ import { createServiceClient } from '@/lib/db/server';
 import { searchAndRates } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
 import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
+import { resolveCityLocation } from '@/lib/curation/google-places';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { BookingError } from '@/lib/booking/types';
 import type { RatesRequest, RatesResponse, BookingApiError } from '@/lib/booking/api-contract';
@@ -54,7 +55,16 @@ export async function POST(req: Request): Promise<Response> {
     } catch {
       cache = undefined;
     }
-    const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch(), cache });
+    // Google-Places geocoder disambiguates the RouteStack destination (10c). Wrapped to warm-fail:
+    // no GOOGLE_PLACES_API_KEY / any error → null → searchAndRates uses the legacy first-valid pick.
+    const geocode = async (q: string) => {
+      try {
+        return await resolveCityLocation(q);
+      } catch {
+        return null;
+      }
+    };
+    const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch(), cache, geocode });
     const payload: RatesResponse = result;
     return Response.json(payload, { status: 200 });
   } catch (e) {

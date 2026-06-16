@@ -9,7 +9,14 @@
  * server-side by construction (reads a secret key) and is imported only by the admin curation route
  * + lib/curation/resolve-places.ts — never by a client component. */
 import { trace, SpanStatusCode } from '@opentelemetry/api';
-import { buildTextSearchBody, mapTextSearchResponse, hasGeo, type PlaceQuery } from './google-places-mapper';
+import {
+  buildTextSearchBody,
+  mapTextSearchResponse,
+  hasGeo,
+  buildCitySearchBody,
+  mapCityLocationResponse,
+  type PlaceQuery,
+} from './google-places-mapper';
 import { withActorCache } from '@/lib/dev/actor-cache';
 
 const SEARCH_TEXT_URL = 'https://places.googleapis.com/v1/places:searchText';
@@ -45,6 +52,62 @@ export async function resolveGooglePlaceId(
   return withActorCache('places', 'searchText', query, () => resolveGooglePlaceIdLive(query, fetchImpl)) as Promise<
     string | null
   >;
+}
+
+/** Resolve a destination/city name → authoritative `{ lat, long }` via Text Search (New), or null
+ * when there's no match. Used to DISAMBIGUATE which RouteStack `search-destinations` candidate to use
+ * (10c / 12i): RouteStack returns several "Bali"s; we pick the one nearest this anchor. Throws
+ * GooglePlacesError('no_key') when the key is absent (caller treats as "skip" → warm-fail to the
+ * legacy first-valid pick). `places.location` field mask (cheap). Injectable `fetchImpl` for tests. */
+export async function resolveCityLocation(
+  query: string,
+  fetchImpl?: typeof fetch,
+): Promise<{ lat: number; long: number } | null> {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key) throw new GooglePlacesError('GOOGLE_PLACES_API_KEY is not set', 'no_key');
+  const doFetch = fetchImpl ?? fetch;
+  const tracer = trace.getTracer('hotelzippo');
+  return tracer.startActiveSpan('google.places.city_location', async (span) => {
+    try {
+      let res: Response;
+      try {
+        res = await doFetch(SEARCH_TEXT_URL, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'X-Goog-Api-Key': key,
+            'X-Goog-FieldMask': 'places.location',
+          },
+          body: JSON.stringify(buildCitySearchBody(query)),
+        });
+      } catch (e) {
+        throw new GooglePlacesError(`places request failed: ${e instanceof Error ? e.message : String(e)}`, 'http_error');
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new GooglePlacesError(`places returned ${res.status}: ${snippet(body)}`, 'http_error', res.status);
+      }
+      let json: unknown;
+      try {
+        json = await res.json();
+      } catch (e) {
+        throw new GooglePlacesError(
+          `places response was not valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+          'bad_response',
+        );
+      }
+      const loc = mapCityLocationResponse(json);
+      span.setAttribute('found', loc !== null);
+      span.setStatus({ code: SpanStatusCode.OK });
+      return loc;
+    } catch (e) {
+      span.recordException(e as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw e;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 async function resolveGooglePlaceIdLive(query: PlaceQuery, fetchImpl?: typeof fetch): Promise<string | null> {

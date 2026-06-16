@@ -56,6 +56,10 @@ export interface BookingDeps {
   now?: () => number;
   nonce?: () => string;
   cache?: IdCache;
+  /** OPTIONAL destination geocoder (Google Places, 10c/12i). When present, its authoritative lat/long
+   * disambiguates which RouteStack search-destinations candidate to use (nearest wins). When absent or
+   * it throws/returns null, resolution warm-fails to the legacy first-valid pick — never blocks a booking. */
+  geocode?: (query: string) => Promise<{ lat: number; long: number } | null>;
 }
 
 const TRACER = 'hotelzippo';
@@ -185,6 +189,18 @@ async function cacheGet<T>(p: Promise<T | null> | undefined): Promise<T | null> 
   }
 }
 
+/** Best-effort geocode: resolve the destination anchor, swallowing any error/absence to null.
+ * Resolution must never break a booking — a failed geocode just means we use the legacy first-valid
+ * candidate pick (10c). */
+async function geocodeAnchor(deps: BookingDeps, destination: string): Promise<{ lat: number; long: number } | null> {
+  if (!deps.geocode) return null;
+  try {
+    return await deps.geocode(destination);
+  } catch {
+    return null;
+  }
+}
+
 /** Best-effort cache WRITE: swallow any error. A failed write just means we don't cache this time. */
 async function cacheRun(p: Promise<void> | undefined): Promise<void> {
   if (!p) return;
@@ -204,8 +220,29 @@ function matchHotelById(result: unknown, rsHotelId: string): { id: string; name:
   return null;
 }
 
-function pickDestination(result: unknown): DestinationHit | null {
+/** Great-circle distance (km) — used only to rank destination candidates, so a cheap approximation
+ * is fine. */
+function haversineKm(aLat: number, aLong: number, bLat: number, bLong: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLong = toRad(bLong - aLong);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLong / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+/** Pick the RouteStack destination candidate to use.
+ *
+ * RouteStack returns several geo-valid candidates for a free-text query (e.g. "Bali" → the real Bali
+ * State AND a Fiji islet). Picking the FIRST one is a bug (live-probe-confirmed 2026-06-16: "Bali"
+ * resolved to the Fiji islet → 0 hotels). When an `anchor` (authoritative lat/long from Google
+ * Places, 10c/12i) is provided, pick the candidate NEAREST it; otherwise fall back to the legacy
+ * first-valid behavior (warm-fail when Google is unavailable). */
+function pickDestination(result: unknown, anchor?: { lat: number; long: number } | null): DestinationHit | null {
   const arr = Array.isArray(result) ? result : [];
+  const valid: DestinationHit[] = [];
   for (const item of arr) {
     if (item && typeof item === 'object') {
       const r = item as Record<string, unknown>;
@@ -214,11 +251,17 @@ function pickDestination(result: unknown): DestinationHit | null {
       const lat = coords.lat;
       const long = coords.long;
       if (typeof id === 'string' && typeof lat === 'number' && typeof long === 'number') {
-        return { id, lat, long, type: typeof r.type === 'string' ? r.type : 'City' };
+        valid.push({ id, lat, long, type: typeof r.type === 'string' ? r.type : 'City' });
       }
     }
   }
-  return null;
+  if (valid.length === 0) return null;
+  if (!anchor) return valid[0]; // legacy behavior (no anchor → first valid)
+  return valid.reduce((best, c) =>
+    haversineKm(anchor.lat, anchor.long, c.lat, c.long) < haversineKm(anchor.lat, anchor.long, best.lat, best.long)
+      ? c
+      : best,
+  );
 }
 
 /** Find the chosen hotel by NAME within search-hotels results (RouteStack search is
@@ -286,7 +329,10 @@ export async function searchAndRates(
       query: input.destination,
       type: 'DESTINATION',
     }, dateAttrs);
-    const resolved = pickDestination(destEnv.result);
+    // Google-Places anchor disambiguates which candidate to use (RouteStack returns several "Bali"s).
+    // Best-effort: any failure (no key, network, no match) → null → legacy first-valid pick. Never blocks.
+    const anchor = await geocodeAnchor(deps, input.destination);
+    const resolved = pickDestination(destEnv.result, anchor);
     if (!resolved) throw new BookingError('not-found', `Could not resolve destination "${input.destination}"`);
     dest = resolved;
     await cacheRun(deps.cache?.saveDestination(input.destination, {
