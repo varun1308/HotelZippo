@@ -91,7 +91,10 @@ jobs:
         if: steps.detect.outputs.has_db == 'true'
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned (not `latest`): a newer CLI changed local-Postgres role/grant init and broke
+          # service-role queries in CI ("permission denied for table hotels"). 2.84.2 is the
+          # known-good version that matches local dev. Bump deliberately after verifying, never auto.
+          version: 2.84.2
 
       - name: Install deps
         if: steps.detect.outputs.has_db == 'true'
@@ -133,7 +136,10 @@ jobs:
         if: steps.detect.outputs.has_e2e == 'true'
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned (not `latest`): a newer CLI changed local-Postgres role/grant init and broke
+          # service-role queries in CI ("permission denied for table hotels"). 2.84.2 is the
+          # known-good version that matches local dev. Bump deliberately after verifying, never auto.
+          version: 2.84.2
 
       - name: Install
         if: steps.detect.outputs.has_e2e == 'true'
