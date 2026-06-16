@@ -67,6 +67,32 @@ describe('toRecommendationSetProps', () => {
     expect(props.topPick.isPreview).toBe(true);
   });
 
+  it('maps a preview_recommendations variant → cards (verdict, no category grid, isPreview)', () => {
+    const preview = {
+      result: 'preview_recommendations',
+      destination: 'Bali',
+      top_pick: {
+        hotel_id: 'pv-1',
+        hotel_name: 'Alassari Plantation',
+        hard_flags: [],
+        brand_note: null,
+        verdict: 'Bookable now — full family review intelligence is on the way for this destination.',
+        why_top_pick: 'preview',
+        _hotel: { destination: 'Bali', area: null, price_tier: 'mid-range', star_rating: 4 as const, images: ['x'], source: 'preview' as const },
+      },
+      other_picks: [
+        { hotel_id: 'pv-2', hotel_name: 'Saridevi Ecolodge', hard_flags: [], brand_note: null, summary: 'A bookable option — full review intelligence coming soon.', _hotel: { destination: 'Bali', area: null, price_tier: 'mid-range', star_rating: 3 as const, images: null, source: 'preview' as const } },
+      ],
+    };
+    const props = toRecommendationSetProps(preview)!;
+    expect(props.topPick.hotelName).toBe('Alassari Plantation');
+    expect(props.topPick.isPreview).toBe(true);
+    expect(props.topPick.verdict).toMatch(/bookable now/i);
+    expect(props.topPick.categorySummaries).toBeUndefined(); // never fabricate a category grid
+    expect(props.topPick.hardFlags).toEqual([]);
+    expect(props.otherPicks[0].isPreview).toBe(true);
+  });
+
   it('returns null for an error variant (no cards)', () => {
     expect(toRecommendationSetProps({ error: 'budget_mismatch', reason: 'x', available_tiers: [] })).toBeNull();
     expect(toRecommendationSetProps({ error: 'no_eligible_hotels', reason: 'x' })).toBeNull();

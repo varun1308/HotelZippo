@@ -156,7 +156,8 @@ export function TopPickCard(props: TopPickCardProps) {
 
       <div className="flex flex-col gap-[22px] p-[18px] sm:p-6">
         <Verdict label="Why this one" text={verdict} />
-        <CategoryGrid summaries={categorySummaries} />
+        {/* Preview top picks (12i) carry no category summaries — skip the grid, never fabricate it. */}
+        {categorySummaries && <CategoryGrid summaries={categorySummaries} />}
         <CTAs onSave={onSave} onProceed={onProceed} saved={saved} />
       </div>
     </article>

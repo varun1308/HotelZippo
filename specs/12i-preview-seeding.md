@@ -141,3 +141,106 @@ alter table public.hotels
 - `verify` with fake RouteStack transport: hit kept · miss dropped · RouteStack-down → warm-fail.
 - Integration: seed → `hotels` rows are `source='preview'`; **guard** — no `hotel_intelligence` row for preview.
 - Destination-resolution fix (10c): fake Google + fake candidates → nearest (correct) wins; no-Google → graceful fallback; "Bali" picks −8.34 over −17.5.
+
+---
+
+# 12i-B · Surfacing preview hotels so they BOOK (BUILT — 2026-06-17)
+
+**Problem found in prod:** seeding works, but a preview-only destination (Bali) still tells the user
+"not covered." Preview hotels are **invisible to the recommendation engine** — the consumption query
+(`lib/review-intelligence/query.ts`) does `from('hotel_intelligence').select('…hotels!inner(*)')`, an
+**INNER JOIN on `hotel_intelligence`**; preview hotels have no intelligence row → 0 candidates →
+`runAssembly` returns `no_eligible_hotels` → the agent says "no coverage." So nothing ever puts a
+preview hotel on a card, and **booking can't start because booking starts from a card.**
+
+**Goal (scoped):** make the **booking flow work for preview hotels**. NOT to fake review-intelligence
+recommendations for them.
+
+## What is NOT the gap (verified by trace)
+
+The booking flow needs only `{hotelId, hotelName, destination, party, dates}` and matches RouteStack by
+name (`searchAndRates` → `matchHotelByName`). The card→booking wiring
+(`ShortlistableRecommendationSet.toBookingHotel`) needs only `hotelId`+`hotelName`+`destination`. The
+`PreviewBadge` already renders. `hydrateHotels` already selects `source` and does NOT filter by it.
+**So everything downstream of "a preview card exists with its hotelId" already works.** The only gap is
+**surfacing** — producing that card.
+
+## The gap (single root cause)
+
+The ONLY path to a card is `assemble_recommendations` → `runAssembly` → `queryCandidates` (intelligence
+INNER JOIN) → LLM assembly (which REQUIRES per-hotel intelligence fields: verdict, category_summaries,
+hard_flags, supporting_phrases — enforced by the Zod contract `recommendation-assembly.ts`). A preview
+hotel can satisfy none of that, by design.
+
+## Chosen approach — a SEPARATE preview path, NO LLM assembly
+
+Do **not** try to make the intelligence-assembly accept null fields (pollutes the contract + the prompt
+would fabricate the "family signal" language we forbid). Instead, a **lightweight preview path** that
+emits cards directly from `hotels`, bypassing the LLM:
+
+1. **`lib/preview/preview-recommendations.ts` (new)** — `previewRecommendations(client, destination, {budgetTier?})`:
+   `select * from hotels where destination=? and source='preview'` (+ optional price_tier pre-filter),
+   map to a **card shape directly** (name, destination, star, price tier label, hero image, `isPreview:true`),
+   **no verdict / no hard_flags / no category_summaries**. Returns a `RecommendationSet`-compatible
+   payload the existing cards render (top pick = first, others = rest), OR a `no_preview_hotels` marker.
+2. **`runAssembly` fallback** — when `queryCandidates` yields 0 (the current `no_eligible_hotels` branch),
+   check for preview hotels: if present, return a **`preview_recommendations` result variant** instead of
+   the error. The agent tool forwards it; `hydrateHotels` already carries `source`.
+3. **Card contract** — preview cards omit the intelligence-only fields. `StandardCardProps`/`TopPickCardProps`
+   already make verdict/category_summaries OPTIONAL (per the existing 03b note), so a thin card is valid.
+   The mapper marks `isPreview` (already wired, PR #54).
+4. **System prompt (08b-1)** — add a short rule: *"For a destination with only preview hotels, present
+   them honestly as bookable previews — name + 'bookable now, full review intelligence coming soon' — and
+   do NOT invent reviews/flags/verdicts. Proceed-to-book still works."* Keeps the no-fabrication guarantee.
+5. **Persist RouteStack id on seed (optimization, not a blocker)** — `seedPreviewFromRouteStack` should
+   `saveHotelRsId` so the first booking skips the re-search. Booking works without it (name-match), so
+   this is P2.
+
+## Why this is the honest, minimal design
+
+- Curated (intelligence-backed) path is **untouched** — the consumption contract 08a-5 stays pure.
+- Preview path produces **only what's grounded** (real name/star/price/image from RouteStack) — no LLM,
+  so zero fabrication risk; the "Preview" badge makes the tier explicit.
+- Booking works the instant a preview card exists, because the booking flow never needed intelligence.
+
+## Gaps → solutions summary
+
+| Gap (file:line) | Blocks booking? | Solution |
+|---|---|---|
+| `query.ts` intelligence INNER JOIN | YES | New preview query (separate fn, not touching this one) |
+| `run-assembly.ts` `no_eligible_hotels` on 0 | YES | Fallback to preview path when preview hotels exist |
+| assembly prompt + Zod require intelligence | YES (for that path) | Bypass LLM assembly entirely for preview |
+| system prompt "no coverage" framing | INDIRECT | Add preview-presentation rule (08b-1) |
+| card render + booking wiring | NO | already preview-ready (PR #54) |
+| `verify.ts` no `saveHotelRsId` | NO (optimization) | add saveHotelRsId (P2) |
+
+## Out of scope (this plan)
+
+- No review-intelligence-style verdicts/hard-flags for preview hotels (they have no reviews — that's the point).
+- No mixing preview + curated in one recommendation set (a destination is either curated or preview, per current data).
+- `/admin` auth gate — tracked separately as a launch risk (still applies before enabling seeding publicly).
+
+## Decisions locked (2026-06-17, founder)
+
+- **No-LLM preview cards** — thin card (name / star / price tier / RouteStack hero image + "Preview"
+  badge), NO prose verdict, NO hard-flags, NO category summaries. Zero fabrication surface.
+- **A destination is either curated OR preview** in one recommendation set — never mixed (matches the
+  data; a destination has intelligence-backed hotels *or* preview hotels, not both).
+- **Single PR** — all of the below ships in one PR (not phased), built spec-first.
+
+## Build plan (ONE PR)
+
+1. `lib/preview/preview-recommendations.ts` + unit tests (fake client → cards from preview rows; empty
+   → `no_preview_hotels`; budget pre-filter respected).
+2. `run-assembly` fallback + result variant + tests (0 intelligence + preview present → preview result;
+   neither → existing `no_eligible_hotels` error).
+3. Agent tool/result threading + `map-recommendation` handles the preview result variant + tests.
+4. System prompt rule (08b-1) + prompt-contract test (preview-presentation; no fabrication).
+5. `saveHotelRsId` on seed (the booking-id optimization — folded into the same PR).
+6. E2E (15a): preview-only destination → card with Preview badge → Proceed-to-book reaches the stub.
+
+## Tests
+
+- `previewRecommendations`: returns cards for preview rows (no intelligence fields); empty → `no_preview_hotels`; budget pre-filter respected.
+- `run-assembly`: destination with 0 intelligence + preview hotels → preview result (not error); 0 of both → `no_eligible_hotels`.
+- E2E (15a): a preview-only destination → a card renders with the Preview badge → Proceed-to-book reaches the booking stub. (Closes the loop the prod bug exposed.)

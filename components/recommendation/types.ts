@@ -63,8 +63,10 @@ interface CardBase extends HotelDisplay {
 export interface TopPickCardProps extends CardBase {
   /** assembly `top_pick.verdict` — the serif italic "Why this one" callout. */
   verdict: TopPick['verdict'];
-  /** assembly `top_pick.category_summaries` — one sentence per category. */
-  categorySummaries: CategorySummaries;
+  /** assembly `top_pick.category_summaries` — one sentence per category. OPTIONAL: a PREVIEW top pick
+   *  (12i — no review intelligence) omits it, and the card skips the category grid entirely (it must
+   *  never show fabricated category text). */
+  categorySummaries?: CategorySummaries;
   /** assembly `top_pick.why_top_pick`. Reserved for future use / a11y. */
   whyTopPick?: TopPick['why_top_pick'];
   /** Controlled shortlist membership — when set, the Save button reflects it

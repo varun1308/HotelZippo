@@ -6,8 +6,10 @@
  *           low_confidence, never touches raw_reviews.
  * Step (b): assembly (08b-2) — validated against the contract; malformed → throws.
  *
- * Returns the assembly JSON (success or {error} variant), OR a no_eligible_hotels
- * error object when the query yields nothing. Server-side only. */
+ * Returns the assembly JSON (success or {error} variant). When there's no review intelligence for the
+ * destination, it falls back to PREVIEW recommendations (12i-B) if `source='preview'` hotels exist —
+ * so a preview-only destination (e.g. Bali) can still surface bookable cards — else `no_eligible_hotels`.
+ * Server-side only. */
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { queryCandidates, type QueryInput } from '@/lib/review-intelligence/query';
@@ -16,6 +18,13 @@ import {
   type AssembleDeps,
 } from '@/lib/recommendations/assemble';
 import type { RecommendationAssembly } from '@/lib/contracts/recommendation-assembly';
+import {
+  previewRecommendations,
+  type PreviewRecommendations,
+} from '@/lib/preview/preview-recommendations';
+
+/** runAssembly returns a normal assembly result OR the preview variant (12i-B). */
+export type AssemblyOrPreview = RecommendationAssembly | PreviewRecommendations;
 
 /** Resolved family_profile + trip_brief (the agent/route pass these through). */
 export interface RunAssemblyInput {
@@ -31,7 +40,7 @@ export async function runAssembly(
   supabase: SupabaseClient,
   input: RunAssemblyInput,
   deps?: AssembleDeps,
-): Promise<RecommendationAssembly> {
+): Promise<AssemblyOrPreview> {
   const queryInput: QueryInput = {
     destination: input.trip_brief.destination,
     evaluateOnly: input.trip_brief.evaluate_only ?? false,
@@ -42,6 +51,12 @@ export async function runAssembly(
   const candidates = await queryCandidates(supabase, queryInput);
 
   if (candidates.length === 0) {
+    // No review intelligence for this destination. Before giving up, check for PREVIEW hotels (12i-B):
+    // a preview-only destination should still surface bookable cards (no LLM, no fabricated reviews).
+    const preview = await previewRecommendations(supabase, input.trip_brief.destination, {
+      budgetTier: queryInput.budgetTier,
+    });
+    if (preview.result === 'preview_recommendations') return preview;
     return {
       error: 'no_eligible_hotels',
       reason:
