@@ -29,11 +29,15 @@ describe('rooms/rates mapper against the canonical fixture', () => {
   });
 
   it('resolves the descriptive fields the picker shows (when present in the payload)', () => {
-    // At least one option should carry a price + currency and a board basis — proving the
-    // alias probing reaches the rate nodes. (Tolerant: not every option needs every field.)
+    // At least one option should carry a price + board basis + bed + refundability — proving the
+    // alias probing reaches the live rate nodes (availability.groups[].rooms[]). (Tolerant: not
+    // every option needs every field.) NOTE: currency is intentionally NOT asserted — the live
+    // RouteStack rate node carries no per-option currency code (only a `currencyrate` multiplier at
+    // the availability level); the booking currency is threaded from the REQUEST (input.currency),
+    // not extracted from the response. See lib/booking/rates.ts.
     expect(options.some((o) => typeof o.price === 'number')).toBe(true);
-    expect(options.some((o) => typeof o.currency === 'string')).toBe(true);
     expect(options.some((o) => typeof o.board === 'string')).toBe(true);
+    expect(options.some((o) => typeof o.bed === 'string')).toBe(true);
     expect(options.some((o) => o.freeCancellation === true)).toBe(true);
   });
 

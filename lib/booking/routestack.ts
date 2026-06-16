@@ -277,10 +277,14 @@ export async function searchAndRates(
     rooms,
   }, dateAttrs);
 
-  const options = mapRoomRateOptions(ratesEnv.result);
-  if (options.length === 0) {
+  const mapped = mapRoomRateOptions(ratesEnv.result);
+  if (mapped.length === 0) {
     throw new BookingError('no-availability', `No bookable rooms returned for "${match.name}"`);
   }
+  // The live rate node carries no per-option currency code (only a `currencyrate` multiplier), so
+  // stamp the REQUEST currency onto any option the mapper couldn't resolve one for — the picker
+  // needs a currency to render the price.
+  const options = mapped.map((o) => (o.currency ? o : { ...o, currency }));
 
   return {
     hotelId: match.id,
