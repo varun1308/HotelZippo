@@ -19,8 +19,12 @@
  * (204 no-availability, 5148 offer-expired) to warm BookingError kinds.
  *
  * The HTTP transport is INJECTABLE (RouteStackFetch): mock fixtures in tests / key-free CI,
- * a real fetch client in dev/live (Slice C). Server-side only. */
-import 'server-only';
+ * a real fetch client in dev/live (Slice C).
+ *
+ * No `import 'server-only'`: like ./auth, ./transport and lib/curation/google-places, this is also
+ * reached from standalone tsx dev/maintenance scripts (the guard throws there). Server-side by
+ * construction (RouteStack creds) and imported only by API routes + server libs — never a client
+ * component (verified: all importers are server-side). */
 import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
 import { getPartnerToken, type RouteStackFetch } from './auth';
 import { buildRoomsOccupancy } from './party';
