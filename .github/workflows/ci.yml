@@ -1,9 +1,19 @@
 name: CI
 
-# The "checks pass" half of the merge gate. Required on every PR to main.
-# Steps are guarded so this passes on the pre-scaffold baseline (no package.json yet)
-# and enforces typecheck/lint/test/build once the Next.js app exists. The integration
-# job boots a local Supabase stack so DB schema + RLS tests run for real (Phase 1+).
+# The "checks pass" half of the merge gate.
+#
+# COST/TIME OPTIMISATION (conservative path filtering):
+#   - On a PULL REQUEST, a `changes` router job (dorny/paths-filter) decides which heavy jobs
+#     are RELEVANT to what the PR touched. A docs/specs/workflow-only PR skips the heavy jobs and
+#     finishes in seconds; a code/db/e2e change runs exactly the jobs it affects.
+#   - On PUSH TO MAIN, ALL jobs run UNCONDITIONALLY (the `changes` filters are forced true), so the
+#     full suite always gates main before any release — path filtering optimises PR time, never the
+#     main/release gate. This is the robustness anchor.
+#   - Job-level `if:` (not trigger-level `paths:`) is used deliberately: a skipped JOB reports as
+#     success, so a future "required check" (if branch protection is ever enabled) is never left
+#     pending. Conservative globs err toward RUNNING (any app/lib/test/db touch runs its job).
+#
+# Steps stay guarded so this also passes on the pre-scaffold baseline (no package.json yet).
 
 on:
   pull_request:
@@ -19,7 +29,72 @@ permissions:
   contents: read
 
 jobs:
+  # ── Router: what changed? On push:main everything is forced true (full gate). ──────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.decide.outputs.code }}
+      db: ${{ steps.decide.outputs.db }}
+      e2e: ${{ steps.decide.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Filter changed paths (PRs only)
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - 'app/**'
+              - 'lib/**'
+              - 'components/**'
+              - 'prompts/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig*.json'
+              - 'next.config.*'
+              - 'jest.config.*'
+              - 'tests/unit/**'
+              - 'tests/contract/**'
+              - 'tests/smoke/**'
+              - 'tests/fixtures/**'
+            db:
+              - 'supabase/**'
+              - 'lib/db/**'
+              - 'tests/integration/**'
+            e2e:
+              - 'app/**'
+              - 'lib/**'
+              - 'components/**'
+              - 'e2e/**'
+              - 'playwright.config.ts'
+              - '.env.e2e'
+              - 'supabase/**'
+              - 'scripts/dev/**'
+              - 'package.json'
+              - 'package-lock.json'
+
+      # On push:main (or any non-PR trigger), force all jobs to run — the full release gate.
+      # On a PR, pass through the paths-filter result.
+      - name: Decide
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true"  >> "$GITHUB_OUTPUT"
+            echo "db=true"    >> "$GITHUB_OUTPUT"
+            echo "e2e=true"   >> "$GITHUB_OUTPUT"
+            echo "Non-PR trigger (push:main) — running the FULL suite."
+          else
+            echo "code=${{ steps.filter.outputs.code }}" >> "$GITHUB_OUTPUT"
+            echo "db=${{ steps.filter.outputs.db }}"     >> "$GITHUB_OUTPUT"
+            echo "e2e=${{ steps.filter.outputs.e2e }}"   >> "$GITHUB_OUTPUT"
+            echo "PR — code=${{ steps.filter.outputs.code }} db=${{ steps.filter.outputs.db }} e2e=${{ steps.filter.outputs.e2e }}"
+          fi
+
   build-and-test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +141,8 @@ jobs:
 
   integration:
     # DB schema + RLS isolation tests against a real local Supabase stack.
+    needs: changes
+    if: needs.changes.outputs.db == 'true' || needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,6 +190,8 @@ jobs:
         run: supabase stop || true
 
   e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -145,9 +224,30 @@ jobs:
         if: steps.detect.outputs.has_e2e == 'true'
         run: npm ci
 
+      # Cache the Playwright browser to skip the ~30-60s Chromium download on every run.
+      # Keyed on the installed Playwright version so a version bump busts the cache automatically.
+      - name: Resolve Playwright version
+        if: steps.detect.outputs.has_e2e == 'true'
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        if: steps.detect.outputs.has_e2e == 'true'
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
+
+      # Cache hit → only install the OS deps (fast); miss → install the browser too.
       - name: Install Playwright (Chromium)
         if: steps.detect.outputs.has_e2e == 'true'
-        run: npx playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" == "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       # Boot the same local Supabase the integration job uses, then seed it deterministically
       # (10 hotels + intelligence) and create the dev user E2E signs in as. .env.e2e carries
