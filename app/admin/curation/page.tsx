@@ -260,6 +260,32 @@ export default function CurationPage() {
     setBusy(null);
   }
 
+  /** Preview seeding (12i): Claude proposes names → RouteStack verifies → staged as source='preview'.
+   * Operator-gated server-side (PREVIEW_SEEDING_ENABLED). Reports proposed → verified → dropped. */
+  async function seedPreview() {
+    setBusy('preview');
+    setNotice(null);
+    const res = await fetch('/api/admin/preview/seed', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ destination: active }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const why = json.error === 'preview_seeding_disabled' ? 'preview seeding is disabled (set PREVIEW_SEEDING_ENABLED=1)' : json.reason ?? json.error;
+      setNotice({ kind: 'error', text: `Preview seed failed: ${why}` });
+    } else {
+      const dropped = (json.dropped ?? []) as string[];
+      const detail = dropped.length ? ` Dropped ${dropped.length} (not found in RouteStack): ${dropped.join(', ')}.` : '';
+      setNotice({
+        kind: dropped.length ? 'info' : 'ok',
+        text: `Preview: proposed ${json.proposed}, verified ${json.verified?.length ?? 0}, staged ${json.staged}.${detail}`,
+      });
+      await load(active);
+    }
+    setBusy(null);
+  }
+
   /** A row may be approved if it clears the review threshold (12a Rule #1). Image is a publish-time
    *  gate, not an approve-time one, so it's not checked here. */
   const approveEligible = (r: Row) => (r.review_count ?? 0) >= MIN_REVIEWS && r.status !== 'approved';
@@ -371,6 +397,14 @@ export default function CurationPage() {
           className="rounded-btn border border-border-strong px-4 py-2 text-body-sm text-text disabled:opacity-50"
         >
           {busy === 'seed' ? 'Seeding…' : 'Seed Demo Intelligence'}
+        </button>
+        <button
+          onClick={seedPreview}
+          disabled={!!busy}
+          title="Claude proposes names → RouteStack verifies → staged as a 'preview' tier (12i). Requires PREVIEW_SEEDING_ENABLED."
+          className="rounded-btn border border-border-strong px-4 py-2 text-body-sm text-text disabled:opacity-50"
+        >
+          {busy === 'preview' ? 'Seeding preview…' : 'Seed preview (Claude + RouteStack)'}
         </button>
       </div>
 

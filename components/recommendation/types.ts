@@ -46,6 +46,9 @@ export interface HotelDisplay {
   heroImageUrl: string | null;
   /** Short mono label for the placeholder, e.g. "resort hero". Optional. */
   heroLabel?: string;
+  /** 12i — preview tier (Claude-proposed + RouteStack-verified, NOT review-intelligence-backed).
+   *  When true the card shows an honest, NEUTRAL "Preview" badge (no hard-flag colors). */
+  isPreview?: boolean;
 }
 
 /** Fields shared by both card variants. */

@@ -30,6 +30,7 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `DASH0_DATASET` | server-only | Dash0 dataset selector — sent as the `Dash0-Dataset` header (`lib/otel/dash0-headers.ts`; optional, default `(default)`) |
 | `PIPELINE_POLL_MS` | server-only | Review-intelligence worker poll interval, ms (`scripts/pipeline/run-worker.ts`; optional, default 5000) |
 | `CURATION_USE_CACHE` | server-only | **Dev only.** `=1` replays cached Apify/Places responses instead of live calls (`lib/dev/actor-cache.ts`). MUST be unset in production. |
+| `PREVIEW_SEEDING_ENABLED` | server-only | **Operator gate (12i).** `=1` enables `POST /api/admin/preview/seed` (Claude proposes hotel names → RouteStack verifies → `source='preview'` rows). Phased: leave UNSET until preview is ready to go live; the route returns 403 otherwise. Uses `ANTHROPIC_API_KEY` + `ROUTESTACK_*` + `GOOGLE_PLACES_API_KEY`. |
 | `NEXT_PUBLIC_ENABLE_DEV_LOGIN` | public | **Dev/E2E only.** `=true` enables the email/password sign-in that BYPASSES Google OAuth (`lib/auth/devSignin.ts`). MUST be unset in production — the build guard (`scripts/build/preflight.mjs`) fails `next build` if it is set. |
 | `NEXT_PUBLIC_E2E` | public | **E2E only.** `=1` injects chat + booking test stubs (`lib/chat/e2e-stub.ts`, `lib/booking/e2e-stub.ts`). MUST be unset in production — blocked by the same build guard. |
 

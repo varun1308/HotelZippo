@@ -56,6 +56,13 @@ describe('TopPickCard', () => {
     expect(screen.getByText('Phuket')).toBeInTheDocument();
     expect(screen.queryByText(/Mai Khao Beach, Phuket/)).not.toBeInTheDocument();
   });
+
+  it('shows a neutral Preview badge only when isPreview (12i)', () => {
+    const { rerender } = render(<TopPickCard {...topPick} />);
+    expect(screen.queryByText('Preview')).not.toBeInTheDocument();
+    rerender(<TopPickCard {...topPick} isPreview />);
+    expect(screen.getByText('Preview')).toBeInTheDocument();
+  });
 });
 
 describe('StandardCard', () => {

@@ -188,7 +188,7 @@ export async function hydrateHotels(
   ];
   const { data } = await supabase
     .from('hotels')
-    .select('id, destination, area, price_tier, star_rating, images')
+    .select('id, destination, area, price_tier, star_rating, images, source')
     .in('id', ids);
 
   const byId = new Map((data ?? []).map((h) => [h.id, h]));

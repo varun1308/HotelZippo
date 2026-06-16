@@ -54,6 +54,17 @@ describe('toRecommendationSetProps', () => {
     // null area → destination only; empty images → placeholder (null hero)
     expect(props.otherPicks[0].area).toBeNull();
     expect(props.otherPicks[0].heroImageUrl).toBeNull();
+    // curated (no source) → not a preview card
+    expect(props.topPick.isPreview).toBe(false);
+  });
+
+  it('flags isPreview when the hydrated hotel is source=preview (12i)', () => {
+    const previewAssembly = {
+      ...assembly,
+      top_pick: { ...hydratedTopPick, _hotel: { ...hydratedTopPick._hotel, source: 'preview' as const } },
+    };
+    const props = toRecommendationSetProps(previewAssembly)!;
+    expect(props.topPick.isPreview).toBe(true);
   });
 
   it('returns null for an error variant (no cards)', () => {
