@@ -8,8 +8,10 @@
  * raw stack — the chat speaks it back per spec 14. */
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
+import { createServiceClient } from '@/lib/db/server';
 import { searchAndRates } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { BookingError } from '@/lib/booking/types';
 import type { RatesRequest, RatesResponse, BookingApiError } from '@/lib/booking/api-contract';
@@ -44,7 +46,15 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch() });
+    // The RouteStack id cache (service-role tables) lets repeat bookings skip search-destinations and
+    // match the hotel by id. Best-effort: if the service client can't be built, book without it.
+    let cache;
+    try {
+      cache = makeSupabaseIdCache(createServiceClient());
+    } catch {
+      cache = undefined;
+    }
+    const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch(), cache });
     const payload: RatesResponse = result;
     return Response.json(payload, { status: 200 });
   } catch (e) {
