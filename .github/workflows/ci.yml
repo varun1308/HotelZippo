@@ -27,6 +27,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read   # dorny/paths-filter reads the PR's changed files via the API
 
 jobs:
   # ── Router: what changed? On push:main everything is forced true (full gate). ──────────────
