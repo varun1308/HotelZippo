@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/db/server';
 import { fetchHotels } from '@/lib/curation/fetch';
+import { stageHotels } from '@/lib/curation/stage';
 import { DESTINATIONS } from '@/lib/db/schemas';
 
 export const runtime = 'nodejs';
@@ -31,25 +32,7 @@ export async function POST(req: Request) {
   }
 
   const supabase = createServiceClient();
-  let staged = 0;
-  for (const h of result.hotels) {
-    // Preserve an existing row's curation status on re-fetch: only insert if absent,
-    // otherwise refresh the fetched fields but keep status.
-    const { data: existing } = await supabase
-      .from('curation_hotels')
-      .select('id')
-      .eq('name', h.name)
-      .eq('destination', h.destination)
-      .maybeSingle();
-
-    const row = { ...h, fetch_source: result.source };
-    if (existing) {
-      await supabase.from('curation_hotels').update(row).eq('id', existing.id);
-    } else {
-      await supabase.from('curation_hotels').insert({ ...row, status: 'pending' });
-    }
-    staged += 1;
-  }
+  const { staged } = await stageHotels(supabase, result.hotels, result.source);
 
   return NextResponse.json({ source: result.source, staged });
 }
