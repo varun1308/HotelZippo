@@ -2,7 +2,7 @@
 
 - **Notion:** https://app.notion.com/p/3814958429ac81209261c90c31c62f27 (12h · Apify Run Ledger)
 - **Phase:** Launch / post-v1 hardening · **Status:** BUILT (branch `apify-run-ledger`, 2026-06-16) — migration 0012 + ledger + async client + ledger-wired curation UI; live happy-path (start→poll→ingest) verified manually with creds
-- **Companion:** [12a · Curation Tool](12a-curation-tool.md), [10b · Apify](10b-apify.md), [02 · Review-Intelligence Pipeline](02-review-intelligence-pipeline.md), [14 · Error Handling](14-error-handling.md).
+- **Companion:** [12a · Curation Tool](12a-curation-tool.md), [02 · Review-Intelligence Pipeline](02-review-intelligence-pipeline.md), [14 · Error Handling](14-error-handling.md), [13 · Environment](13-environment.md) (Apify env vars).
 
 ## Problem
 

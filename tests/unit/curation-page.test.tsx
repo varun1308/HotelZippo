@@ -120,6 +120,64 @@ describe('Admin Curation page', () => {
     );
   });
 
+  it('(e) Approve is disabled with a reason for a sub-100-review hotel; enabled for a strong one', async () => {
+    mockFetch({
+      hotels: [
+        { id: 'h-weak', name: 'Tiny Inn', destination: 'Phuket', review_count: 40, images: ['http://img/1.jpg'], status: 'pending' },
+        { id: 'h-strong', name: 'Grand Resort', destination: 'Phuket', review_count: 820, images: ['http://img/2.jpg'], status: 'pending' },
+      ],
+    });
+    render(<CurationPage />);
+
+    const weakCard = (await screen.findByText('Tiny Inn')).closest('li') as HTMLElement;
+    const strongCard = screen.getByText('Grand Resort').closest('li') as HTMLElement;
+
+    // The weak hotel's Approve is disabled and carries the reason; the inline hint is shown.
+    const weakApprove = within(weakCard).getByRole('button', { name: /approve/i });
+    expect(weakApprove).toBeDisabled();
+    expect(weakApprove).toHaveAttribute('title', expect.stringContaining('100'));
+    expect(within(weakCard).getByText(/below 100-review threshold/i)).toBeInTheDocument();
+
+    // The strong hotel's Approve is enabled.
+    expect(within(strongCard).getByRole('button', { name: /approve/i })).toBeEnabled();
+  });
+
+  it('(f) a 0-image card shows the no-image placeholder + count + a won\'t-publish hint', async () => {
+    mockFetch({
+      hotels: [
+        { id: 'h-noimg', name: 'Imageless Hotel', destination: 'Phuket', review_count: 500, images: [], status: 'pending' },
+      ],
+    });
+    render(<CurationPage />);
+    const card = (await screen.findByText('Imageless Hotel')).closest('li') as HTMLElement;
+    expect(within(card).getByText(/no img/i)).toBeInTheDocument();
+    expect(within(card).getByText(/0 imgs/i)).toBeInTheDocument();
+    expect(within(card).getByText(/won't publish/i)).toBeInTheDocument();
+  });
+
+  it('(g) publish surfaces WHICH hotels were skipped and why (not just a count)', async () => {
+    const fn = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (url.startsWith('/api/admin/hotels')) return jsonRes(200, { hotels: [] });
+      if (url.startsWith('/api/admin/curation/runs')) return jsonRes(200, { runs: [] });
+      if (url.startsWith('/api/admin/publish-hotels') && method === 'POST') {
+        return jsonRes(200, { published: 2, skipped: [{ name: 'No Pic Hotel', reasons: ['Needs at least one image (see 12g).'] }] });
+      }
+      throw new Error(`unexpected fetch: ${method} ${url}`);
+    });
+    global.fetch = fn as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<CurationPage />);
+    await user.click(screen.getByRole('button', { name: /publish to hotels/i }));
+
+    // The notice names the skipped hotel + its reason, not just "skipped 1".
+    await waitFor(() => expect(screen.getByText(/published 2 to hotels/i)).toBeInTheDocument());
+    expect(screen.getByText(/No Pic Hotel/)).toBeInTheDocument();
+    expect(screen.getByText(/Needs at least one image/)).toBeInTheDocument();
+  });
+
   it('(d2) reuse guard: Force fresh fetch POSTs run/start with force:true', async () => {
     // First call → reusable; once forced, return a normal run.
     let started = 0;
