@@ -309,6 +309,79 @@ function sessionHandles(result: unknown): { correlationId: string; token: string
 
 /** PHASE 1 — resolve destination → search hotels → match by name → details+rates. Returns
  * the picker's room/rate options plus the session handles phase 2 must thread back. */
+/** Resolve a destination (with Google-anchor disambiguation + id-cache) and run search-hotels.
+ * Shared by searchAndRates AND preview verification (12i) so the destination-disambiguation fix lives
+ * in ONE place. Returns the raw search envelope result (carries the hotel list + session handles) and
+ * the resolved destination handle. `hotelIdForCache` is the optional our-hotels uuid used for the
+ * destination cache scope key; pass the destination's confirmed dates/party. */
+export async function searchHotelsInDestination(
+  destination: string,
+  party: SearchAndRatesInput['party'],
+  dates: { checkIn: string; checkOut: string },
+  deps: BookingDeps,
+  currencyArg?: string,
+): Promise<{ searchResult: unknown; dest: DestinationHit }> {
+  const dateAttrs = { check_in: dates.checkIn, check_out: dates.checkOut };
+  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce });
+  const currency = currencyArg ?? DEFAULT_CURRENCY;
+  const rooms = buildRoomsOccupancy(party);
+
+  // resolve destination → id + coords (cached handle skips the paid search-destinations call).
+  const cachedDest = await cacheGet(deps.cache?.loadDestination(destination));
+  let dest: DestinationHit;
+  if (cachedDest) {
+    dest = { id: cachedDest.rsDestinationId, type: cachedDest.rsDestinationType ?? 'City', lat: cachedDest.lat, long: cachedDest.long };
+  } else {
+    const destEnv = await tracedCall(deps, 'search_destinations', '/mcp/hotel/search-destinations', jwt, {
+      query: destination,
+      type: 'DESTINATION',
+    }, dateAttrs);
+    // Google-Places anchor disambiguates which candidate to use (RouteStack returns several "Bali"s).
+    // Best-effort: any failure (no key, network, no match) → null → legacy first-valid pick. Never blocks.
+    const anchor = await geocodeAnchor(deps, destination);
+    const resolved = pickDestination(destEnv.result, anchor);
+    if (!resolved) throw new BookingError('not-found', `Could not resolve destination "${destination}"`);
+    dest = resolved;
+    await cacheRun(deps.cache?.saveDestination(destination, {
+      rsDestinationId: dest.id, rsDestinationType: dest.type, lat: dest.lat, long: dest.long,
+    }));
+  }
+
+  // search hotels in that destination (mints the session token + carries availability).
+  const searchEnv = await tracedCall(deps, 'search_hotels', '/mcp/hotel/search-hotels', jwt, {
+    destinationId: dest.id,
+    destinationType: dest.type,
+    lat: dest.lat,
+    long: dest.long,
+    checkIn: dates.checkIn,
+    checkOut: dates.checkOut,
+    rooms,
+    currency,
+  }, dateAttrs);
+
+  return { searchResult: searchEnv.result, dest };
+}
+
+/** Hotel list (with starRating/ourprice) from a search-hotels result — public for preview
+ * verification (12i). Reads the RAW inventory directly (extractHotelList intentionally narrows to
+ * {id,name} for booking; verification also needs the rating + price). */
+export function listSearchHotels(searchResult: unknown): Array<{ id: string; name: string; starRating?: number; ourprice?: number }> {
+  const inner = searchResult && typeof searchResult === 'object' ? (searchResult as Record<string, unknown>).result : searchResult;
+  const arr = Array.isArray(inner) ? inner : [];
+  const out: Array<{ id: string; name: string; starRating?: number; ourprice?: number }> = [];
+  for (const h of arr) {
+    const r = (h ?? {}) as Record<string, unknown>;
+    if (typeof r.id !== 'string' || typeof r.name !== 'string') continue;
+    out.push({
+      id: r.id,
+      name: r.name,
+      starRating: typeof r.starRating === 'number' ? r.starRating : undefined,
+      ourprice: typeof r.ourprice === 'number' ? r.ourprice : undefined,
+    });
+  }
+  return out;
+}
+
 export async function searchAndRates(
   input: SearchAndRatesInput,
   deps: BookingDeps,
@@ -318,41 +391,9 @@ export async function searchAndRates(
   const currency = input.currency ?? DEFAULT_CURRENCY;
   const rooms = buildRoomsOccupancy(input.party);
 
-  // 1. resolve destination → id + coords. The destination handle is STABLE, so reuse a cached one
-  //    (skips the paid search-destinations call) and back-fill the cache on a fresh resolve.
-  const cachedDest = await cacheGet(deps.cache?.loadDestination(input.destination));
-  let dest: DestinationHit;
-  if (cachedDest) {
-    dest = { id: cachedDest.rsDestinationId, type: cachedDest.rsDestinationType ?? 'City', lat: cachedDest.lat, long: cachedDest.long };
-  } else {
-    const destEnv = await tracedCall(deps, 'search_destinations', '/mcp/hotel/search-destinations', jwt, {
-      query: input.destination,
-      type: 'DESTINATION',
-    }, dateAttrs);
-    // Google-Places anchor disambiguates which candidate to use (RouteStack returns several "Bali"s).
-    // Best-effort: any failure (no key, network, no match) → null → legacy first-valid pick. Never blocks.
-    const anchor = await geocodeAnchor(deps, input.destination);
-    const resolved = pickDestination(destEnv.result, anchor);
-    if (!resolved) throw new BookingError('not-found', `Could not resolve destination "${input.destination}"`);
-    dest = resolved;
-    await cacheRun(deps.cache?.saveDestination(input.destination, {
-      rsDestinationId: dest.id, rsDestinationType: dest.type, lat: dest.lat, long: dest.long,
-    }));
-  }
-
-  // 2. search hotels in that destination. This call ALWAYS runs — it mints the session token the
-  //    rates step requires, and availability is per-date. We use a cached RouteStack hotel id (if any)
-  //    to match DETERMINISTICALLY by id; otherwise fall back to fuzzy name-matching and cache the id.
-  const searchEnv = await tracedCall(deps, 'search_hotels', '/mcp/hotel/search-hotels', jwt, {
-    destinationId: dest.id,
-    destinationType: dest.type,
-    lat: dest.lat,
-    long: dest.long,
-    checkIn: input.dates.checkIn,
-    checkOut: input.dates.checkOut,
-    rooms,
-    currency,
-  }, dateAttrs);
+  // 1+2. resolve destination + search hotels (shared helper — carries the destination-disambiguation).
+  const { searchResult } = await searchHotelsInDestination(input.destination, input.party, input.dates, deps, currency);
+  const searchEnv = { result: searchResult };
 
   const cachedRsId = await cacheGet(deps.cache?.loadHotelRsId(input.hotelId));
   const match = (cachedRsId && matchHotelById(searchEnv.result, cachedRsId)) ||
