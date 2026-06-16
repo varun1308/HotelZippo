@@ -14,7 +14,10 @@ name: DB Migrate (production)
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_PROJECT_REF   — the prod project ref (the xxxx in xxxx.supabase.co)
 #   SUPABASE_DB_PASSWORD   — the prod database password
-# The CLI reads SUPABASE_DB_PASSWORD from the env; the password never appears in a command line.
+#   SUPABASE_ACCESS_TOKEN  — a Supabase account/personal access token (supabase.com → Account →
+#                            Access Tokens). `supabase link` needs it in CI; there is no interactive
+#                            `supabase login` on a runner. (Locally, a prior `supabase login` covers it.)
+# The CLI reads these from the env; no secret ever appears in a command line.
 
 on:
   workflow_dispatch:
@@ -37,6 +40,12 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     environment: production   # lets you attach a required-reviewer gate later if desired
+    # Set at the job level so every supabase step sees them. SUPABASE_ACCESS_TOKEN is the
+    # account/personal access token `supabase link` needs in CI (there is no interactive
+    # `supabase login` on a runner); SUPABASE_DB_PASSWORD is the prod DB password.
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,32 +60,25 @@ jobs:
         env:
           REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           PW: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          if [ -z "$REF" ] || [ -z "$PW" ]; then
-            echo "::error title=Missing secrets::Set SUPABASE_PROJECT_REF and SUPABASE_DB_PASSWORD in repo Actions secrets before running."
+          if [ -z "$REF" ] || [ -z "$PW" ] || [ -z "$TOKEN" ]; then
+            echo "::error title=Missing secrets::Set SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD and SUPABASE_ACCESS_TOKEN in repo Actions secrets before running."
             exit 1
           fi
           echo "Secrets present. Project ref: ${REF:0:6}… (masked)"
 
       - name: Link to prod project
-        env:
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
 
       - name: Show pending migrations (local vs remote)
-        env:
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase migration list
 
       - name: Dry run (always)
-        env:
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase db push --dry-run
 
       - name: Apply migrations (only when confirm == APPLY)
         if: ${{ inputs.confirm == 'APPLY' }}
-        env:
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           echo "Confirm input = APPLY → pushing migrations to PRODUCTION."
           supabase db push

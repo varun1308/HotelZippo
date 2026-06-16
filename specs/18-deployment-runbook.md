@@ -107,7 +107,9 @@ and the launch-specific decisions. Actual secret **values** never appear in the 
   (`workflow_dispatch` only — no push/PR trigger). Default is a **dry run**; to apply, set the
   `confirm` input to the literal `APPLY` (typo-guard). Runs in the `production` GitHub Environment so a
   required-reviewer gate can be attached later. CLI pinned to 2.84.2 (matches `ci.yml` + local).
-  **Required repo Actions secrets:** `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`.
+  **Required repo Actions secrets:** `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, and
+  `SUPABASE_ACCESS_TOKEN` (a Supabase account/personal access token — `supabase link` needs it in CI;
+  there is no interactive `supabase login` on a runner).
 
 ## Auth specifics (so redirect config is correct)
 - Sign-in starts client-side with `redirectTo = ${window.location.origin}/auth/callback`
