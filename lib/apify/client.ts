@@ -43,6 +43,7 @@ export interface RunActorOptions {
 }
 
 const APIFY_BASE = 'https://api.apify.com/v2/actors';
+const APIFY_API = 'https://api.apify.com/v2';
 
 /** Truncate an error body before it goes into an Error message / OTEL — Apify (and TripAdvisor
  * anti-bot pages) can return huge HTML bodies, and we must never echo the token. */
@@ -141,4 +142,119 @@ async function runActorLive(opts: RunActorOptions, fetchImpl?: typeof fetch): Pr
       span.end();
     }
   });
+}
+
+// ── Async run lifecycle (12h · Apify Run Ledger) ────────────────────────────────────────────────
+// The sync `runActorGetItems` above blocks ~5 min for the actor to finish — right for the laptop/CLI
+// worker, but it exceeds Vercel's serverless function limit and loses paid data on any failure after
+// Apify finishes. These three primitives use Apify's ASYNC endpoints so a run can be STARTED (returns
+// in <1s), POLLED, and its dataset PULLED separately — the durable path the ledger persists around.
+
+/** Apify's terminal/active run statuses, normalised to our ledger's vocabulary. */
+export type ApifyRunStatus = 'running' | 'succeeded' | 'failed';
+
+/** A small helper: authenticated JSON fetch against the Apify API with the Bearer token + abort. */
+async function apifyJson(
+  url: string,
+  init: RequestInit,
+  doFetch: typeof fetch,
+  timeoutMs: number,
+): Promise<unknown> {
+  const token = process.env.APIFY_API_TOKEN;
+  if (!token) throw new ApifyError('APIFY_API_TOKEN is not set', 'no_token');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let res: Response;
+    try {
+      res = await doFetch(url, {
+        ...init,
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        throw new ApifyError(`apify request timed out after ${timeoutMs}ms`, 'timeout');
+      }
+      throw new ApifyError(`apify request failed: ${e instanceof Error ? e.message : String(e)}`, 'http_error');
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new ApifyError(`apify returned ${res.status}: ${snippet(body)}`, 'http_error', res.status);
+    }
+    try {
+      return await res.json();
+    } catch (e) {
+      throw new ApifyError(`apify response was not valid JSON: ${e instanceof Error ? e.message : String(e)}`, 'bad_response');
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export interface StartRunResult {
+  apifyRunId: string;
+  apifyDatasetId: string;
+}
+
+/** Start an actor run asynchronously. Returns the Apify run id + its default dataset id IMMEDIATELY
+ * (the actor keeps running on Apify's side). Persist these in the ledger so the run is recoverable. */
+export async function startRun(
+  opts: { actorId: string; input: Record<string, unknown>; runTimeoutSecs?: number },
+  fetchImpl?: typeof fetch,
+): Promise<StartRunResult> {
+  const doFetch = fetchImpl ?? fetch;
+  const params = new URLSearchParams();
+  if (opts.runTimeoutSecs != null) params.set('timeout', String(opts.runTimeoutSecs));
+  const qs = params.toString();
+  const url = `${APIFY_BASE}/${encodeURIComponent(opts.actorId)}/runs${qs ? `?${qs}` : ''}`;
+  const body = (await apifyJson(url, { method: 'POST', body: JSON.stringify(opts.input) }, doFetch, 30_000)) as {
+    data?: { id?: string; defaultDatasetId?: string };
+  };
+  const apifyRunId = body?.data?.id;
+  const apifyDatasetId = body?.data?.defaultDatasetId;
+  if (!apifyRunId || !apifyDatasetId) {
+    throw new ApifyError('apify start-run response missing data.id / data.defaultDatasetId', 'bad_response');
+  }
+  return { apifyRunId, apifyDatasetId };
+}
+
+export interface RunStatusResult {
+  status: ApifyRunStatus;
+  /** Apify-reported items in the dataset (when known). */
+  itemCount?: number;
+  /** Apify-reported run cost in USD (when known). */
+  costEstimate?: number;
+}
+
+/** Poll one run's status. Maps Apify's run statuses onto our 3-state vocabulary:
+ *   READY|RUNNING → running ; SUCCEEDED → succeeded ; FAILED|TIMED-OUT|ABORTED → failed. */
+export async function getRunStatus(apifyRunId: string, fetchImpl?: typeof fetch): Promise<RunStatusResult> {
+  const doFetch = fetchImpl ?? fetch;
+  const url = `${APIFY_API}/actor-runs/${encodeURIComponent(apifyRunId)}`;
+  const body = (await apifyJson(url, { method: 'GET' }, doFetch, 30_000)) as {
+    data?: { status?: string; stats?: { computeUnits?: number }; usageTotalUsd?: number; defaultDatasetId?: string };
+  };
+  const raw = body?.data?.status ?? '';
+  const status: ApifyRunStatus =
+    raw === 'SUCCEEDED' ? 'succeeded' : raw === 'READY' || raw === 'RUNNING' ? 'running' : 'failed';
+  const result: RunStatusResult = { status };
+  if (typeof body?.data?.usageTotalUsd === 'number') result.costEstimate = body.data.usageTotalUsd;
+  return result;
+}
+
+/** Pull a dataset's items by id. Free + repeatable for a succeeded run (the dataset persists on
+ * Apify), so this is what powers REUSE / re-ingest. `limit` caps the rows pulled. */
+export async function pullDatasetItems(
+  apifyDatasetId: string,
+  opts: { limit?: number; timeoutMs?: number } = {},
+  fetchImpl?: typeof fetch,
+): Promise<unknown[]> {
+  const doFetch = fetchImpl ?? fetch;
+  const params = new URLSearchParams({ format: 'json', clean: 'true' });
+  if (opts.limit != null) params.set('limit', String(opts.limit));
+  const url = `${APIFY_API}/datasets/${encodeURIComponent(apifyDatasetId)}/items?${params}`;
+  const items = await apifyJson(url, { method: 'GET' }, doFetch, opts.timeoutMs ?? 120_000);
+  if (!Array.isArray(items)) throw new ApifyError('apify dataset items response was not an array', 'bad_response');
+  return items;
 }
