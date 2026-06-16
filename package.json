@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/build/preflight.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -21,7 +22,7 @@
     "dev:gen-seed": "tsx scripts/dev/gen-seed-sql.ts",
     "dev:db": "npm run dev:gen-seed && supabase db reset",
     "e2e:user": "tsx --env-file=.env.e2e scripts/dev/seed-dev-user.ts",
-    "e2e:build": "next build",
+    "e2e:build": "ALLOW_UNSAFE_FLAGS=1 node scripts/build/preflight.mjs && next build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
