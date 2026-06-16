@@ -25,6 +25,7 @@ import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
 import { getPartnerToken, type RouteStackFetch } from './auth';
 import { buildRoomsOccupancy } from './party';
 import { mapRoomRateOptions } from './rates';
+import type { IdCache } from './id-cache';
 import {
   BookingError,
   type TravelParty,
@@ -47,11 +48,14 @@ export interface SearchAndRatesInput {
   currency?: string;
 }
 
-/** Injectable seam + clock/nonce hooks (so auth is deterministic in tests). */
+/** Injectable seam + clock/nonce hooks (so auth is deterministic in tests). `cache` is OPTIONAL —
+ * when present, stable RouteStack ids are reused to skip search-destinations and match hotels by id;
+ * when absent (or any cache call fails), the flow runs the full live path unchanged. */
 export interface BookingDeps {
   fetchImpl: RouteStackFetch;
   now?: () => number;
   nonce?: () => string;
+  cache?: IdCache;
 }
 
 const TRACER = 'hotelzippo';
@@ -170,6 +174,36 @@ interface DestinationHit {
   type: string;
 }
 
+/** Best-effort cache READ: resolve the promise, but swallow any error/absence to a null "miss".
+ * Caching must never break a booking — a failed read just means we run the live call. */
+async function cacheGet<T>(p: Promise<T | null> | undefined): Promise<T | null> {
+  if (!p) return null;
+  try {
+    return await p;
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort cache WRITE: swallow any error. A failed write just means we don't cache this time. */
+async function cacheRun(p: Promise<void> | undefined): Promise<void> {
+  if (!p) return;
+  try {
+    await p;
+  } catch {
+    /* best-effort — never block a booking on the cache */
+  }
+}
+
+/** Match the chosen hotel by an exact RouteStack id within search-hotels results (deterministic,
+ * used when we have a cached id). Returns null if the id isn't in this search's availability. */
+function matchHotelById(result: unknown, rsHotelId: string): { id: string; name: string } | null {
+  for (const h of extractHotelList(result)) {
+    if (h.id === rsHotelId) return { id: h.id, name: h.name ?? '' };
+  }
+  return null;
+}
+
 function pickDestination(result: unknown): DestinationHit | null {
   const arr = Array.isArray(result) ? result : [];
   for (const item of arr) {
@@ -241,15 +275,28 @@ export async function searchAndRates(
   const currency = input.currency ?? DEFAULT_CURRENCY;
   const rooms = buildRoomsOccupancy(input.party);
 
-  // 1. resolve destination → id + coords
-  const destEnv = await tracedCall(deps, 'search_destinations', '/mcp/hotel/search-destinations', jwt, {
-    query: input.destination,
-    type: 'DESTINATION',
-  }, dateAttrs);
-  const dest = pickDestination(destEnv.result);
-  if (!dest) throw new BookingError('not-found', `Could not resolve destination "${input.destination}"`);
+  // 1. resolve destination → id + coords. The destination handle is STABLE, so reuse a cached one
+  //    (skips the paid search-destinations call) and back-fill the cache on a fresh resolve.
+  const cachedDest = await cacheGet(deps.cache?.loadDestination(input.destination));
+  let dest: DestinationHit;
+  if (cachedDest) {
+    dest = { id: cachedDest.rsDestinationId, type: cachedDest.rsDestinationType ?? 'City', lat: cachedDest.lat, long: cachedDest.long };
+  } else {
+    const destEnv = await tracedCall(deps, 'search_destinations', '/mcp/hotel/search-destinations', jwt, {
+      query: input.destination,
+      type: 'DESTINATION',
+    }, dateAttrs);
+    const resolved = pickDestination(destEnv.result);
+    if (!resolved) throw new BookingError('not-found', `Could not resolve destination "${input.destination}"`);
+    dest = resolved;
+    await cacheRun(deps.cache?.saveDestination(input.destination, {
+      rsDestinationId: dest.id, rsDestinationType: dest.type, lat: dest.lat, long: dest.long,
+    }));
+  }
 
-  // 2. search hotels in that destination
+  // 2. search hotels in that destination. This call ALWAYS runs — it mints the session token the
+  //    rates step requires, and availability is per-date. We use a cached RouteStack hotel id (if any)
+  //    to match DETERMINISTICALLY by id; otherwise fall back to fuzzy name-matching and cache the id.
   const searchEnv = await tracedCall(deps, 'search_hotels', '/mcp/hotel/search-hotels', jwt, {
     destinationId: dest.id,
     destinationType: dest.type,
@@ -261,8 +308,14 @@ export async function searchAndRates(
     currency,
   }, dateAttrs);
 
-  const match = matchHotelByName(searchEnv.result, input.hotelName);
+  const cachedRsId = await cacheGet(deps.cache?.loadHotelRsId(input.hotelId));
+  const match = (cachedRsId && matchHotelById(searchEnv.result, cachedRsId)) ||
+    matchHotelByName(searchEnv.result, input.hotelName);
   if (!match) throw new BookingError('not-found', `"${input.hotelName}" not found in ${input.destination} availability`);
+  // Lazy-populate the id↔hotel mapping on a fresh resolve (no-op if already cached the same id).
+  if (match.id !== cachedRsId) {
+    await cacheRun(deps.cache?.saveHotelRsId(input.hotelId, match.id, match.name));
+  }
   const handles = sessionHandles(searchEnv.result);
   if (!handles) throw new BookingError('session-expired', 'search-hotels returned no session handles');
 
