@@ -105,5 +105,3 @@ export function makeSupabaseIdCache(client: SupabaseClient): IdCache {
     },
   };
 }
-
-// ci-filter-probe: temporary touch to verify the run lane on PR #43 (reverted before merge)
