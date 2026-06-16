@@ -68,6 +68,7 @@ export const hotelSchema = z.object({
   google_place_id: z.string().nullable(),
   images: z.array(z.string()).nullable(),
   price_tier: z.enum(PRICE_TIERS).nullable(),
+  source: z.enum(['curated', 'preview']).default('curated'), // 12i — provenance tier (migration 0013)
   created_at: ts,
 });
 
