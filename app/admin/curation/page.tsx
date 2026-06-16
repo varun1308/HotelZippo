@@ -260,8 +260,8 @@ export default function CurationPage() {
     setBusy(null);
   }
 
-  /** Preview seeding (12i): Claude proposes names → RouteStack verifies → staged as source='preview'.
-   * Operator-gated server-side (PREVIEW_SEEDING_ENABLED). Reports proposed → verified → dropped. */
+  /** Preview seeding (12i, RouteStack-first): stage the REAL bookable hotels RouteStack returns (with
+   * its grounded hero images) as source='preview'. No Claude. Operator-gated (PREVIEW_SEEDING_ENABLED). */
   async function seedPreview() {
     setBusy('preview');
     setNotice(null);
@@ -275,11 +275,11 @@ export default function CurationPage() {
       const why = json.error === 'preview_seeding_disabled' ? 'preview seeding is disabled (set PREVIEW_SEEDING_ENABLED=1)' : json.reason ?? json.error;
       setNotice({ kind: 'error', text: `Preview seed failed: ${why}` });
     } else {
-      const dropped = (json.dropped ?? []) as string[];
-      const detail = dropped.length ? ` Dropped ${dropped.length} (not found in RouteStack): ${dropped.join(', ')}.` : '';
+      const hotels = (json.hotels ?? []) as Array<{ hasImage: boolean }>;
+      const withImg = hotels.filter((h) => h.hasImage).length;
       setNotice({
-        kind: dropped.length ? 'info' : 'ok',
-        text: `Preview: proposed ${json.proposed}, verified ${json.verified?.length ?? 0}, staged ${json.staged}.${detail}`,
+        kind: json.staged > 0 ? 'ok' : 'info',
+        text: `Preview: found ${json.found} RouteStack hotel(s), staged ${json.staged} (${withImg} with images).`,
       });
       await load(active);
     }

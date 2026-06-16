@@ -16,12 +16,32 @@ review intelligence*: Claude proposes candidate hotel **names**, RouteStack is t
 that verifies they exist + are bookable, and the survivors are stored as a clearly-labeled
 **preview tier** — surfaced to users but never dressed up as review-intelligence-backed.
 
+## Flow (RouteStack-FIRST, no-Claude — the DEFAULT, 2026-06-17)
+
+The original design asked Claude to propose names → RouteStack verified them. In practice (live Bali
+seed) Claude proposes famous resorts that aren't in RouteStack's (sparse, sandbox) inventory → **0
+verified**. **Inverted flow (now the default):** take the hotels **RouteStack actually returns** for a
+destination and stage *those* — real + bookable by construction, with RouteStack's **own grounded hero
+images** (`result.content.heroImage` / `content.images[].links[].url`). **No LLM at all** in the
+default path:
+- An LLM proposing names yields poor verification against real inventory.
+- An LLM proposing **image URLs hallucinates** broken/wrong links — never trust it for images. Images
+  come from RouteStack (grounded) or fall back to the card placeholder (12g), never fabricated.
+
+`seedPreviewFromRouteStack(client, destination, deps, {limit})` = `listPreviewHotelsFromRouteStack`
+(search → top N → per-hotel `get-hotel-details-and-rates` for the hero image) → upsert `source='preview'`
+with `images:[heroImage]`. Route: `POST /api/admin/preview/seed { destination, limit? }` → `{ found, staged, hotels[] }`.
+
+> The Claude-proposes path (`proposeHotels` + `verifyAndStage`) is **kept** for a future enrichment
+> option, but is NOT wired into the route. Cost note: the RouteStack-first flow makes 1 `search-hotels`
+> + N `get-hotel-details-and-rates` calls per seed (one-time, bounded by `limit`).
+
 ## The honest contract (the spine — do not compromise)
 
-- Claude proposes **hotel names only** (+ a one-line "why family-friendly"). It NEVER invents review
-  counts, hard-flags, review quotes, prices, or star ratings.
-- **RouteStack is ground truth.** A proposed hotel is kept **only if `search-hotels` returns it by
-  name** in the correctly-resolved destination (real + bookable + real rates).
+- **No LLM in the default path** — every staged hotel is a real RouteStack-returned, bookable property
+  with a real RouteStack hero image. No fabricated names, facts, or image URLs.
+- **RouteStack is ground truth.** (Legacy Claude-propose path, if ever used: a name is kept **only if
+  `search-hotels` returns it** in the correctly-resolved destination.)
 - Survivors are stored with **`hotels.source = 'preview'`** and surfaced with a neutral **"Preview —
   bookable now, full review intelligence coming soon"** label. No fabricated `hotel_intelligence`
   row; no hard-flags; no review-derived claims; **no amber/red** (reserved for hard-flags per 05).
