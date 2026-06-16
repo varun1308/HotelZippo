@@ -156,6 +156,23 @@ Maps spec-15 Phase 7 (UI flow only; RouteStack stubbed).
 - **AC4.4** A stub-injected business failure (e.g. `no-availability` / `offer-expired`)
   surfaces as a **warm conversational fallback**, never a raw error / dead-end (spec 14).
 
+### J5 — Admin curation via the Apify Run Ledger (`e2e/curation.spec.ts`)
+Maps 12a + **12h · Apify Run Ledger**. The one **admin** journey in E2E (admin tooling is otherwise
+internal/out-of-scope), added 2026-06-16 because the launch loads production data through this UI.
+`/admin/curation` is ungated (no-auth v1), so no sign-in is needed. The Apify provider is swapped for
+a deterministic stub (`NEXT_PUBLIC_E2E=1` → `lib/curation/e2e-stub`): a started run "succeeds" at once
+and Ingest stages 3 fixture candidates — so the page's real React flow runs with **no Apify spend**.
+The stub still writes the REAL `apify_runs` + `curation_hotels` rows via the service client.
+- **AC5.1** The curation page loads with destination tabs, the actions, and the Runs panel.
+- **AC5.2** **Start Fetch** creates a run that succeeds; the Runs panel offers **Ingest**, and
+  ingesting stages the fixture candidates (they render as candidate cards; staged count reflects them).
+- **AC5.3** A **second** Start Fetch within the freshness window triggers the **reuse guard** —
+  the warning + its three choices (re-pull free / force fresh / cancel) — never an auto-run.
+- *Regression caught while building J5:* the service-role Supabase client's GETs were being memoised
+  by Next.js's patched `fetch` inside route handlers, so a repeated list query (the Runs panel /
+  status poll) returned a STALE first response. Fixed in `lib/db/server.ts` (`cache: 'no-store'`); a
+  prod-affecting bug the E2E surfaced.
+
 ## 5. CI integration
 
 The `e2e` job in `.github/workflows/ci.yml` **already auto-activates** when a `test:e2e`

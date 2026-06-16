@@ -37,6 +37,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'no_dataset' }, { status: 409 });
   }
 
+  // E2E stub seam (specs/15a, J5): stage deterministic fixture candidates instead of pulling a
+  // real Apify dataset when the harness sets NEXT_PUBLIC_E2E=1.
+  const { e2eEnabled } = await import('@/lib/curation/e2e-stub');
+  if (e2eEnabled()) {
+    const { e2eIngest } = await import('@/lib/curation/e2e-stub');
+    const out = await e2eIngest(supabase, run);
+    return NextResponse.json(out, { status: 200 });
+  }
+
   let items: unknown[];
   try {
     const max = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);

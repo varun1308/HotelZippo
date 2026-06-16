@@ -18,5 +18,14 @@ export function createServiceClient(): SupabaseClient {
   }
   return createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: {
+      // Opt out of Next.js's patched-fetch cache. Next memoises GETs by URL inside route
+      // handlers; a repeated list query (same URL every call) would otherwise return a STALE
+      // first response — e.g. an empty apify_runs list cached before any run existed, so the
+      // curation Runs panel never updated. Service-role reads are always live data, never
+      // cacheable. (`dynamic='force-dynamic'` covers route rendering, not the SDK's internal
+      // fetch — this does.)
+      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+    },
   });
 }
