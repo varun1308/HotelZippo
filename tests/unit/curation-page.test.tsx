@@ -120,6 +120,116 @@ describe('Admin Curation page', () => {
     );
   });
 
+  it('(e) Approve is disabled with a reason for a sub-100-review hotel; enabled for a strong one', async () => {
+    mockFetch({
+      hotels: [
+        { id: 'h-weak', name: 'Tiny Inn', destination: 'Phuket', review_count: 40, images: ['http://img/1.jpg'], status: 'pending' },
+        { id: 'h-strong', name: 'Grand Resort', destination: 'Phuket', review_count: 820, images: ['http://img/2.jpg'], status: 'pending' },
+      ],
+    });
+    render(<CurationPage />);
+
+    const weakCard = (await screen.findByText('Tiny Inn')).closest('li') as HTMLElement;
+    const strongCard = screen.getByText('Grand Resort').closest('li') as HTMLElement;
+
+    // The weak hotel's Approve is disabled and carries the reason; the inline hint is shown.
+    const weakApprove = within(weakCard).getByRole('button', { name: /approve/i });
+    expect(weakApprove).toBeDisabled();
+    expect(weakApprove).toHaveAttribute('title', expect.stringContaining('100'));
+    expect(within(weakCard).getByText(/below 100-review threshold/i)).toBeInTheDocument();
+
+    // The strong hotel's Approve is enabled.
+    expect(within(strongCard).getByRole('button', { name: /approve/i })).toBeEnabled();
+  });
+
+  it('(f) a 0-image card shows the no-image placeholder + count + a won\'t-publish hint', async () => {
+    mockFetch({
+      hotels: [
+        { id: 'h-noimg', name: 'Imageless Hotel', destination: 'Phuket', review_count: 500, images: [], status: 'pending' },
+      ],
+    });
+    render(<CurationPage />);
+    const card = (await screen.findByText('Imageless Hotel')).closest('li') as HTMLElement;
+    expect(within(card).getByText(/no img/i)).toBeInTheDocument();
+    expect(within(card).getByText(/0 imgs/i)).toBeInTheDocument();
+    expect(within(card).getByText(/won't publish/i)).toBeInTheDocument();
+  });
+
+  it('(g) publish surfaces WHICH hotels were skipped and why (not just a count)', async () => {
+    const fn = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (url.startsWith('/api/admin/hotels')) return jsonRes(200, { hotels: [] });
+      if (url.startsWith('/api/admin/curation/runs')) return jsonRes(200, { runs: [] });
+      if (url.startsWith('/api/admin/publish-hotels') && method === 'POST') {
+        return jsonRes(200, { published: 2, skipped: [{ name: 'No Pic Hotel', reasons: ['Needs at least one image (see 12g).'] }] });
+      }
+      throw new Error(`unexpected fetch: ${method} ${url}`);
+    });
+    global.fetch = fn as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<CurationPage />);
+    await user.click(screen.getByRole('button', { name: /publish to hotels/i }));
+
+    // The notice names the skipped hotel + its reason, not just "skipped 1".
+    await waitFor(() => expect(screen.getByText(/published 2 to hotels/i)).toBeInTheDocument());
+    expect(screen.getByText(/No Pic Hotel/)).toBeInTheDocument();
+    expect(screen.getByText(/Needs at least one image/)).toBeInTheDocument();
+  });
+
+  it('(h) status filter + search narrow the visible list', async () => {
+    mockFetch({
+      hotels: [
+        { id: 'p1', name: 'Pending Palace', destination: 'Phuket', review_count: 500, images: ['x'], status: 'pending' },
+        { id: 'a1', name: 'Approved Arms', destination: 'Phuket', review_count: 500, images: ['x'], status: 'approved' },
+        { id: 'p2', name: 'Beachfront Bungalow', destination: 'Phuket', review_count: 500, images: ['x'], status: 'pending' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<CurationPage />);
+
+    // Default filter is "Pending": the approved hotel is hidden.
+    await waitFor(() => expect(screen.getByText('Pending Palace')).toBeInTheDocument());
+    expect(screen.queryByText('Approved Arms')).not.toBeInTheDocument();
+
+    // Switch to Approved → only the approved one shows.
+    await user.click(screen.getByRole('button', { name: /^approved \(1\)/i }));
+    expect(await screen.findByText('Approved Arms')).toBeInTheDocument();
+    expect(screen.queryByText('Pending Palace')).not.toBeInTheDocument();
+
+    // All + search "beach" → only the matching pending hotel.
+    await user.click(screen.getByRole('button', { name: /^all \(3\)/i }));
+    await user.type(screen.getByRole('textbox', { name: /search hotels/i }), 'beach');
+    expect(await screen.findByText('Beachfront Bungalow')).toBeInTheDocument();
+    expect(screen.queryByText('Pending Palace')).not.toBeInTheDocument();
+    expect(screen.queryByText('Approved Arms')).not.toBeInTheDocument();
+  });
+
+  it('(i) bulk approve PATCHes only the eligible visible rows (>=100 reviews, not already approved)', async () => {
+    const { calls } = mockFetch({
+      hotels: [
+        { id: 'strong', name: 'Strong One', destination: 'Phuket', review_count: 800, images: ['x'], status: 'pending' },
+        { id: 'weak', name: 'Weak One', destination: 'Phuket', review_count: 40, images: ['x'], status: 'pending' },
+        { id: 'ok2', name: 'Good Two', destination: 'Phuket', review_count: 150, images: ['x'], status: 'pending' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<CurationPage />);
+
+    // The bulk button advertises 2 eligible (the 40-review one is excluded).
+    const bulk = await screen.findByRole('button', { name: /approve eligible in view \(2\)/i });
+    await user.click(bulk);
+
+    // It PATCHed exactly the two eligible ids to 'approved' — never the sub-100 one.
+    await waitFor(() => {
+      const approves = calls.filter(
+        (c) => c.url.startsWith('/api/admin/hotels') && c.method === 'PATCH' && c.body?.status === 'approved',
+      );
+      expect(approves.map((c) => c.body?.id).sort()).toEqual(['ok2', 'strong']);
+    });
+  });
+
   it('(d2) reuse guard: Force fresh fetch POSTs run/start with force:true', async () => {
     // First call → reusable; once forced, return a normal run.
     let started = 0;

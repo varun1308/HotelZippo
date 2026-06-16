@@ -41,16 +41,26 @@ interface ApifyRun {
 
 const ACTIVE = (s: ApifyRun['status']) => s === 'pending' || s === 'running';
 
+/** A page-level notice with a kind so the banner can show success vs. problem distinctly. */
+type Notice = { kind: 'ok' | 'error' | 'info'; text: string } | null;
+
+const MIN_REVIEWS = 100; // mirrors lib/curation/types.MIN_REVIEWS (12a Rule #1); kept inline to avoid a server-only import.
+const imageCount = (r: Row) => r.images?.length ?? 0;
+
 export default function CurationPage() {
   const [active, setActive] = useState<Destination>('Phuket');
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string>('');
+  const [notice, setNotice] = useState<Notice>(null);
   const [runs, setRuns] = useState<ApifyRun[]>([]);
   // A succeeded/ingested run found by the reuse guard, awaiting the operator's choice.
   const [reusable, setReusable] = useState<ApifyRun | null>(null);
   // The run we're actively polling (just started).
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  // Operator-scale controls (250 hotels ≈ 50/destination): triage the list without endless scroll.
+  const [statusFilter, setStatusFilter] = useState<'all' | Row['status']>('pending');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'rank' | 'reviews' | 'attention'>('rank');
 
   const load = useCallback(async (dest: Destination) => {
     const res = await fetch(`/api/admin/hotels?destination=${encodeURIComponent(dest)}`);
@@ -85,8 +95,8 @@ export default function CurationPage() {
         setActiveRunId(null);
         setNotice(
           run.status === 'succeeded'
-            ? `Run finished (${run.itemCount ?? '?'} items). Click Ingest to stage them.`
-            : `Run ${run.status}${run.error ? `: ${run.error}` : ''}.`,
+            ? { kind: 'ok', text: 'Run finished — click Ingest below to stage the results.' }
+            : { kind: 'error', text: `Run ${run.status}${run.error ? `: ${run.error}` : ''}.` },
         );
       }
     };
@@ -103,7 +113,7 @@ export default function CurationPage() {
   /** Start a fetch run. force=true skips the reuse guard. */
   async function startFetch(force = false) {
     setBusy('fetch');
-    setNotice('');
+    setNotice(null);
     setReusable(null);
     const res = await fetch('/api/admin/curation/run/start', {
       method: 'POST',
@@ -112,14 +122,14 @@ export default function CurationPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setNotice(`Error: ${json.reason ?? json.error}`);
+      setNotice({ kind: 'error', text: `Error: ${json.reason ?? json.error}` });
     } else if (json.reusable) {
       // Reuse guard fired — warn, let the operator choose (never auto-skip).
       setReusable(json.reusable);
-      setNotice('');
+      setNotice(null);
     } else if (json.run) {
       setActiveRunId(json.run.id);
-      setNotice('Run started — polling for completion…');
+      setNotice({ kind: 'info', text: 'Run started — polling for completion…' });
     }
     await loadRuns(active);
     setBusy(null);
@@ -127,7 +137,7 @@ export default function CurationPage() {
 
   async function ingestRun(runId: string) {
     setBusy(`ingest-${runId}`);
-    setNotice('');
+    setNotice(null);
     setReusable(null);
     const res = await fetch('/api/admin/curation/run/ingest', {
       method: 'POST',
@@ -135,7 +145,11 @@ export default function CurationPage() {
       body: JSON.stringify({ runId }),
     });
     const json = await res.json();
-    setNotice(res.ok ? `Ingested ${json.ingested} candidates (${json.items} items).` : `Error: ${json.reason ?? json.error}`);
+    setNotice(
+      res.ok
+        ? { kind: 'ok', text: `Ingested ${json.ingested} candidates (${json.items} items).` }
+        : { kind: 'error', text: `Error: ${json.reason ?? json.error}` },
+    );
     await load(active);
     await loadRuns(active);
     setBusy(null);
@@ -143,14 +157,21 @@ export default function CurationPage() {
 
   async function setStatus(id: string, status: Row['status']) {
     setBusy(id);
+    setNotice(null);
     const res = await fetch('/api/admin/hotels', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id, status }),
     });
+    const row = rows.find((r) => r.id === id);
+    const label = row ? `"${row.name}"` : 'hotel';
     if (!res.ok) {
       const json = await res.json();
-      setNotice(`Cannot ${status}: ${(json.reasons ?? [json.error]).join(' ')}`);
+      // "Cannot approve …" — use the verb, not the status value (was "Cannot approved").
+      const verb = status === 'approved' ? 'approve' : status === 'rejected' ? 'reject' : status;
+      setNotice({ kind: 'error', text: `Cannot ${verb} ${label}: ${(json.reasons ?? [json.error]).join(' ')}` });
+    } else {
+      setNotice({ kind: 'ok', text: `${label} ${status}.` });
     }
     await load(active);
     setBusy(null);
@@ -158,7 +179,7 @@ export default function CurationPage() {
 
   async function resolvePlaces() {
     setBusy('resolve');
-    setNotice('');
+    setNotice(null);
     const res = await fetch('/api/admin/curation/resolve-places', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -167,10 +188,13 @@ export default function CurationPage() {
     const json = await res.json();
     setNotice(
       res.ok
-        ? `Resolved ${json.resolved}/${json.total} place ids; skipped ${json.skipped?.length ?? 0}${
-            json.lowConfidence?.length ? ` · ${json.lowConfidence.length} name-only (check)` : ''
-          }.`
-        : `Error: ${json.reason ?? json.error}`,
+        ? {
+            kind: 'ok',
+            text: `Resolved ${json.resolved}/${json.total} place ids; skipped ${json.skipped?.length ?? 0}${
+              json.lowConfidence?.length ? ` · ${json.lowConfidence.length} name-only (check)` : ''
+            }.`,
+          }
+        : { kind: 'error', text: `Error: ${json.reason ?? json.error}` },
     );
     await load(active);
     setBusy(null);
@@ -185,7 +209,7 @@ export default function CurationPage() {
     });
     if (!res.ok) {
       const json = await res.json();
-      setNotice(`Edit failed: ${json.error ?? ''}`);
+      setNotice({ kind: 'error', text: `Edit failed: ${json.error ?? ''}` });
     }
     await load(active);
     setBusy(null);
@@ -193,35 +217,80 @@ export default function CurationPage() {
 
   async function publish() {
     setBusy('publish');
-    setNotice('');
+    setNotice(null);
     const res = await fetch('/api/admin/publish-hotels', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ destination: active }),
     });
     const json = await res.json();
-    setNotice(
-      res.ok ? `Published ${json.published}; skipped ${json.skipped?.length ?? 0}.` : `Error: ${json.error}`,
-    );
+    if (!res.ok) {
+      setNotice({ kind: 'error', text: `Error: ${json.error}` });
+    } else {
+      const skipped: Array<{ name: string; reasons: string[] }> = json.skipped ?? [];
+      // Name WHAT was skipped + why — a bare count hides which hotels failed and for what reason.
+      const detail = skipped.length
+        ? ` Skipped ${skipped.length}: ${skipped.map((s) => `${s.name} (${s.reasons.join(', ')})`).join('; ')}`
+        : '';
+      setNotice({
+        kind: skipped.length ? 'info' : 'ok',
+        text: `Published ${json.published} to Hotels.${detail}`,
+      });
+    }
     await load(active);
     setBusy(null);
   }
 
   async function seedIntelligence() {
     setBusy('seed');
-    setNotice('');
+    setNotice(null);
     const res = await fetch('/api/admin/seed-intelligence', { method: 'POST' });
     const json = await res.json().catch(() => ({}));
     if (res.ok) {
-      setNotice(`Seeded ${json.written ?? 0} intelligence records; skipped ${json.skipped ?? 0}.`);
+      setNotice({ kind: 'ok', text: `Seeded ${json.written ?? 0} intelligence records; skipped ${json.skipped ?? 0}.` });
     } else {
       const fileReasons = (json.details ?? [])
         .map((d: { file: string; reason: string }) => `${d.file}: ${d.reason}`)
         .join(' · ');
-      setNotice(
-        `Seed failed (${json.error ?? res.status}): ${json.message ?? ''}${fileReasons ? ` — ${fileReasons}` : ''}`,
-      );
+      setNotice({
+        kind: 'error',
+        text: `Seed failed (${json.error ?? res.status}): ${json.message ?? ''}${fileReasons ? ` — ${fileReasons}` : ''}`,
+      });
     }
+    setBusy(null);
+  }
+
+  /** A row may be approved if it clears the review threshold (12a Rule #1). Image is a publish-time
+   *  gate, not an approve-time one, so it's not checked here. */
+  const approveEligible = (r: Row) => (r.review_count ?? 0) >= MIN_REVIEWS && r.status !== 'approved';
+
+  /** Approve every currently-VISIBLE eligible row in one pass — turns N clicks into one. Only the
+   *  rows the operator can see (after filter+search) are affected, so it's predictable. */
+  async function bulkApproveVisible(targets: Row[]) {
+    const eligible = targets.filter(approveEligible);
+    if (eligible.length === 0) {
+      setNotice({ kind: 'info', text: 'No eligible hotels to approve in the current view (need ≥100 reviews, not already approved).' });
+      return;
+    }
+    setBusy('bulk');
+    setNotice(null);
+    let ok = 0;
+    const failed: string[] = [];
+    // Sequential to keep the server-side guard authoritative and avoid hammering the PATCH route.
+    for (const r of eligible) {
+      const res = await fetch('/api/admin/hotels', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: r.id, status: 'approved' }),
+      });
+      if (res.ok) ok += 1;
+      else failed.push(r.name);
+    }
+    setNotice({
+      kind: failed.length ? 'info' : 'ok',
+      text: `Approved ${ok} hotel${ok === 1 ? '' : 's'}.${failed.length ? ` Could not approve ${failed.length}: ${failed.join(', ')}.` : ''}`,
+    });
+    await load(active);
     setBusy(null);
   }
 
@@ -231,6 +300,29 @@ export default function CurationPage() {
   );
   const unIngested = runs.filter((r) => r.status === 'succeeded' && !r.ingestedAt);
   const polling = !!activeRunId;
+
+  // Apply status filter → name search → sort. Pure derivation over the loaded rows (≤~50/dest).
+  const q = search.trim().toLowerCase();
+  const visibleRows = rows
+    .filter((r) => (statusFilter === 'all' ? true : r.status === statusFilter))
+    .filter((r) => (q ? r.name.toLowerCase().includes(q) : true))
+    .sort((a, b) => {
+      if (sortBy === 'reviews') return (b.review_count ?? 0) - (a.review_count ?? 0);
+      if (sortBy === 'attention') {
+        // Rows that still need a human decision (no image / sub-100 reviews) float to the top.
+        const score = (r: Row) => (imageCount(r) === 0 ? 2 : 0) + ((r.review_count ?? 0) < MIN_REVIEWS ? 1 : 0);
+        return score(b) - score(a);
+      }
+      return (a.tripadvisor_rank ?? 9999) - (b.tripadvisor_rank ?? 9999);
+    });
+  const eligibleVisible = visibleRows.filter(approveEligible).length;
+  const publishable = rows.filter((r) => r.status === 'approved' && imageCount(r) > 0).length;
+  const STATUS_TABS: Array<{ key: 'all' | Row['status']; label: string; n: number }> = [
+    { key: 'pending', label: 'Pending', n: counts.pending ?? 0 },
+    { key: 'approved', label: 'Approved', n: counts.approved ?? 0 },
+    { key: 'rejected', label: 'Rejected', n: counts.rejected ?? 0 },
+    { key: 'all', label: 'All', n: rows.length },
+  ];
 
   return (
     <main className="mx-auto max-w-card px-6 py-10">
@@ -317,31 +409,98 @@ export default function CurationPage() {
         </div>
       )}
 
-      <p className="mb-4 font-mono text-caption text-text-tertiary">
-        {rows.length} staged · {counts.approved ?? 0} approved · {counts.pending ?? 0} pending ·{' '}
-        {counts.rejected ?? 0} rejected
+      {/* Triage controls — at ~50 hotels/destination a flat list is unworkable; filter to the queue
+          that needs a decision, search by name, sort, and bulk-approve the eligible ones. */}
+      <p className="mb-2 font-mono text-caption text-text-tertiary">
+        {rows.length} staged · {publishable} ready to publish
       </p>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {STATUS_TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setStatusFilter(t.key)}
+            aria-pressed={statusFilter === t.key}
+            className={`rounded-pill px-3 py-1 text-caption transition-colors duration-base ${
+              statusFilter === t.key ? 'bg-primary text-on-primary' : 'bg-surface-2 text-text-secondary hover:bg-surface-3'
+            }`}
+          >
+            {t.label} ({t.n})
+          </button>
+        ))}
+        <input
+          aria-label="Search hotels by name"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name…"
+          className="ml-1 w-44 rounded-input border border-border bg-surface-2 px-2 py-1 text-caption text-text"
+        />
+        <label className="flex items-center gap-1 text-caption text-text-tertiary">
+          Sort
+          <select
+            aria-label="Sort hotels"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="rounded-input border border-border bg-surface-2 px-2 py-1 text-caption text-text"
+          >
+            <option value="rank">TripAdvisor rank</option>
+            <option value="reviews">Review count</option>
+            <option value="attention">Needs attention</option>
+          </select>
+        </label>
+        <button
+          onClick={() => bulkApproveVisible(visibleRows)}
+          disabled={!!busy || eligibleVisible === 0}
+          title={eligibleVisible === 0 ? 'No eligible hotels in view (need ≥100 reviews, not already approved)' : undefined}
+          className="ml-auto rounded-btn border border-border-strong px-3 py-1 text-caption text-text disabled:opacity-50"
+        >
+          {busy === 'bulk' ? 'Approving…' : `Approve eligible in view (${eligibleVisible})`}
+        </button>
+      </div>
 
       {notice && (
-        <p className="mb-4 rounded-input bg-surface-2 px-4 py-3 text-body-sm text-text-secondary">{notice}</p>
+        <p
+          role="status"
+          aria-live="polite"
+          className={`mb-4 rounded-input px-4 py-3 text-body-sm ${
+            notice.kind === 'ok'
+              ? 'bg-success-bg text-success-text'
+              : notice.kind === 'error'
+                ? 'border border-border-strong bg-surface-2 font-medium text-text'
+                : 'bg-surface-2 text-text-secondary'
+          }`}
+        >
+          {notice.text}
+        </p>
       )}
 
       {/* Runs panel (history + un-ingested reuse + refresh). */}
       <section className="mb-6 rounded-card border border-border bg-surface px-4 py-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="font-mono text-label uppercase text-text-tertiary">Apify runs · {active}</p>
+          {/* "Refresh" starts a NEW paid run — kept visually subordinate so it isn't mistaken for the
+              free next step (Ingest). The label says "(paid)" to make the cost explicit. */}
           <button
             onClick={() => startFetch(false)}
             disabled={!!busy || polling}
-            className="rounded-btn border border-border-strong px-3 py-1 text-caption text-text-secondary disabled:opacity-50"
+            className="rounded-btn px-3 py-1 text-caption text-text-tertiary underline-offset-2 hover:underline disabled:opacity-50"
           >
-            Refresh (new run)
+            Refresh — new paid run
           </button>
         </div>
+        {/* When a paid run is sitting un-ingested, make INGEST the prominent next step (it's free). */}
         {unIngested.length > 0 && (
-          <p className="mb-2 rounded-input bg-success-bg px-3 py-2 text-caption text-success-text">
-            {unIngested.length} succeeded run(s) not yet ingested — re-pull below for free.
-          </p>
+          <div className="mb-2 flex items-center justify-between gap-3 rounded-input bg-success-bg px-3 py-2">
+            <p className="text-caption text-success-text">
+              {unIngested.length} succeeded run(s) ready to ingest — free (already paid).
+            </p>
+            <button
+              onClick={() => ingestRun(unIngested[0].id)}
+              disabled={!!busy}
+              className="shrink-0 rounded-btn bg-primary px-4 py-1.5 text-caption text-on-primary disabled:opacity-50"
+            >
+              {busy === `ingest-${unIngested[0].id}` ? 'Ingesting…' : 'Ingest now (free)'}
+            </button>
+          </div>
         )}
         {runs.length === 0 ? (
           <p className="text-caption text-text-tertiary">No runs yet.</p>
@@ -359,7 +518,11 @@ export default function CurationPage() {
                   <button
                     onClick={() => ingestRun(r.id)}
                     disabled={!!busy}
-                    className="rounded-btn border border-border-strong px-2 py-0.5 text-caption text-text-secondary disabled:opacity-50"
+                    className={`shrink-0 rounded-btn px-2 py-0.5 text-caption disabled:opacity-50 ${
+                      r.status === 'succeeded'
+                        ? 'bg-primary text-on-primary' // un-ingested → the action to take
+                        : 'border border-border-strong text-text-secondary' // already ingested → secondary re-pull
+                    }`}
                   >
                     {busy === `ingest-${r.id}` ? 'Ingesting…' : r.status === 'ingested' ? 'Re-ingest' : 'Ingest'}
                   </button>
@@ -370,18 +533,68 @@ export default function CurationPage() {
         )}
       </section>
 
+      {rows.length > 0 && visibleRows.length === 0 && (
+        <p className="rounded-input bg-surface-2 px-4 py-3 text-body-sm text-text-secondary">
+          No hotels match this filter{q ? ` and "${search.trim()}"` : ''}.
+        </p>
+      )}
+
       <ul className="flex flex-col gap-3">
-        {rows.map((r) => (
+        {visibleRows.map((r) => {
+          const reviews = r.review_count ?? 0;
+          const tooFewReviews = reviews < MIN_REVIEWS;
+          const imgs = imageCount(r);
+          const noImages = imgs === 0;
+          // Mirror the server-side approve guard (12a Rule #1) so the button is disabled with a reason,
+          // instead of looking tappable and failing the PATCH after the click.
+          const approveBlocked = tooFewReviews;
+          const approveTitle = tooFewReviews
+            ? `Needs at least ${MIN_REVIEWS} reviews to approve (has ${reviews}).`
+            : undefined;
+          return (
           <li
             key={r.id}
-            className="flex items-center justify-between rounded-card border border-border bg-surface px-4 py-3 shadow-card"
+            className="flex items-center justify-between gap-4 rounded-card border border-border bg-surface px-4 py-3 shadow-card"
           >
-            <div>
+            {/* Thumbnail + image count — so the publish-blocking 0-image case is visible BEFORE publish. */}
+            <div className="shrink-0">
+              {r.images && r.images[0] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={r.images[0]}
+                  alt=""
+                  className="h-16 w-16 rounded-input border border-border object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+                  }}
+                />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-input border border-border bg-surface-2 text-caption text-text-tertiary">
+                  no img
+                </div>
+              )}
+              <p
+                className={`mt-1 text-center font-mono text-caption ${
+                  noImages ? 'text-text' : 'text-text-tertiary'
+                }`}
+              >
+                {imgs} img{imgs === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="min-w-0 flex-1">
               <p className="text-body text-text">{r.name}</p>
               <p className="font-mono text-caption text-text-tertiary">
-                #{r.tripadvisor_rank ?? '—'} · {r.review_count ?? 0} reviews · {r.star_rating ?? '—'}★ ·{' '}
-                {r.price_tier ?? '—'} · {r.brand ?? '—'}
+                #{r.tripadvisor_rank ?? '—'} ·{' '}
+                <span className={tooFewReviews ? 'font-medium text-text' : undefined}>{reviews} reviews</span> ·{' '}
+                {r.star_rating ?? '—'}★ · {r.price_tier ?? '—'} · {r.brand ?? '—'}
               </p>
+              {(tooFewReviews || noImages) && (
+                <p className="mt-0.5 text-caption text-text-secondary">
+                  {tooFewReviews && `Below ${MIN_REVIEWS}-review threshold — can't approve.`}
+                  {tooFewReviews && noImages && ' '}
+                  {noImages && "No image — won't publish (12g)."}
+                </p>
+              )}
               <div className="mt-1 flex items-center gap-2">
                 <span
                   className={`font-mono text-caption ${
@@ -417,7 +630,9 @@ export default function CurationPage() {
               </span>
               <button
                 onClick={() => setStatus(r.id, 'approved')}
-                disabled={busy === r.id}
+                disabled={busy === r.id || approveBlocked}
+                title={approveTitle}
+                aria-disabled={approveBlocked}
                 className="rounded-btn bg-primary px-3 py-1 text-caption text-on-primary disabled:opacity-50"
               >
                 Approve
@@ -431,7 +646,8 @@ export default function CurationPage() {
               </button>
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </main>
   );
