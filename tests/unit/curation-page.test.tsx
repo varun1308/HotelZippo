@@ -178,6 +178,58 @@ describe('Admin Curation page', () => {
     expect(screen.getByText(/Needs at least one image/)).toBeInTheDocument();
   });
 
+  it('(h) status filter + search narrow the visible list', async () => {
+    mockFetch({
+      hotels: [
+        { id: 'p1', name: 'Pending Palace', destination: 'Phuket', review_count: 500, images: ['x'], status: 'pending' },
+        { id: 'a1', name: 'Approved Arms', destination: 'Phuket', review_count: 500, images: ['x'], status: 'approved' },
+        { id: 'p2', name: 'Beachfront Bungalow', destination: 'Phuket', review_count: 500, images: ['x'], status: 'pending' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<CurationPage />);
+
+    // Default filter is "Pending": the approved hotel is hidden.
+    await waitFor(() => expect(screen.getByText('Pending Palace')).toBeInTheDocument());
+    expect(screen.queryByText('Approved Arms')).not.toBeInTheDocument();
+
+    // Switch to Approved → only the approved one shows.
+    await user.click(screen.getByRole('button', { name: /^approved \(1\)/i }));
+    expect(await screen.findByText('Approved Arms')).toBeInTheDocument();
+    expect(screen.queryByText('Pending Palace')).not.toBeInTheDocument();
+
+    // All + search "beach" → only the matching pending hotel.
+    await user.click(screen.getByRole('button', { name: /^all \(3\)/i }));
+    await user.type(screen.getByRole('textbox', { name: /search hotels/i }), 'beach');
+    expect(await screen.findByText('Beachfront Bungalow')).toBeInTheDocument();
+    expect(screen.queryByText('Pending Palace')).not.toBeInTheDocument();
+    expect(screen.queryByText('Approved Arms')).not.toBeInTheDocument();
+  });
+
+  it('(i) bulk approve PATCHes only the eligible visible rows (>=100 reviews, not already approved)', async () => {
+    const { calls } = mockFetch({
+      hotels: [
+        { id: 'strong', name: 'Strong One', destination: 'Phuket', review_count: 800, images: ['x'], status: 'pending' },
+        { id: 'weak', name: 'Weak One', destination: 'Phuket', review_count: 40, images: ['x'], status: 'pending' },
+        { id: 'ok2', name: 'Good Two', destination: 'Phuket', review_count: 150, images: ['x'], status: 'pending' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<CurationPage />);
+
+    // The bulk button advertises 2 eligible (the 40-review one is excluded).
+    const bulk = await screen.findByRole('button', { name: /approve eligible in view \(2\)/i });
+    await user.click(bulk);
+
+    // It PATCHed exactly the two eligible ids to 'approved' — never the sub-100 one.
+    await waitFor(() => {
+      const approves = calls.filter(
+        (c) => c.url.startsWith('/api/admin/hotels') && c.method === 'PATCH' && c.body?.status === 'approved',
+      );
+      expect(approves.map((c) => c.body?.id).sort()).toEqual(['ok2', 'strong']);
+    });
+  });
+
   it('(d2) reuse guard: Force fresh fetch POSTs run/start with force:true', async () => {
     // First call → reusable; once forced, return a normal run.
     let started = 0;

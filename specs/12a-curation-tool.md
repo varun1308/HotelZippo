@@ -51,6 +51,12 @@ Header: destination tabs + count badges, **"Start Fetch"** button per destinatio
 - The single page notice is **typed** (ok / info / error): success shows in the success style, problems in a bordered neutral panel — **no amber/red** (those stay reserved for hard-flags per 05).
 - **Publish names what it skipped and why** (e.g. "Skipped 1: No Pic Hotel (Needs at least one image)") instead of a bare count.
 
+**Operator-scale triage (2026-06-16 — ~250 hotels ≈ 50/destination):** a flat list doesn't scale, so the candidate list is filtered/searched/sorted client-side over the loaded rows:
+- **Status filter chips** (Pending / Approved / Rejected / All) with live counts; default = **Pending** (the queue that needs a decision). A "{n} staged · {m} ready to publish" line shows progress.
+- **Name search** + **sort** (TripAdvisor rank · review count · "needs attention" = missing-image/sub-100 first).
+- **Bulk approve** — "Approve eligible in view (n)" PATCHes every *visible eligible* row (≥100 reviews, not already approved) sequentially so the server guard stays authoritative; reports approved + any that failed. Image remains a publish-time gate, not approve-time.
+- These run client-side (fine to a few hundred rows). **Server-side pagination in `/api/admin/hotels` is deferred** until a single destination exceeds ~100 (YAGNI at 50/destination).
+
 ## Rules
 
 - Only hotels with **100+ reviews** may be approved — the Approve button is **disabled with a reason** below the threshold (UI) and the PATCH route + publish re-validate server-side.

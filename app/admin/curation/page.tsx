@@ -57,6 +57,10 @@ export default function CurationPage() {
   const [reusable, setReusable] = useState<ApifyRun | null>(null);
   // The run we're actively polling (just started).
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  // Operator-scale controls (250 hotels ≈ 50/destination): triage the list without endless scroll.
+  const [statusFilter, setStatusFilter] = useState<'all' | Row['status']>('pending');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'rank' | 'reviews' | 'attention'>('rank');
 
   const load = useCallback(async (dest: Destination) => {
     const res = await fetch(`/api/admin/hotels?destination=${encodeURIComponent(dest)}`);
@@ -256,12 +260,69 @@ export default function CurationPage() {
     setBusy(null);
   }
 
+  /** A row may be approved if it clears the review threshold (12a Rule #1). Image is a publish-time
+   *  gate, not an approve-time one, so it's not checked here. */
+  const approveEligible = (r: Row) => (r.review_count ?? 0) >= MIN_REVIEWS && r.status !== 'approved';
+
+  /** Approve every currently-VISIBLE eligible row in one pass — turns N clicks into one. Only the
+   *  rows the operator can see (after filter+search) are affected, so it's predictable. */
+  async function bulkApproveVisible(targets: Row[]) {
+    const eligible = targets.filter(approveEligible);
+    if (eligible.length === 0) {
+      setNotice({ kind: 'info', text: 'No eligible hotels to approve in the current view (need ≥100 reviews, not already approved).' });
+      return;
+    }
+    setBusy('bulk');
+    setNotice(null);
+    let ok = 0;
+    const failed: string[] = [];
+    // Sequential to keep the server-side guard authoritative and avoid hammering the PATCH route.
+    for (const r of eligible) {
+      const res = await fetch('/api/admin/hotels', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: r.id, status: 'approved' }),
+      });
+      if (res.ok) ok += 1;
+      else failed.push(r.name);
+    }
+    setNotice({
+      kind: failed.length ? 'info' : 'ok',
+      text: `Approved ${ok} hotel${ok === 1 ? '' : 's'}.${failed.length ? ` Could not approve ${failed.length}: ${failed.join(', ')}.` : ''}`,
+    });
+    await load(active);
+    setBusy(null);
+  }
+
   const counts = rows.reduce(
     (acc, r) => ((acc[r.status] = (acc[r.status] ?? 0) + 1), acc),
     {} as Record<string, number>,
   );
   const unIngested = runs.filter((r) => r.status === 'succeeded' && !r.ingestedAt);
   const polling = !!activeRunId;
+
+  // Apply status filter → name search → sort. Pure derivation over the loaded rows (≤~50/dest).
+  const q = search.trim().toLowerCase();
+  const visibleRows = rows
+    .filter((r) => (statusFilter === 'all' ? true : r.status === statusFilter))
+    .filter((r) => (q ? r.name.toLowerCase().includes(q) : true))
+    .sort((a, b) => {
+      if (sortBy === 'reviews') return (b.review_count ?? 0) - (a.review_count ?? 0);
+      if (sortBy === 'attention') {
+        // Rows that still need a human decision (no image / sub-100 reviews) float to the top.
+        const score = (r: Row) => (imageCount(r) === 0 ? 2 : 0) + ((r.review_count ?? 0) < MIN_REVIEWS ? 1 : 0);
+        return score(b) - score(a);
+      }
+      return (a.tripadvisor_rank ?? 9999) - (b.tripadvisor_rank ?? 9999);
+    });
+  const eligibleVisible = visibleRows.filter(approveEligible).length;
+  const publishable = rows.filter((r) => r.status === 'approved' && imageCount(r) > 0).length;
+  const STATUS_TABS: Array<{ key: 'all' | Row['status']; label: string; n: number }> = [
+    { key: 'pending', label: 'Pending', n: counts.pending ?? 0 },
+    { key: 'approved', label: 'Approved', n: counts.approved ?? 0 },
+    { key: 'rejected', label: 'Rejected', n: counts.rejected ?? 0 },
+    { key: 'all', label: 'All', n: rows.length },
+  ];
 
   return (
     <main className="mx-auto max-w-card px-6 py-10">
@@ -348,10 +409,53 @@ export default function CurationPage() {
         </div>
       )}
 
-      <p className="mb-4 font-mono text-caption text-text-tertiary">
-        {rows.length} staged · {counts.approved ?? 0} approved · {counts.pending ?? 0} pending ·{' '}
-        {counts.rejected ?? 0} rejected
+      {/* Triage controls — at ~50 hotels/destination a flat list is unworkable; filter to the queue
+          that needs a decision, search by name, sort, and bulk-approve the eligible ones. */}
+      <p className="mb-2 font-mono text-caption text-text-tertiary">
+        {rows.length} staged · {publishable} ready to publish
       </p>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {STATUS_TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setStatusFilter(t.key)}
+            aria-pressed={statusFilter === t.key}
+            className={`rounded-pill px-3 py-1 text-caption transition-colors duration-base ${
+              statusFilter === t.key ? 'bg-primary text-on-primary' : 'bg-surface-2 text-text-secondary hover:bg-surface-3'
+            }`}
+          >
+            {t.label} ({t.n})
+          </button>
+        ))}
+        <input
+          aria-label="Search hotels by name"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name…"
+          className="ml-1 w-44 rounded-input border border-border bg-surface-2 px-2 py-1 text-caption text-text"
+        />
+        <label className="flex items-center gap-1 text-caption text-text-tertiary">
+          Sort
+          <select
+            aria-label="Sort hotels"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="rounded-input border border-border bg-surface-2 px-2 py-1 text-caption text-text"
+          >
+            <option value="rank">TripAdvisor rank</option>
+            <option value="reviews">Review count</option>
+            <option value="attention">Needs attention</option>
+          </select>
+        </label>
+        <button
+          onClick={() => bulkApproveVisible(visibleRows)}
+          disabled={!!busy || eligibleVisible === 0}
+          title={eligibleVisible === 0 ? 'No eligible hotels in view (need ≥100 reviews, not already approved)' : undefined}
+          className="ml-auto rounded-btn border border-border-strong px-3 py-1 text-caption text-text disabled:opacity-50"
+        >
+          {busy === 'bulk' ? 'Approving…' : `Approve eligible in view (${eligibleVisible})`}
+        </button>
+      </div>
 
       {notice && (
         <p
@@ -429,8 +533,14 @@ export default function CurationPage() {
         )}
       </section>
 
+      {rows.length > 0 && visibleRows.length === 0 && (
+        <p className="rounded-input bg-surface-2 px-4 py-3 text-body-sm text-text-secondary">
+          No hotels match this filter{q ? ` and "${search.trim()}"` : ''}.
+        </p>
+      )}
+
       <ul className="flex flex-col gap-3">
-        {rows.map((r) => {
+        {visibleRows.map((r) => {
           const reviews = r.review_count ?? 0;
           const tooFewReviews = reviews < MIN_REVIEWS;
           const imgs = imageCount(r);
