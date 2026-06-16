@@ -29,7 +29,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid_destination' }, { status: 400 });
   }
 
-  const actorId = process.env.APIFY_TRIPADVISOR_SEARCH_ACTOR_ID;
+  // In E2E stub mode there is no real actor id (and none is needed — the run is stubbed);
+  // a placeholder is recorded in the ledger for shape parity.
+  const { e2eEnabled } = await import('@/lib/curation/e2e-stub');
+  const actorId = process.env.APIFY_TRIPADVISOR_SEARCH_ACTOR_ID ?? (e2eEnabled() ? 'e2e~stub-actor' : undefined);
   if (!actorId) {
     return NextResponse.json({ error: 'apify_not_configured' }, { status: 400 });
   }
@@ -58,6 +61,14 @@ export async function POST(req: Request) {
     scopeValue: destination!,
     input,
   });
+
+  // E2E stub seam (specs/15a, J5): after the real ledger write + reuse guard, swap the live Apify
+  // provider for a deterministic stub when the harness sets NEXT_PUBLIC_E2E=1 (no spend, no network).
+  if (e2eEnabled()) {
+    const { e2eMarkStarted } = await import('@/lib/curation/e2e-stub');
+    const stubbed = await e2eMarkStarted(supabase, run);
+    return NextResponse.json({ run: stubbed }, { status: 200 });
+  }
 
   try {
     const { apifyRunId, apifyDatasetId } = await startRun({ actorId, input });
