@@ -1,18 +1,21 @@
-/* OPTIONAL live Apify smoke — validates the real actor I/O against the mappers. SKIPPED unless
- * APIFY_API_TOKEN + the actor ids are present in the environment, so it NEVER runs in CI (CI
- * sets no Apify creds). The founder flips it on locally (creds in .env.local, run with
- *   npx jest --selectProjects integration tests/integration/apify-live.test.ts)
- * once, to confirm the live dataset shape matches the fixtures; if a field differs, adjust the
- * mapper + its unit fixture. This makes a real, paid actor run — use sparingly. */
+/* OPTIONAL live Apify smoke — validates the real actor I/O against the mappers. OPT-IN: runs ONLY
+ * when APIFY_LIVE_SMOKE=1 is set (in addition to the creds below), so it does NOT make slow, PAID,
+ * non-deterministic actor runs during a routine `npm run test:integration` (now that .env.local
+ * carries working Apify creds). It NEVER runs in CI (CI sets neither the flag nor the creds). Run it
+ * deliberately, once, to confirm the live dataset shape matches the fixtures:
+ *   APIFY_LIVE_SMOKE=1 npx jest --selectProjects integration tests/integration/apify-live.test.ts
+ * if a field differs, adjust the mapper + its unit fixture. This makes a real, paid actor run. */
 import { fetchHotels } from '@/lib/curation/fetch';
 import { scrapeHotelReviews, type ScrapeTarget } from '@/lib/review-intelligence/apify';
 
 jest.setTimeout(300_000);
 
+// Live, paid actor calls are opt-in — a routine integration run must not trigger them.
+const LIVE_SMOKE = process.env.APIFY_LIVE_SMOKE === '1';
 const hasSearch =
-  !!process.env.APIFY_API_TOKEN && !!process.env.APIFY_TRIPADVISOR_SEARCH_ACTOR_ID;
+  LIVE_SMOKE && !!process.env.APIFY_API_TOKEN && !!process.env.APIFY_TRIPADVISOR_SEARCH_ACTOR_ID;
 const hasReviews =
-  !!process.env.APIFY_API_TOKEN && !!process.env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID;
+  LIVE_SMOKE && !!process.env.APIFY_API_TOKEN && !!process.env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID;
 
 const describeSearch = hasSearch ? describe : describe.skip;
 const describeReviews = hasReviews ? describe : describe.skip;

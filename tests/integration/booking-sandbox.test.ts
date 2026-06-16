@@ -1,14 +1,16 @@
 /* Phase 7 · Slice C — RouteStack SANDBOX smoke test (specs/10c-booking-routestack.md + 15).
  *
  * Runs the live session up to the rooms/rates payload and asserts the shape — it NEVER calls
- * get-payment-url and NEVER completes a booking. It is doubly guarded so it is safe in CI:
- *   1. The whole suite is SKIPPED unless ROUTESTACK_API_KEY/SECRET/URL are all present
- *      (key-free CI auto-skips — no false failures).
- *   2. If the sandbox ACCOUNT is not yet provisioned for hotel search (it currently returns
- *      a "member token required" / "partner credentials required" envelope — a RouteStack
- *      admin/account-config step the founder owns, NOT a code defect), the test logs the
- *      reason and skips the assertions rather than failing. The moment the account is ready
- *      this turns into a real green assertion with no code change.
+ * get-payment-url and NEVER completes a booking. It is guarded so it is safe + fast by default:
+ *   1. OPT-IN: the suite only runs when ROUTESTACK_LIVE_SMOKE=1 is set (in addition to the creds
+ *      below). Without it the suite SKIPS — so it does NOT make slow, quota-costing, non-
+ *      deterministic live RouteStack calls during a routine `npm run test:integration`. Run it
+ *      deliberately: `ROUTESTACK_LIVE_SMOKE=1 npm run test:integration -- booking-sandbox`.
+ *   2. CREDS: even with the flag, it skips unless ROUTESTACK_API_KEY/SECRET/URL are all present
+ *      (key-free CI auto-skips — no false failures; CI never sets the flag OR the creds).
+ *   3. If the account is not yet provisioned for hotel search (a "member token required" envelope —
+ *      a RouteStack admin/account-config step, NOT a code defect), the test logs the reason and
+ *      skips the assertions rather than failing.
  *
  * Credentials come from .env.local (loaded here explicitly — the integration project's
  * load-env.ts only loads the local-Supabase .env.test). */
@@ -22,7 +24,10 @@ import { mapRoomRateOptions } from '@/lib/booking/rates';
 config({ path: path.join(process.cwd(), '.env.local') });
 
 const HAS_CREDS = !!(process.env.ROUTESTACK_API_KEY && process.env.ROUTESTACK_API_SECRET && process.env.ROUTESTACK_API_URL);
-const describeMaybe = HAS_CREDS ? describe : describe.skip;
+// Live calls are opt-in: a routine integration run must NOT hit the live RouteStack API (slow,
+// quota-costing, non-deterministic). Set ROUTESTACK_LIVE_SMOKE=1 to actually run it.
+const LIVE_SMOKE = process.env.ROUTESTACK_LIVE_SMOKE === '1';
+const describeMaybe = HAS_CREDS && LIVE_SMOKE ? describe : describe.skip;
 
 jest.setTimeout(60_000);
 

@@ -2,8 +2,24 @@
  * Proves the cache skips search-destinations on a hit, back-fills on a miss, matches the hotel by
  * cached id, and — critically — that a THROWING cache never breaks the booking (best-effort). */
 import { searchAndRates } from '@/lib/booking/routestack';
+import { _clearTokenCache } from '@/lib/booking/auth';
 import type { IdCache, CachedDestination } from '@/lib/booking/id-cache';
 import { makeMockFetch, FIXED_NOW, FIXED_NONCE } from '@/tests/fixtures/routestack';
+
+// Dummy RouteStack creds so getPartnerToken can build its HMAC without a real key. CRITICAL for
+// key-free CI: searchAndRates reads these BEFORE hitting the mock fetch, so without them the test
+// throws "Missing ROUTESTACK_API_KEY" in CI (no creds) while passing locally off .env.local.
+// Restored after each test. (Mirrors tests/unit/booking-orchestrator.test.ts.)
+const ENV = { ROUTESTACK_API_KEY: 'rs_test_key', ROUTESTACK_API_SECRET: 'shhh', ROUTESTACK_API_URL: 'https://evolvemcp.routestack.ai' };
+const savedEnv = { ...process.env };
+beforeEach(() => {
+  Object.assign(process.env, ENV);
+  _clearTokenCache();
+});
+afterEach(() => {
+  process.env = { ...savedEnv };
+  _clearTokenCache();
+});
 
 const INPUT = {
   hotelId: 'our-uuid-1',
