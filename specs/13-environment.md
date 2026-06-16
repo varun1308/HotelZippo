@@ -27,7 +27,11 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `GOOGLE_PLACES_API_KEY` | server-only | Google Places **Text Search (New)**, ID-only field mask — resolves curated hotels → `google_place_id` (12a). Free 10k/mo SKU. Distinct from the OAuth creds. |
 | `DASH0_API_KEY` | server-only | OTEL export to Dash0 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | server-only | Dash0 OTLP endpoint URL |
+| `DASH0_DATASET` | server-only | Dash0 dataset selector — sent as the `Dash0-Dataset` header (`lib/otel/dash0-headers.ts`; optional, default `(default)`) |
 | `PIPELINE_POLL_MS` | server-only | Review-intelligence worker poll interval, ms (`scripts/pipeline/run-worker.ts`; optional, default 5000) |
+| `CURATION_USE_CACHE` | server-only | **Dev only.** `=1` replays cached Apify/Places responses instead of live calls (`lib/dev/actor-cache.ts`). MUST be unset in production. |
+| `NEXT_PUBLIC_ENABLE_DEV_LOGIN` | public | **Dev/E2E only.** `=true` enables the email/password sign-in that BYPASSES Google OAuth (`lib/auth/devSignin.ts`). MUST be unset in production — the build guard (`scripts/build/preflight.mjs`) fails `next build` if it is set. |
+| `NEXT_PUBLIC_E2E` | public | **E2E only.** `=1` injects chat + booking test stubs (`lib/chat/e2e-stub.ts`, `lib/booking/e2e-stub.ts`). MUST be unset in production — blocked by the same build guard. |
 
 ## Rules
 
@@ -36,6 +40,7 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 3. `NEXT_PUBLIC_` is reserved for browser-safe values — all others are server-side.
 4. `.env.local` is always in `.gitignore` — include in the initial scaffold.
 5. `DASH0_API_KEY` and `OTEL_EXPORTER_OTLP_ENDPOINT` are server-side only.
+6. `NEXT_PUBLIC_ENABLE_DEV_LOGIN`, `NEXT_PUBLIC_E2E`, and `CURATION_USE_CACHE` are dev/E2E-only and **must be unset in production**. A build-time guard (`scripts/build/preflight.mjs`, run as `prebuild`) fails `next build` if the first two are set; the CI E2E build opts out via `ALLOW_UNSAFE_FLAGS=1`. See [18 · Deployment Runbook](18-deployment-runbook.md).
 
 ## Setup order (new environment)
 
