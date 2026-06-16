@@ -16,6 +16,7 @@ Authoritative details (columns, types, indexes, SQL for pipeline + curation tabl
 
 - `hotels.star_rating` ∈ {3, 4, 5}.
 - `hotels.price_tier` ∈ {mid-range, luxury, ultra-luxury}.
+- `hotels.source` ∈ {curated, preview} (migration `0013`, default `curated`). `curated` = Apify-curated + review-intelligence-backed (showcase tier); `preview` = Claude-proposed + RouteStack-verified, **no `hotel_intelligence` row**, surfaced with an honest "preview" label. See **12i · Preview Destinations**.
 - `hotels.area` is nullable (card shows destination only when null).
 - `raw_reviews` is permanently accumulated; deduped via `UNIQUE (hotel_id, source, reviewer_name, review_date)`; carries `pipeline_run_id`.
 - `hotel_intelligence.low_confidence` defaults `false`; `true` suppresses the hotel from recommendations.

@@ -117,6 +117,19 @@ Two **service-role-only** tables cache the **STABLE** RouteStack ids so a repeat
 - **Seam:** `lib/booking/id-cache.ts` exposes an **`IdCache` interface** (load/save destination + hotel-RS-id) plus a `makeSupabaseIdCache(serviceClient)` implementation, injected as **`deps.cache`** on `searchAndRates`. **Best-effort / warm-fail:** any cache miss or error degrades to the live calls and **never breaks a booking** (the orchestrator guards each cache call).
 - **Net:** saves **1 of 3 calls** per repeat booking + deterministic hotel matching.
 
+### Destination resolution — Google-Places-anchored disambiguation (2026-06-16, prereq for multi-destination)
+
+⚠️ **Bug found by live probe (2026-06-16).** `pickDestination` (`lib/booking/routestack.ts`) returns the **first** geo-valid `search-destinations` candidate. RouteStack returns ~10 candidates for a free-text query and the *intended* place is often NOT first: probing **"Bali"** returned the real Bali State (id 328057, lat −8.34) at index **[1]**, but a **Fiji islet** (lat −17.5) at index [0] — so the code picked the islet → `search-hotels` returned **0** hotels. Forcing index [1] → **20** hotels. Phuket works only by luck (its correct State is first). This mis-resolves the **live booking flow** for any destination whose first candidate is wrong — not just preview.
+
+**Fix:**
+- `search-hotels` **requires** RouteStack's own `destinationId` (per `openapi.yaml` `HotelSearchRequest.required`) — Google Places does **not** replace `search-destinations`; it **disambiguates** which candidate to use.
+- Resolve the destination's authoritative lat/long via **Google Places Text Search (New)** (reuse `lib/curation/google-places.ts` + `GOOGLE_PLACES_API_KEY`; add a `places.location` field-mask variant — current resolver returns only `places.id`).
+- `pickDestination(result, anchor?)` → when a Google anchor is present, pick the RouteStack candidate **nearest** it (haversine); **fall back** to the current first-valid behavior when Google is unavailable (env-gated, **warm-fail — never break a booking**).
+- Cache the resolved `{ rsDestinationId, type, lat, long }` in **`routestack_destinations`** (PR #42) → one Google lookup per destination, then reused.
+- Tests: fake Google + fake candidates → nearest (correct) wins; no-Google → graceful fallback; a guard that "Bali" picks −8.34 over −17.5.
+
+This is the **prerequisite PR-0** for **12i · Preview Destinations** (Claude-seeded, RouteStack-verified) — preview verification depends on hitting the right place.
+
 > **Ops note:** the live RouteStack + Apify smoke tests are now **OPT-IN** (`ROUTESTACK_LIVE_SMOKE=1` / `APIFY_LIVE_SMOKE=1`) so a routine `npm run test:integration` does **not** fire slow / paid live calls.
 
 ## Booking flow (08c)
