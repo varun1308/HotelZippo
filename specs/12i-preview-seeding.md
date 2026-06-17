@@ -244,3 +244,119 @@ emits cards directly from `hotels`, bypassing the LLM:
 - `previewRecommendations`: returns cards for preview rows (no intelligence fields); empty → `no_preview_hotels`; budget pre-filter respected.
 - `run-assembly`: destination with 0 intelligence + preview hotels → preview result (not error); 0 of both → `no_eligible_hotels`.
 - E2E (15a): a preview-only destination → a card renders with the Preview badge → Proceed-to-book reaches the booking stub. (Closes the loop the prod bug exposed.)
+
+---
+
+# 12i-C · On-the-fly preview seeding from chat (BUILT — 2026-06-17)
+
+**Goal.** When a user asks about one of the five destinations that has **no hotels in the DB**, seed
+its preview hotels **at runtime** and surface them — instead of "coming soon." Today preview seeding is
+operator-only (`/admin/preview/seed`, `PREVIEW_SEEDING_ENABLED`); this makes it happen automatically on
+first user demand.
+
+## Decisions locked (2026-06-17, founder) + architecture resolution (build-time)
+
+- **Seed-once per destination, then cached.** The FIRST user to ask an empty destination triggers the
+  seed; everyone after reads the seeded rows (the existing `previewRecommendations` path). Bounds total
+  cost to ~5 seeds, ever — not per-request.
+- **Five enum destinations only.** No new/arbitrary destinations (the brief enforces the 5-enum). "A
+  destination that doesn't exist" = one of the five with zero hotels, not Tokyo.
+- **RESOLVED at build (the spec's open question): FAST SEED, INLINE — no async needed.** The 45s seed
+  was dominated by the per-hotel `get-hotel-details-and-rates` image loop. A **fast seed** does ONLY the
+  single `search-hotels` call (~a few seconds) and stages names/star/price with `images:null` (card
+  shows the 12g placeholder — still bookable). That fits inside the chat turn's 60s budget, so the seed
+  runs **inline** and the SAME turn returns preview cards — simpler and better UX than async, and
+  `unstable_after` isn't available in Next 14.2.35 anyway (verified). Images backfill later via the
+  operator `/admin/preview/seed` (full seed) or a future job. So: founder's "async + come back" intent
+  is satisfied by an in-turn fast seed instead — no "say show me" round-trip, no background-exec risk.
+
+## Why this is safe (vs. the operator-gated worry)
+
+Runtime seeding means an END USER triggers paid RouteStack/Google calls. The **seed-once + cache** rule
+caps that to one seed per destination total; a **concurrency guard** (a single in-flight seed per
+destination) prevents a thundering herd; and a **feature flag** (`PREVIEW_RUNTIME_SEED`) gates the whole
+behavior so it's off until the founder turns it on. No fabricated data — same RouteStack-first,
+grounded-image, honest-preview pipeline as 12i-B.
+
+## Flow
+
+```
+user: "beach resort for family in Bali"   (Bali has 0 hotels in DB)
+  agent gathers destination + trip type (unchanged)
+  → assemble_recommendations tool runs runAssembly
+     → queryCandidates = 0 (no intelligence)
+     → previewRecommendations = no_preview_hotels (0 preview rows)
+     → NEW: if PREVIEW_RUNTIME_SEED on AND no seed in-flight/done for this dest:
+          - mark a seed "running" (dedupe), kick seedPreviewFromRouteStack in the BACKGROUND
+          - return a `preview_seeding` result → agent says "Give me a moment, gathering bookable
+            options for Bali…" (a `researching` pill, no cards yet)
+  next turn (user says "ok" / "show me" OR a lightweight client poll):
+     → runAssembly runs again → previewRecommendations now finds the seeded rows
+       → preview_recommendations → cards render (Preview badge), bookable.
+```
+
+## Components
+
+1. **Seed tracker (dedupe + once)** — a tiny `preview_seeds` table (migration `0014`):
+   `destination` (PK, the 5-enum) · `status` (`running` | `done` | `failed`) · `started_at` ·
+   `finished_at` · `hotel_count` · `error`. Service-role only (RLS, no policies). `running` blocks a
+   second concurrent seed; `done` means "already seeded — never re-seed." (Lighter than reusing
+   `apify_runs`; this is a per-destination latch, not a run ledger.)
+2. **`lib/preview/runtime-seed.ts`** — `ensurePreviewSeed(client, destination, deps)`:
+   - read `preview_seeds[destination]`; if `done` → return `already_seeded`; if `running` → return
+     `in_progress`; else claim `running` (atomic upsert), and **fire-and-forget**
+     `seedPreviewFromRouteStack` → on success mark `done` + `hotel_count`, on error mark `failed`.
+   - Returns immediately (`started` | `in_progress` | `already_seeded`) — never blocks the turn.
+   - Background work uses `after()` (Next.js `unstable_after`) or a detached promise so the response
+     streams while seeding continues server-side. (If the platform kills detached work, fall back to a
+     dedicated `/api/preview/seed-bg` the client fire-pings — decide at build time.)
+3. **`run-assembly` extension** — when `previewRecommendations` is empty AND `PREVIEW_RUNTIME_SEED` is
+   on, call `ensurePreviewSeed`; return a new **`preview_seeding`** result variant
+   `{ result:'preview_seeding', destination, state:'started'|'in_progress' }`. Else the existing
+   `no_eligible_hotels`.
+4. **Agent + prompt (08b-1)** — on `preview_seeding`, the agent emits a brief honest line
+   ("Gathering bookable options for {destination} — give me a moment, then say 'show me'") and a
+   `researching` pill; NO cards yet. On the next assemble call it gets `preview_recommendations`.
+5. **Surfacing the result** — two options (pick at build): (a) **prompt the user to re-ask** ("say
+   'show me Bali'") — zero new client plumbing, leans on the existing turn loop; or (b) a **client
+   poll** that re-calls assemble every few seconds until cards arrive. (a) is simpler and matches the
+   conversational model; start there.
+
+## Honest contract (unchanged)
+
+Runtime seeding uses the **same RouteStack-first, no-LLM, grounded-image** pipeline (12i-B). Preview
+cards stay clearly badged; nothing fabricated. The only change is WHO triggers the seed (a user, once)
+and WHEN (on first demand) — not WHAT gets stored.
+
+## Cost / abuse controls
+
+- `PREVIEW_RUNTIME_SEED=1` gates the whole feature (off by default).
+- Seed-once: `preview_seeds.status='done'` → never re-seed (cost capped at ~5 seeds total).
+- Concurrency latch: `status='running'` → a second request gets `in_progress`, not a second seed.
+- Bounded `limit` (e.g. 8) per seed — unchanged.
+- (Optional later) a global daily seed cap as a backstop.
+
+## Out of scope
+
+- New/arbitrary destinations (still the 5-enum).
+- Re-seeding / refreshing a `done` destination at runtime (operator `/admin` re-seed still exists for that).
+- Review intelligence for preview hotels (they have none — that's the tier).
+
+## Build plan (ONE PR)
+
+1. migration `0014_preview_seeds.sql` + `lib/preview/runtime-seed.ts` (latch + background seed) + tests.
+2. `run-assembly` → `preview_seeding` variant when empty + flag on + `ensurePreviewSeed`; tests
+   (empty+flag→started; second call→in_progress; flag off→no_eligible_hotels).
+3. Agent/prompt: present `preview_seeding` as a "gathering…" pill + the re-ask nudge; prompt-contract test.
+4. map-recommendation / chat: render the seeding state (researching pill, no cards).
+5. Integration (real DB, no LLM): empty dest + flag → seed latch claimed; second call sees `running`;
+   after seed completes, runAssembly returns preview cards. (Background seed stubbed/awaited in test.)
+6. 13 · Environment: document `PREVIEW_RUNTIME_SEED`.
+
+## Open question for build (flag at PR time, not now)
+
+**Background-execution mechanism on Vercel.** `unstable_after` runs work after the response on Vercel,
+but its time budget is limited and a ~45s seed may exceed it. If so, the seed must run as its own
+request (a `/api/preview/seed-bg` the server kicks, or the existing on-demand worker). The "fast seed,
+defer images" idea (one search call, images later) is the natural mitigation if background time is
+tight — fold in only if needed. Resolve by measuring `unstable_after`'s real budget during build.
