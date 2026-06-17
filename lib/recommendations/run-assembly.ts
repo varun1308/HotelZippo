@@ -22,9 +22,23 @@ import {
   previewRecommendations,
   type PreviewRecommendations,
 } from '@/lib/preview/preview-recommendations';
+import { ensurePreviewSeed, runtimeSeedEnabled } from '@/lib/preview/runtime-seed';
+import type { BookingDeps } from '@/lib/booking/routestack';
 
-/** runAssembly returns a normal assembly result OR the preview variant (12i-B). */
-export type AssemblyOrPreview = RecommendationAssembly | PreviewRecommendations;
+/** The "still seeding" variant (12i-C): a runtime seed is in progress, no cards yet this turn. */
+export interface PreviewSeeding {
+  result: 'preview_seeding';
+  destination: string;
+  state: 'in_progress' | 'failed';
+}
+
+/** runAssembly returns a normal assembly result, the preview variant (12i-B), or the seeding variant. */
+export type AssemblyOrPreview = RecommendationAssembly | PreviewRecommendations | PreviewSeeding;
+
+/** Optional runtime-seed seam (12i-C). Absent → no on-the-fly seeding (CI/tests stay key-free). */
+export interface RuntimeSeedDeps {
+  bookingDeps: BookingDeps;
+}
 
 /** Resolved family_profile + trip_brief (the agent/route pass these through). */
 export interface RunAssemblyInput {
@@ -40,6 +54,7 @@ export async function runAssembly(
   supabase: SupabaseClient,
   input: RunAssemblyInput,
   deps?: AssembleDeps,
+  seedDeps?: RuntimeSeedDeps,
 ): Promise<AssemblyOrPreview> {
   const queryInput: QueryInput = {
     destination: input.trip_brief.destination,
@@ -53,10 +68,25 @@ export async function runAssembly(
   if (candidates.length === 0) {
     // No review intelligence for this destination. Before giving up, check for PREVIEW hotels (12i-B):
     // a preview-only destination should still surface bookable cards (no LLM, no fabricated reviews).
-    const preview = await previewRecommendations(supabase, input.trip_brief.destination, {
+    let preview = await previewRecommendations(supabase, input.trip_brief.destination, {
       budgetTier: queryInput.budgetTier,
     });
     if (preview.result === 'preview_recommendations') return preview;
+
+    // 12i-C: still nothing — seed on the fly (once, race-safe, fast) if enabled, then re-query so the
+    // SAME turn can surface cards. Gated by PREVIEW_RUNTIME_SEED + an injected RouteStack dep.
+    if (seedDeps && runtimeSeedEnabled()) {
+      const seed = await ensurePreviewSeed(supabase, input.trip_brief.destination, seedDeps.bookingDeps);
+      if (seed.state === 'seeded' || seed.state === 'already_seeded') {
+        preview = await previewRecommendations(supabase, input.trip_brief.destination, { budgetTier: queryInput.budgetTier });
+        if (preview.result === 'preview_recommendations') return preview;
+      }
+      // A seed is mid-flight (another request) or failed → tell the agent so it can say "gathering…".
+      if (seed.state === 'in_progress') return { result: 'preview_seeding', destination: input.trip_brief.destination, state: 'in_progress' };
+      if (seed.state === 'failed') return { result: 'preview_seeding', destination: input.trip_brief.destination, state: 'failed' };
+      // 'seeded'/'already_seeded' but the preview query still found nothing (e.g. budget filter excluded
+      // all) or 'empty' → fall through to no_eligible_hotels.
+    }
     return {
       error: 'no_eligible_hotels',
       reason:

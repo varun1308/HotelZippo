@@ -62,7 +62,7 @@ describe('agent hotel hydration (spec 03b)', () => {
   it('attaches _hotel display metadata by hotel_id', async () => {
     const id = await seedHotel();
     const hydrated = await hydrateHotels(admin, assemblyJson(id));
-    if ('error' in hydrated) throw new Error('expected a success variant');
+    if ('error' in hydrated || 'result' in hydrated) throw new Error('expected a success variant');
     const hyd = hydrated.top_pick as {
       _hotel?: { destination?: string; area?: string | null; star_rating?: number; images?: string[] } | null;
     };
@@ -80,7 +80,7 @@ describe('agent hotel hydration (spec 03b)', () => {
 
   it('tolerates unknown hotel_ids (leaves _hotel null)', async () => {
     const hydrated = await hydrateHotels(admin, assemblyJson('00000000-0000-0000-0000-0000000000ff'));
-    if ('error' in hydrated) throw new Error('expected a success variant');
+    if ('error' in hydrated || 'result' in hydrated) throw new Error('expected a success variant');
     expect((hydrated.top_pick as { _hotel?: unknown })._hotel).toBeNull();
   });
 });

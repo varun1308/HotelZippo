@@ -424,7 +424,7 @@ export interface RouteStackPreviewHotel {
 export async function listPreviewHotelsFromRouteStack(
   destination: string,
   deps: BookingDeps,
-  opts: { limit?: number; dates?: { checkIn: string; checkOut: string }; party?: SearchAndRatesInput['party'] } = {},
+  opts: { limit?: number; dates?: { checkIn: string; checkOut: string }; party?: SearchAndRatesInput['party']; fast?: boolean } = {},
 ): Promise<RouteStackPreviewHotel[]> {
   const limit = opts.limit ?? 8;
   const party = opts.party ?? { adults: 2, children: 0, childAges: [], rooms: 1 };
@@ -435,6 +435,13 @@ export async function listPreviewHotelsFromRouteStack(
   const { searchResult } = await searchHotelsInDestination(destination, party, dates, deps);
   const handles = sessionHandles(searchResult);
   const inventory = listSearchHotels(searchResult).filter((h) => h.id && h.name).slice(0, limit);
+
+  // FAST mode (12i-C runtime seed): skip the per-hotel get-hotel-details image loop — the slow part
+  // (~45s for 8 hotels). Stage names/star/price now (1 search call, fits the chat turn); images null →
+  // card placeholder (12g), still bookable. A later full seed (/admin) backfills images.
+  if (opts.fast) {
+    return inventory.map((h) => ({ rsHotelId: h.id, name: h.name, starRating: h.starRating ?? null, heroImage: null }));
+  }
 
   const out: RouteStackPreviewHotel[] = [];
   for (const h of inventory) {

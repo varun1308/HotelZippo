@@ -140,12 +140,13 @@ export async function seedPreviewFromRouteStack(
   client: SupabaseClient,
   destination: string,
   deps: BookingDeps,
-  opts: VerifyOptions & { limit?: number } = {},
+  opts: VerifyOptions & { limit?: number; fast?: boolean } = {},
 ): Promise<SeedFromRouteStackResult> {
   const hotels = await listPreviewHotelsFromRouteStack(destination, deps, {
     limit: opts.limit,
     dates: opts.dates,
     party: opts.party,
+    fast: opts.fast, // 12i-C: runtime seed skips the slow image loop to fit the chat turn
   });
   if (hotels.length === 0) return { found: 0, staged: 0, hotels: [] };
 

@@ -17,7 +17,10 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/db/server';
-import { runAssembly, type AssemblyOrPreview } from '@/lib/recommendations/run-assembly';
+import { runAssembly, type AssemblyOrPreview, type RuntimeSeedDeps } from '@/lib/recommendations/run-assembly';
+import { createRouteStackFetch } from '@/lib/booking/transport';
+import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
+import { resolveCityLocation } from '@/lib/curation/google-places';
 import { DESTINATIONS, BUDGET_TIERS } from '@/lib/db/schemas';
 import type { RecommendationAssembly, RecommendationSuccess } from '@/lib/contracts/recommendation-assembly';
 import {
@@ -128,7 +131,11 @@ export async function runConversation(args: RunConversationArgs) {
         inputSchema: assembleToolInput,
         execute: async (input) => {
           const supabase = createServiceClient();
-          const assembly = await runAssembly(supabase, input, args.assembleModel);
+          // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
+          // so an empty 5-enum destination can be seeded on the fly. Gated by PREVIEW_RUNTIME_SEED
+          // inside runAssembly; built best-effort so a missing piece never breaks the turn.
+          const seedDeps = buildRuntimeSeedDeps(supabase);
+          const assembly = await runAssembly(supabase, input, args.assembleModel, seedDeps);
           // Hydrate display metadata from `hotels` (spec 03b: single batched query by
           // hotel_id) so the client can render cards without a DB round-trip.
           return hydrateHotels(supabase, assembly);
@@ -174,6 +181,23 @@ export async function runUpdateProfile(
   return { updated };
 }
 
+/** Build the 12i-C runtime-seed seam (RouteStack transport + id-cache + warm-failing geocode). Returns
+ *  undefined if the service client can't back the cache — runAssembly then simply won't seed. */
+function buildRuntimeSeedDeps(supabase: SupabaseClient): RuntimeSeedDeps | undefined {
+  try {
+    const geocode = async (q: string) => {
+      try {
+        return await resolveCityLocation(q);
+      } catch {
+        return null;
+      }
+    };
+    return { bookingDeps: { fetchImpl: createRouteStackFetch(), cache: makeSupabaseIdCache(supabase), geocode } };
+  } catch {
+    return undefined;
+  }
+}
+
 /** Attach `_hotel` display metadata to each pick (spec 03b card hydration). Single
  *  batched query by hotel_id. Error variants pass through untouched; the PREVIEW variant (12i-B)
  *  is ALREADY hydrated (it's built from `hotels` rows) so it passes through too. */
@@ -181,8 +205,9 @@ export async function hydrateHotels(
   supabase: SupabaseClient,
   assembly: AssemblyOrPreview,
 ): Promise<AssemblyOrPreview> {
-  // Preview recommendations already carry `_hotel`; nothing to hydrate. Error variants: passthrough.
-  if ('result' in assembly && assembly.result === 'preview_recommendations') return assembly;
+  // Preview recommendations already carry `_hotel`; the seeding variant has no hotels yet. Both pass
+  // through, as do error variants.
+  if ('result' in assembly && (assembly.result === 'preview_recommendations' || assembly.result === 'preview_seeding')) return assembly;
   if ('error' in assembly) return assembly;
   // Past the guards this is the curated success shape.
   const success = assembly as RecommendationSuccess;
