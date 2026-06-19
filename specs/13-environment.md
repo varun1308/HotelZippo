@@ -22,6 +22,7 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `ROUTESTACK_API_KEY` | server-only | RouteStack partner API key (public identifier) — used in the HMAC token exchange (Phase 7) |
 | `ROUTESTACK_API_SECRET` | server-only | RouteStack partner secret — signs the HMAC (`apiKey:timestamp:nonce`) for the partner-token exchange; never exposed to client (Phase 7) |
 | `ROUTESTACK_API_URL` | server-only | RouteStack HTTP base URL — sandbox `https://evolvemcp.routestack.ai` (Phase 7) |
+| `ROUTESTACK_DEBUG_PAYLOADS` | server-only | **Debug gate (Phase 7).** `=1` persists each RouteStack call's REDACTED request/response into the service-role-only `raw_routestack_payloads` table for replay/inspection (`lib/booking/payload-log.ts`). Off by default → zero capture. Redaction (token / correlationId / payment URL / Authorization / guest PII masked) is ALWAYS applied before insert; the table is service-role only (RLS, no policies). Best-effort: a capture failure never affects a booking. Retention is operator-managed (no auto-TTL). The OTEL-logs half is deferred. |
 | `GOOGLE_CLIENT_ID` | server-only | Google OAuth client ID (Phase 4) |
 | `GOOGLE_CLIENT_SECRET` | server-only | Google OAuth client secret (Phase 4) |
 | `GOOGLE_PLACES_API_KEY` | server-only | Google Places **Text Search (New)**, ID-only field mask — resolves curated hotels → `google_place_id` (12a). Free 10k/mo SKU. Distinct from the OAuth creds. |

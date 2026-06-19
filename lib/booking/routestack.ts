@@ -30,6 +30,7 @@ import { getPartnerToken, type RouteStackFetch } from './auth';
 import { buildRoomsOccupancy } from './party';
 import { mapRoomRateOptions } from './rates';
 import type { IdCache } from './id-cache';
+import type { PayloadLog } from './payload-log';
 import {
   BookingError,
   type TravelParty,
@@ -64,6 +65,10 @@ export interface BookingDeps {
    * disambiguates which RouteStack search-destinations candidate to use (nearest wins). When absent or
    * it throws/returns null, resolution warm-fails to the legacy first-valid pick — never blocks a booking. */
   geocode?: (query: string) => Promise<{ lat: number; long: number } | null>;
+  /** OPTIONAL RouteStack payload debug log. When present (route injects it only if
+   * ROUTESTACK_DEBUG_PAYLOADS=1), every call's REDACTED request/response is persisted for replay.
+   * Best-effort: a failed/absent log never affects the booking. */
+  debugLog?: PayloadLog;
 }
 
 const TRACER = 'hotelzippo';
@@ -126,6 +131,12 @@ async function tracedCall(
   return tracer.startActiveSpan(`routestack.${step}`, async (span: Span) => {
     for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v);
     const start = Date.now();
+    // Debug-log capture (best-effort, flag-gated via deps.debugLog). Tracks the raw response +
+    // outcome across every exit path so one record() in finally covers success AND failure.
+    let rawResponse: unknown = null;
+    let logSuccess: boolean | null = null;
+    let logCode: number | null = null;
+    let logError: string | null = null;
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
       let raw: unknown;
@@ -134,11 +145,15 @@ async function tracedCall(
       } catch (e) {
         throw new BookingError('transport', `${step} request failed: ${e instanceof Error ? e.message : String(e)}`);
       }
+      rawResponse = raw;
       const env = asEnvelope(raw);
+      logSuccess = env.success;
+      logCode = env.code ?? null;
       span.setAttribute('success', env.success);
       if (env.code !== undefined) span.setAttribute('code', env.code);
       if (!env.success) {
         const err = attachTrace(envelopeError(env, step), span);
+        logError = err.message;
         span.recordException(err);
         span.setStatus({ code: SpanStatusCode.ERROR });
         throw err;
@@ -146,6 +161,7 @@ async function tracedCall(
       span.setStatus({ code: SpanStatusCode.OK });
       return env;
     } catch (e) {
+      if (logError === null) logError = e instanceof Error ? e.message : String(e);
       if (e instanceof BookingError) {
         attachTrace(e, span);
         if (e.kind === 'transport' || e.kind === 'config') {
@@ -159,6 +175,28 @@ async function tracedCall(
       throw e;
     } finally {
       span.setAttribute('duration_ms', Date.now() - start);
+      if (deps.debugLog) {
+        // Fire-and-forget, fully isolated: the injected log is an arbitrary impl, so we guard against
+        // BOTH a synchronous throw and a rejected promise — a misbehaving debug log must NEVER surface
+        // as an unhandled rejection or block the booking. hotel_id comes from the span attrs if present.
+        try {
+          const p = deps.debugLog.record({
+            step,
+            path,
+            request: body,
+            response: rawResponse,
+            success: logSuccess,
+            code: logCode,
+            durationMs: Date.now() - start,
+            error: logError,
+            hotelId: typeof attrs.hotel_id === 'string' ? attrs.hotel_id : null,
+            traceId: span.spanContext()?.traceId ?? null,
+          });
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } catch {
+          /* debug logging is best-effort — swallow */
+        }
+      }
       span.end();
     }
   });

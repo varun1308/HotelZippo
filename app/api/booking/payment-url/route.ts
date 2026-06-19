@@ -7,8 +7,10 @@
  * (re-search / another shortlisted hotel) per spec 14. */
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
+import { createServiceClient } from '@/lib/db/server';
 import { selectAndPaymentUrl } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { BookingError } from '@/lib/booking/types';
 import type { PaymentUrlRequest, PaymentUrlResponse, BookingApiError } from '@/lib/booking/api-contract';
@@ -41,6 +43,15 @@ export async function POST(req: Request): Promise<Response> {
     return e2ePaymentUrlStub(body);
   }
 
+  // Flag-gated RouteStack payload capture (ROUTESTACK_DEBUG_PAYLOADS=1). Best-effort: a failure to
+  // build the service client just means no capture — never blocks the booking.
+  let debugLog;
+  try {
+    if (payloadLoggingEnabled()) debugLog = makeSupabasePayloadLog(createServiceClient());
+  } catch {
+    debugLog = undefined;
+  }
+
   try {
     const result = await selectAndPaymentUrl(
       {
@@ -52,7 +63,7 @@ export async function POST(req: Request): Promise<Response> {
         roomId: body.roomId,
         dates: body.dates,
       },
-      { fetchImpl: createRouteStackFetch() },
+      { fetchImpl: createRouteStackFetch(), debugLog },
     );
     const payload: PaymentUrlResponse = result;
     return Response.json(payload, { status: 200 });
