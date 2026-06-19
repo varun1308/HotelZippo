@@ -12,6 +12,7 @@ import { createServiceClient } from '@/lib/db/server';
 import { searchAndRates } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
 import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
+import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { resolveCityLocation } from '@/lib/curation/google-places';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { BookingError } from '@/lib/booking/types';
@@ -50,10 +51,15 @@ export async function POST(req: Request): Promise<Response> {
     // The RouteStack id cache (service-role tables) lets repeat bookings skip search-destinations and
     // match the hotel by id. Best-effort: if the service client can't be built, book without it.
     let cache;
+    let debugLog;
     try {
-      cache = makeSupabaseIdCache(createServiceClient());
+      const service = createServiceClient();
+      cache = makeSupabaseIdCache(service);
+      // Flag-gated RouteStack payload capture (ROUTESTACK_DEBUG_PAYLOADS=1). Off → undefined → no capture.
+      if (payloadLoggingEnabled()) debugLog = makeSupabasePayloadLog(service);
     } catch {
       cache = undefined;
+      debugLog = undefined;
     }
     // Google-Places geocoder disambiguates the RouteStack destination (10c). Wrapped to warm-fail:
     // no GOOGLE_PLACES_API_KEY / any error → null → searchAndRates uses the legacy first-valid pick.
@@ -64,7 +70,7 @@ export async function POST(req: Request): Promise<Response> {
         return null;
       }
     };
-    const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch(), cache, geocode });
+    const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch(), cache, geocode, debugLog });
     const payload: RatesResponse = result;
     return Response.json(payload, { status: 200 });
   } catch (e) {

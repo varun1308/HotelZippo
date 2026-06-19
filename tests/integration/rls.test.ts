@@ -95,4 +95,14 @@ describe('RLS — reference + service-role tables', () => {
     const { data } = await alice.client.from('raw_reviews').select('*');
     expect(data ?? []).toHaveLength(0);
   });
+
+  it('raw_routestack_payloads (service-role only) is NOT client-readable', async () => {
+    const admin = serviceClient();
+    await admin
+      .from('raw_routestack_payloads')
+      .insert({ step: 'search_hotels', path: '/mcp/hotel/search-hotels' });
+    const { data } = await alice.client.from('raw_routestack_payloads').select('*');
+    expect(data ?? []).toHaveLength(0);
+    await admin.from('raw_routestack_payloads').delete().eq('step', 'search_hotels');
+  });
 });
