@@ -45,8 +45,9 @@ export interface PayloadLog {
 
 /** Keys whose values are session secrets or the session-bearing deep link — fully masked. */
 const SECRET_KEYS = new Set(['token', 'correlationId', 'correlationid', 'authorization', 'url', 'paymenturl', 'jwt', 'hmac', 'apikey', 'apisecret']);
-/** Keys that (now or once booking is live) carry guest PII — masked. */
-const PII_KEYS = new Set(['guestnames', 'guestname', 'firstname', 'lastname', 'email', 'phone', 'contact', 'childages', 'guests', 'travellers', 'travelers', 'passenger']);
+/** Keys that (now or once booking is live) carry guest PII — masked. Includes the webhook billing
+ * fields (10d) so the webhook_events audit log never stores raw billing name/email. */
+const PII_KEYS = new Set(['guestnames', 'guestname', 'firstname', 'lastname', 'email', 'billing_email', 'billing_name', 'phone', 'contact', 'childages', 'guests', 'travellers', 'travelers', 'passenger']);
 
 const MASK = '[redacted]';
 

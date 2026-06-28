@@ -11,6 +11,7 @@ import { createServiceClient } from '@/lib/db/server';
 import { selectAndPaymentUrl } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
 import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
+import { recordPendingOrder } from '@/lib/booking/webhook';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { BookingError } from '@/lib/booking/types';
 import type { PaymentUrlRequest, PaymentUrlResponse, BookingApiError } from '@/lib/booking/api-contract';
@@ -65,6 +66,21 @@ export async function POST(req: Request): Promise<Response> {
       },
       { fetchImpl: createRouteStackFetch(), debugLog },
     );
+    // Best-effort pending-order write (10d): the bridge a later RouteStack webhook matches to this
+    // user by billing_email. Never blocks the handoff — the user gets their booking URL regardless.
+    try {
+      await recordPendingOrder(createServiceClient(), {
+        userId: user.id,
+        userEmail: user.email ?? null,
+        hotelId: body.hotelId,
+        hotelName: body.hotelName,
+        checkIn: body.dates.checkIn,
+        checkOut: body.dates.checkOut,
+        correlationId: body.correlationId,
+      });
+    } catch {
+      /* swallow — pending-order recording is best-effort */
+    }
     const payload: PaymentUrlResponse = result;
     return Response.json(payload, { status: 200 });
   } catch (e) {
