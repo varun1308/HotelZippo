@@ -116,11 +116,11 @@ export const RA03: RecommendationAssembly = {
   alternatives_introduced: false,
 };
 
-/** RA-04 — budget mismatch. value tier, all Maldives ultra-luxury. */
+/** RA-04 — budget mismatch. value tier, all ultra-luxury available. */
 export const RA04: RecommendationAssembly = {
   error: 'budget_mismatch',
   reason:
-    'Every hotel we cover in the Maldives is ultra-luxury, which is above your value budget.',
+    'The hotels we cover here at your dates are all ultra-luxury, which is above your value budget.',
   available_tiers: ['ultra-luxury'],
 };
 

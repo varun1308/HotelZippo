@@ -8,8 +8,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { DESTINATIONS } from '@/lib/db/schemas';
 
-const DESTINATIONS = ['Phuket', 'Hong Kong', 'Singapore', 'Maldives', 'Bali'] as const;
 type Destination = (typeof DESTINATIONS)[number];
 
 interface Row {

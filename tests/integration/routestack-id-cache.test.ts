@@ -33,7 +33,7 @@ describe('routestack_destinations cache', () => {
   });
 
   it('returns null for an unresolved destination', async () => {
-    expect(await cache.loadDestination('Maldives')).toBeNull();
+    expect(await cache.loadDestination('Tokyo')).toBeNull();
   });
 });
 

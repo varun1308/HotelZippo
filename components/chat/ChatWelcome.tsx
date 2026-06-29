@@ -12,8 +12,10 @@ import {
   Sparkles,
   Palmtree,
   Building2,
+  MapPin,
   type LucideIcon,
 } from 'lucide-react';
+import { DESTINATIONS } from '@/lib/db/schemas';
 
 export interface SuggestionChip {
   icon: LucideIcon;
@@ -114,6 +116,26 @@ export function ChatWelcome({ onSuggestion, chips = DEFAULT_CHIPS }: ChatWelcome
             </button>
           );
         })}
+      </div>
+
+      {/* Destinations we cover — driven by the canonical DESTINATIONS so it never drifts from the
+          supported set. Clicking a chip prefills the composer with that destination. */}
+      <p className="mb-[14px] mt-[30px] font-mono text-[11px] uppercase tracking-[0.1em] text-text-tertiary">
+        Destinations we cover
+      </p>
+      <div className="flex flex-wrap gap-[10px]">
+        {DESTINATIONS.map((destination) => (
+          <button
+            key={destination}
+            type="button"
+            aria-label={`Plan a trip to ${destination}`}
+            onClick={() => onSuggestion?.(`I'm planning a family trip to ${destination}.`)}
+            className="group inline-flex items-center gap-[8px] rounded-pill border border-border bg-surface py-[9px] pl-[11px] pr-[15px] text-left shadow-xs transition duration-base hover:-translate-y-px hover:border-primary-300 hover:bg-primary-50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <MapPin aria-hidden className="h-[15px] w-[15px] flex-none text-primary-500" strokeWidth={1.75} />
+            <span className="text-[14px] font-medium text-text">{destination}</span>
+          </button>
+        ))}
       </div>
     </section>
   );

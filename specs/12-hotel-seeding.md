@@ -5,7 +5,7 @@
 
 ## Selection
 
-250 hotels = top 50 per destination (Phuket, Hong Kong, Singapore, Maldives, Bali) by **TripAdvisor Traveller Ranking**, filtered to **100+ reviews minimum**. Per-hotel data: name, destination, tripadvisor_url, google_place_id, brand, price_tier, images, star_rating (3/4/5).
+250 hotels = top 50 per destination (Phuket, Singapore, Tokyo, Orlando, Bali) by **TripAdvisor Traveller Ranking**, filtered to **100+ reviews minimum**. Per-hotel data: name, destination, tripadvisor_url, google_place_id, brand, price_tier, images, star_rating (3/4/5).
 
 ## Pipeline (Phase 1 build order)
 

@@ -12,7 +12,7 @@ describe('detectBriefUpdates', () => {
 
   it('returns the canonical destination casing regardless of input casing', () => {
     expect(detectBriefUpdates('somewhere in PHUKET please').destination).toBe('Phuket');
-    expect(detectBriefUpdates('hong kong sounds fun').destination).toBe('Hong Kong');
+    expect(detectBriefUpdates('tokyo sounds fun').destination).toBe('Tokyo');
   });
 
   it('maps budget words to the tier labels', () => {

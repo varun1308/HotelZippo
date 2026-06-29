@@ -22,7 +22,7 @@ export interface FixtureFamilyProfile {
 }
 
 export interface FixtureTripBrief {
-  destination: 'Phuket' | 'Hong Kong' | 'Singapore' | 'Maldives' | 'Bali';
+  destination: 'Phuket' | 'Singapore' | 'Tokyo' | 'Orlando' | 'Bali';
   trip_type: 'resort-anchored' | 'city-activity' | 'multi-city';
   travel_dates: string | null;
   focus_areas: string[];

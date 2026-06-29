@@ -3,7 +3,7 @@
  * (specs/15-test-strategy.md) and are reused by the seed + recommendation contracts. */
 import { z } from 'zod';
 
-export const DESTINATIONS = ['Phuket', 'Hong Kong', 'Singapore', 'Maldives', 'Bali'] as const;
+export const DESTINATIONS = ['Phuket', 'Singapore', 'Tokyo', 'Orlando', 'Bali'] as const;
 export const BUDGET_TIERS = ['value', 'comfort', 'luxury'] as const;
 export const PRICE_TIERS = ['mid-range', 'luxury', 'ultra-luxury'] as const;
 export const STAR_RATINGS = [3, 4, 5] as const;

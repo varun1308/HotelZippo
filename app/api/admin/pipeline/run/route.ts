@@ -6,10 +6,9 @@
  * Internal admin tool — no auth in v1 (consistent with /admin/curation). Service client. */
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/db/server';
+import { DESTINATIONS } from '@/lib/db/schemas';
 
 export const runtime = 'nodejs';
-
-const DESTINATIONS = ['Phuket', 'Hong Kong', 'Singapore', 'Maldives', 'Bali'];
 
 export async function POST(req: Request) {
   let body: { scope_type?: string; scope_value?: string };
@@ -25,7 +24,7 @@ export async function POST(req: Request) {
   if (!scope_value) {
     return NextResponse.json({ error: 'scope_value required' }, { status: 400 });
   }
-  if (scope_type === 'destination' && !DESTINATIONS.includes(scope_value)) {
+  if (scope_type === 'destination' && !(DESTINATIONS as readonly string[]).includes(scope_value)) {
     return NextResponse.json({ error: 'unknown destination' }, { status: 400 });
   }
 
