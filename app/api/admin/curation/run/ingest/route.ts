@@ -12,6 +12,7 @@ import { createServiceClient } from '@/lib/db/server';
 import { pullDatasetItems } from '@/lib/apify/client';
 import { loadRun, markIngested } from '@/lib/apify/run-ledger';
 import { mapDatasetItems, stageHotels } from '@/lib/curation/stage';
+import { selectTopHotels } from '@/lib/curation/select';
 
 export const runtime = 'nodejs';
 
@@ -48,8 +49,9 @@ export async function POST(req: Request) {
 
   let items: unknown[];
   try {
-    const max = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);
-    items = await pullDatasetItems(run.apifyDatasetId, { limit: max });
+    // Pull the FULL fetched pool (not just the final 50) so selectTopHotels can rank + backfill.
+    const pool = Number(process.env.APIFY_SEARCH_POOL_SIZE ?? 500);
+    items = await pullDatasetItems(run.apifyDatasetId, { limit: pool });
   } catch (e) {
     return NextResponse.json(
       { error: 'pull_failed', reason: e instanceof Error ? e.message : String(e) },
@@ -57,9 +59,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const hotels = mapDatasetItems(items, run.scopeValue);
+  // Map the whole pool → select the top N (default 50): prefer 4&5-star by Traveller Ranking,
+  // backfill with the next-best-ranked if fewer than N. The 100+ review rule stays a publish gate.
+  const pool = mapDatasetItems(items, run.scopeValue);
+  const topN = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);
+  const hotels = selectTopHotels(pool, { topN });
   const { staged } = await stageHotels(supabase, hotels, 'apify');
   await markIngested(supabase, run.id, { itemCount: items.length });
 
-  return NextResponse.json({ ingested: staged, items: items.length });
+  return NextResponse.json({ ingested: staged, items: items.length, pool: pool.length });
 }
