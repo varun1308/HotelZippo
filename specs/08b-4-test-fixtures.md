@@ -17,7 +17,7 @@ Structured fixtures for the three Conversation Agent prompts. Tests validate **s
 - **RA-01** Resort-anchored (Raj, Phuket; Anantara / JW Marriott / Holiday Inn). Anantara = confirmed Indian food + strong family signal; JW Marriott = preferred brand but no Indian guest reviews; Holiday Inn = hard flag. Expect: Anantara top pick; JW Marriott in `other_picks` with explicit Indian-food gap; `why_top_pick` references vegetarian grandparents + kids-club need.
 - **RA-02** Low-confidence filter — Marina Bay Sands (`low_confidence: true`) excluded; Shangri-La top pick; `other_picks = []`.
 - **RA-03** Evaluate-only — Soneva Fushi + Six Senses Laamu with `evaluate_only: true`; Gili Lankanfushi (stronger but not shortlisted) excluded; `evaluate_only_applied = true`, `alternatives_introduced = false`.
-- **RA-04** Budget mismatch — `value` tier, all Maldives `ultra-luxury` → error object, `available_tiers = ["ultra-luxury"]`.
+- **RA-04** Budget mismatch — `value` tier, all available hotels `ultra-luxury` → error object, `available_tiers = ["ultra-luxury"]`.
 - **RA-05** All hotels flagged — A (moderate, strong), B (severe refurb, thin), C (severe pest, thin). A top pick; all hard flags verbatim; `recommendation_notes` states all options flagged.
 
 ## Session Snapshot (SS-01…SS-02) — Phase 5

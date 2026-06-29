@@ -11,8 +11,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, RotateCcw, AlertCircle } from 'lucide-react';
+import { DESTINATIONS } from '@/lib/db/schemas';
 
-const DESTINATIONS = ['Phuket', 'Hong Kong', 'Singapore', 'Maldives', 'Bali'] as const;
 type Destination = (typeof DESTINATIONS)[number];
 
 type HotelStatus =

@@ -37,7 +37,7 @@ that isn't published yet, and tells you exactly which ones.
 }
 ```
 
-- `destination` ∈ Phuket | Hong Kong | Singapore | Maldives | Bali
+- `destination` ∈ Phuket | Singapore | Tokyo | Orlando | Bali
 - `hard_flags[].severity` ∈ `moderate` | `severe` (amber | red); `review_evidence_count` optional
 - `family_signal_strength.*` ∈ `strong` | `thin` | `none`
 - All four category objects (`conflicting_signals`, `family_signal_strength`,

@@ -13,7 +13,7 @@ const runIds: string[] = [];
 beforeAll(async () => {
   const { data } = await admin
     .from('hotels')
-    .insert({ name: 'Admin API Hotel', destination: 'Maldives', star_rating: 5, price_tier: 'luxury' })
+    .insert({ name: 'Admin API Hotel', destination: 'Tokyo', star_rating: 5, price_tier: 'luxury' })
     .select('id')
     .single();
   hotelId = data!.id;
@@ -86,14 +86,14 @@ describe('TC-P22 run history', () => {
 
 describe('destination counts (Mode A badge)', () => {
   it('reports processed vs total for a destination', async () => {
-    const before = await getDestinationCounts(admin, 'Maldives');
+    const before = await getDestinationCounts(admin, 'Tokyo');
     expect(before.total).toBeGreaterThanOrEqual(1);
     // Add an intelligence row → processed increments.
     await admin.from('hotel_intelligence').upsert(
       { hotel_id: hotelId, review_count_family: 1, review_count_total: 5, low_confidence: false, hard_flags: [] },
       { onConflict: 'hotel_id' },
     );
-    const after = await getDestinationCounts(admin, 'Maldives');
+    const after = await getDestinationCounts(admin, 'Tokyo');
     expect(after.processed).toBe(before.processed + 1);
   });
 });

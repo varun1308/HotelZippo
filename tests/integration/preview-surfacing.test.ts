@@ -8,7 +8,7 @@ import { runAssembly } from '@/lib/recommendations/run-assembly';
 
 jest.setTimeout(30_000);
 const admin = serviceClient();
-const DEST = 'Maldives'; // not in the demo seed → owned by this test
+const DEST = 'Tokyo'; // not in the demo seed → owned by this test
 const OWN = ['ZZ Preview Villa', 'ZZ Preview Lagoon'];
 
 // The assemble dep should NEVER be called on the preview path — fail loudly if it is.

@@ -37,7 +37,7 @@ const BEHAVIOUR_EVIDENCE: Record<PromptBehaviour, RegExp[]> = {
   ],
   'out-of-scope-decline-names-five': [
     /decline warmly/i,
-    /Phuket.*Hong Kong.*Singapore.*Maldives.*Bali/s,
+    /Phuket.*Singapore.*Tokyo.*Orlando.*Bali/s,
   ],
   'confirmed-change-must-call-update-profile': [
     /MUST call\s+`update_profile`/i,

@@ -1,6 +1,6 @@
 # HotelZippo
 
-An AI concierge that finds the right hotel for Indian families travelling with young children across five Asian destinations (Phuket, Hong Kong, Singapore, Maldives, Bali). It replaces hours of fragmented research with a single confident recommendation, backed by AI-synthesised family reviews — and never buries a hard flag.
+An AI concierge that finds the right hotel for Indian families travelling with young children across five destinations (Phuket, Singapore, Tokyo, Orlando, Bali). It replaces hours of fragmented research with a single confident recommendation, backed by AI-synthesised family reviews — and never buries a hard flag.
 
 ## Stack
 Next.js (App Router) · Tailwind CSS **v3** · Supabase (Postgres, Mumbai) · Anthropic Claude · Vercel AI SDK · Apify · RouteStack MCP · OpenTelemetry → Dash0. Hosted on Vercel.

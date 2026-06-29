@@ -14,8 +14,10 @@
 -- routestack_destinations — one row per HotelZippo destination enum value.
 -- ---------------------------------------------------------------------------
 create table public.routestack_destinations (
+  -- Rollout destination set updated by 0017_rollout_destinations (fresh resets get the new list here;
+  -- 0017 covers already-applied DBs). Old set was Phuket/Hong Kong/Singapore/Maldives/Bali.
   destination        text primary key
-                       check (destination in ('Phuket','Hong Kong','Singapore','Maldives','Bali')),
+                       check (destination in ('Phuket','Singapore','Tokyo','Orlando','Bali')),
   rs_destination_id   text not null,
   rs_destination_type text,                         -- e.g. 'State' | 'City'; nullable
   lat                 double precision not null,

@@ -8,8 +8,10 @@
 -- exclusively by the server-side runtime-seed path, never client-read. Canonical: Notion 07 + 12i.
 
 create table public.preview_seeds (
+  -- Rollout destination set updated by 0017_rollout_destinations (fresh resets get the new list here;
+  -- 0017 covers already-applied DBs). Old set was Phuket/Hong Kong/Singapore/Maldives/Bali.
   destination   text primary key
-                  check (destination in ('Phuket', 'Hong Kong', 'Singapore', 'Maldives', 'Bali')),
+                  check (destination in ('Phuket', 'Singapore', 'Tokyo', 'Orlando', 'Bali')),
   status        text not null default 'running'
                   check (status in ('running', 'done', 'failed')),
   hotel_count   integer,

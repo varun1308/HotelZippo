@@ -7,7 +7,7 @@
 ## Why
 
 Only **Phuket** is fully curated (Apify → `hotel_intelligence`). The other four destinations
-(Hong Kong, Singapore, Maldives, Bali) have no hotels, which (a) blocks live RouteStack
+(Singapore, Tokyo, Orlando, Bali) have no hotels, which (a) blocks live RouteStack
 booking-flow testing outside Phuket, and (b) makes the product look incomplete. Running the full
 Apify pipeline per destination is the eventual answer but is paid + operator-heavy.
 

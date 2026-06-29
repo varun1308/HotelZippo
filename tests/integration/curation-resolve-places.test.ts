@@ -8,7 +8,7 @@ import { resolvePlaceIds, type PlaceResolver } from '@/lib/curation/resolve-plac
 jest.setTimeout(30_000);
 const admin = serviceClient();
 
-const DEST = 'Maldives';
+const DEST = 'Tokyo';
 const HOTEL_WITH_GEO = 'Resolve Geo Hotel';
 const HOTEL_NO_GEO = 'Resolve NoGeo Hotel';
 const HOTEL_NO_MATCH = 'Resolve NoMatch Hotel';

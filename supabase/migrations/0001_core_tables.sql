@@ -37,7 +37,9 @@ create index family_profiles_user_id_idx on public.family_profiles (user_id);
 create table public.trip_briefs (
   id                     uuid primary key default gen_random_uuid(),
   user_id                uuid not null references public.users (id) on delete cascade,
-  destination            text check (destination in ('Phuket', 'Hong Kong', 'Singapore', 'Maldives', 'Bali')),
+  -- Rollout destination set updated by 0017_rollout_destinations (fresh resets get the new list here;
+  -- 0017 covers already-applied DBs). Old set was Phuket/Hong Kong/Singapore/Maldives/Bali.
+  destination            text check (destination in ('Phuket', 'Singapore', 'Tokyo', 'Orlando', 'Bali')),
   travel_dates           jsonb,                  -- start, end, or travel_month
   trip_type              text,                   -- resort-anchored / city-activity / multi-city
   focus_areas            text[],
@@ -53,7 +55,8 @@ create index trip_briefs_user_id_idx on public.trip_briefs (user_id);
 create table public.hotels (
   id              uuid primary key default gen_random_uuid(),
   name            text not null,
-  destination     text not null check (destination in ('Phuket', 'Hong Kong', 'Singapore', 'Maldives', 'Bali')),
+  -- Rollout destination set updated by 0017_rollout_destinations (see note on trip_briefs above).
+  destination     text not null check (destination in ('Phuket', 'Singapore', 'Tokyo', 'Orlando', 'Bali')),
   area            text,                           -- neighbourhood; nullable; shown on cards
   star_rating     integer check (star_rating in (3, 4, 5)),
   brand           text,

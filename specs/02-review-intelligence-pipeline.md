@@ -50,7 +50,7 @@ Canonical data model: 07. The schema is documented there too.
 **Access:** No auth for v1 — internal founder tool, not linked from any public page (consistent with the curation tool). No `is_admin` column; auth can be added post-launch.
 
 **Mode A — Full destination run:**
-- Destination dropdown: Phuket / Hong Kong / Singapore / Maldives / Bali.
+- Destination dropdown: Phuket / Singapore / Tokyo / Orlando / Bali.
 - Shows processed-vs-unprocessed hotel count for that destination.
 - "Run full destination" inserts a `pipeline_runs` row and processes all hotels **sequentially**.
 - Blocked if any run is already `running`.
