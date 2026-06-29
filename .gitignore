@@ -23,6 +23,8 @@ next-env.d.ts
 .env.development.local
 .env.test.local
 .env.production.local
+.env.prod-curation
+# .env.prod-curation holds PROD Supabase URL/key + curation creds for the prod data load — NEVER commit
 # .env.example IS committed (template only, no values)
 # .env.e2e IS committed (specs/15a) — only public localhost-only Supabase demo keys + E2E flags, no secrets
 
