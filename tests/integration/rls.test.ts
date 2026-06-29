@@ -53,6 +53,25 @@ describe('RLS — owner-scoped tables isolate users', () => {
     expect(bobView ?? []).toHaveLength(0);
   });
 
+  it('booking_orders: B cannot read A’s row', async () => {
+    // Booking orders are written by the service role (webhook + handoff routes), so insert as admin.
+    const admin = serviceClient();
+    await admin
+      .from('booking_orders')
+      .insert({ user_id: alice.id, user_email: alice.email, hotel_name: 'Alice Hotel' });
+
+    // Bob, querying with his own authenticated client, sees none of Alice's orders.
+    const { data: bobView } = await bob.client.from('booking_orders').select('*');
+    expect(bobView ?? []).toHaveLength(0);
+
+    // Alice reads her own via the owner-read policy.
+    const { data: aliceView } = await alice.client.from('booking_orders').select('*');
+    expect(aliceView).toHaveLength(1);
+    expect(aliceView![0].hotel_name).toBe('Alice Hotel');
+
+    await admin.from('booking_orders').delete().eq('user_id', alice.id);
+  });
+
   it('B cannot insert a row owned by A (WITH CHECK)', async () => {
     const { error } = await bob.client
       .from('family_profiles')
@@ -104,5 +123,15 @@ describe('RLS — reference + service-role tables', () => {
     const { data } = await alice.client.from('raw_routestack_payloads').select('*');
     expect(data ?? []).toHaveLength(0);
     await admin.from('raw_routestack_payloads').delete().eq('step', 'search_hotels');
+  });
+
+  it('webhook_events (service-role only) is NOT client-readable', async () => {
+    const admin = serviceClient();
+    await admin
+      .from('webhook_events')
+      .insert({ event: 'BOOKING_SUCCESS', payload: { event: 'BOOKING_SUCCESS' } });
+    const { data } = await alice.client.from('webhook_events').select('*');
+    expect(data ?? []).toHaveLength(0);
+    await admin.from('webhook_events').delete().eq('event', 'BOOKING_SUCCESS');
   });
 });
