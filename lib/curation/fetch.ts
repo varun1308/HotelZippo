@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fetchedHotelSchema, type FetchHotelsResult, type FetchedHotel } from './types';
 import { runActorGetItems } from '@/lib/apify/client';
 import { buildSearchInput, mapSearchItem } from './apify-mapper';
+import { selectTopHotels } from './select';
 import { DESTINATIONS } from '@/lib/db/schemas';
 
 function slug(destination: string): string {
@@ -23,24 +24,28 @@ async function fetchFromMock(destination: string): Promise<FetchedHotel[]> {
   return fetchedHotelSchema.array().parse(parsed);
 }
 
-/** Live TripAdvisor-search fetch. `maxResults` = "top N by traveller ranking" cap (TA search
- * returns ranking order); the ≥100-review gate stays at approve-time (canApprove), not here.
- * Throws on missing actor id / Apify failure → fetchHotels() catch degrades to playwright→mock. */
+/** Live TripAdvisor-search fetch. Fetches a LARGE pool (~APIFY_SEARCH_POOL_SIZE) then selects the
+ * top N (APIFY_SEARCH_MAX_RESULTS, default 50): prefer 4&5-star by Traveller Ranking, backfill with
+ * the next-best-ranked if fewer than N (see lib/curation/select). The ≥100-review gate stays at
+ * approve-time (canApprove), not here. Throws on missing actor id / Apify failure →
+ * fetchHotels() catch degrades to playwright→mock. */
 async function fetchFromApify(destination: string): Promise<FetchedHotel[]> {
   const actorId = process.env.APIFY_TRIPADVISOR_SEARCH_ACTOR_ID;
   if (!actorId) throw new Error('APIFY_TRIPADVISOR_SEARCH_ACTOR_ID is not set');
   if (!(DESTINATIONS as readonly string[]).includes(destination)) {
     throw new Error(`unknown destination: ${destination}`);
   }
-  const max = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);
+  const poolSize = Number(process.env.APIFY_SEARCH_POOL_SIZE ?? 500);
   const items = await runActorGetItems({
     actorId,
-    input: buildSearchInput(destination, max),
-    limit: max,
+    input: buildSearchInput(destination, poolSize),
+    limit: poolSize,
   });
-  return items
+  const pool = items
     .map((it) => mapSearchItem(it, destination as (typeof DESTINATIONS)[number]))
     .filter((h): h is FetchedHotel => h !== null);
+  const topN = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);
+  return selectTopHotels(pool, { topN });
 }
 
 async function fetchFromPlaywright(_destination: string): Promise<FetchedHotel[]> {

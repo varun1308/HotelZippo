@@ -34,6 +34,15 @@ Web-based internal admin tool at `/admin/curation` (Next.js App Router). **No au
 - **Mock mode:** static fixtures at `/scripts/seed/fixtures/[destination].json`.
 - `APIFY_API_TOKEN` optional — degrades gracefully to fallback/mock.
 
+### Top-N selection (2026-06-30)
+
+We fetch a **large pool** (`APIFY_SEARCH_POOL_SIZE`, default 500) from the actor per destination, then select the hotels to stage via `lib/curation/select.ts` `selectTopHotels`:
+- **Prefer 4 & 5-star** hotels, ordered by **TripAdvisor Traveller Ranking** (best = lowest rank first).
+- Take the top **N** (`APIFY_SEARCH_MAX_RESULTS`, default 50) from that preferred set.
+- If fewer than N four/five-star exist, **backfill** with the next-best-ranked remaining hotels (3-star/unrated) until N — never ship fewer than N when the pool allows.
+- De-dup by name (keep the better-ranked copy). Applied in BOTH the ledger ingest path (`curation/run/ingest`) and the legacy `lib/curation/fetch.ts` apify path.
+- **The ≥100-review rule is NOT applied here** — it stays a publish-time gate (Rule #1), so all N are staged and the operator publishes the review-eligible ones (published count may be < N).
+
 ## Google Place-ID resolution (added 2026-06-07)
 
 The TripAdvisor search actor returns no `google_place_id` (the Google-reviews half of the pipeline needs it). A separate, re-runnable **"Resolve Place IDs"** step fills it for staged rows:

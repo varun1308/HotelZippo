@@ -37,8 +37,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'apify_not_configured' }, { status: 400 });
   }
 
-  const max = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);
-  const input = buildSearchInput(destination!, max);
+  // Fetch a LARGE pool from the actor (~500) so ingest's selectTopHotels can rank + backfill to the
+  // final top-N (APIFY_SEARCH_MAX_RESULTS, default 50). Pool ≫ N is the whole point of the new rule.
+  const pool = Number(process.env.APIFY_SEARCH_POOL_SIZE ?? 500);
+  const input = buildSearchInput(destination!, pool);
   const supabase = createServiceClient();
 
   // Reuse guard — warn, never auto-reuse.
