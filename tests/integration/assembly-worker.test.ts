@@ -1,25 +1,30 @@
 /* Assembly worker route + recommendation_jobs RLS (specs/03c) against LOCAL Supabase.
  *
- * Proves: (1) POST /api/assembly/run claims a seeded pending job and drives it to `succeeded` with
- * the hydrated result persisted (assembly model MOCKED → key-free, no Anthropic call); (2) a duplicate
- * kick is a no-op (idempotent claim); (3) a no-eligible-hotels outcome → failed(no_eligible_hotels);
- * (4) owner-read RLS — user A cannot SELECT user B's job. Cleans its own rows. */
-
-// Mock the assembly model call so the worker runs key-free (no ANTHROPIC_API_KEY). queryCandidates +
-// hydrate still hit the real DB; only assembleRecommendations is replaced.
-jest.mock('@/lib/recommendations/assemble', () => {
-  const actual = jest.requireActual('@/lib/recommendations/assemble');
-  return { ...actual, assembleRecommendations: jest.fn() };
-});
+ * Proves the WORKER ROUTE logic in isolation from hotel-seed contents: (1) POST /api/assembly/run claims
+ * a pending job and drives it to `succeeded` with the hydrated result persisted; (2) a duplicate kick is
+ * a no-op (idempotent claim); (3) a no-eligible-hotels outcome → failed; (4) a thrown model error →
+ * failed(model_failed); (5) owner-read RLS — user A cannot SELECT user B's job.
+ *
+ * `runAssembly` is MOCKED so the test is independent of which hotels are seeded (CI's integration DB has
+ * NO hotel rows → the real runAssembly would always short-circuit to no_eligible_hotels before the model
+ * mock). The job ledger writes still hit the REAL local DB. `hydrateHotels` passes through (no hotels to
+ * hydrate in the mocked result). Key-free (no Anthropic). */
+jest.mock('@/lib/recommendations/run-assembly', () => ({
+  runAssembly: jest.fn(),
+}));
+jest.mock('@/lib/chat/agent', () => ({
+  hydrateHotels: jest.fn(async (_c: unknown, a: unknown) => a),
+}));
 
 import { POST } from '@/app/api/assembly/run/route';
-import { assembleRecommendations } from '@/lib/recommendations/assemble';
+import { runAssembly } from '@/lib/recommendations/run-assembly';
+import { AssemblyError } from '@/lib/recommendations/assemble';
 import { createJob, loadJob } from '@/lib/recommendations/job-ledger';
 import { serviceClient, createTestUser, deleteTestUser } from './helpers';
 
 jest.setTimeout(30_000);
 const admin = serviceClient();
-const mockAssemble = assembleRecommendations as unknown as jest.Mock;
+const mockAssemble = runAssembly as unknown as jest.Mock;
 
 const HASH = `worker-test-${Date.now()}`;
 const SUCCESS_ASSEMBLY = {
@@ -83,11 +88,8 @@ describe('POST /api/assembly/run', () => {
   });
 
   it('a thrown model error → failed(model_failed)', async () => {
-    // Use Phuket (has local candidates) so the flow REACHES assembleRecommendations and its throw fires
-    // (an empty-candidate destination short-circuits to no_eligible_hotels before the model call).
-    const { AssemblyError } = jest.requireActual('@/lib/recommendations/assemble');
     mockAssemble.mockRejectedValue(new AssemblyError('boom', 'model_call_failed'));
-    const job = await createJob(admin, { destination: 'Phuket', inputHash: `${HASH}-fail`, input: { family_profile: { budget_tier: 'comfort' }, trip_brief: { destination: 'Phuket' } } });
+    const job = await createJob(admin, { destination: 'Phuket', inputHash: `${HASH}-fail`, input: { trip_brief: { destination: 'Phuket' } } });
     const res = await post(job.id);
     expect((await res.json()).error_kind).toBe('model_failed');
     const final = await loadJob(admin, job.id);
