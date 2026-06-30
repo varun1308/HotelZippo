@@ -19,6 +19,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/db/server';
 import { runAssembly, type AssemblyOrPreview, type RuntimeSeedDeps } from '@/lib/recommendations/run-assembly';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { createMockRouteStackFetch, routeStackMockEnabled } from '@/lib/booking/mock-transport';
 import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
 import { resolveCityLocation } from '@/lib/curation/google-places';
 import { DESTINATIONS, BUDGET_TIERS } from '@/lib/db/schemas';
@@ -192,7 +193,14 @@ function buildRuntimeSeedDeps(supabase: SupabaseClient): RuntimeSeedDeps | undef
         return null;
       }
     };
-    return { bookingDeps: { fetchImpl: createRouteStackFetch(), cache: makeSupabaseIdCache(supabase), geocode } };
+    // Honour the mock-demo flag here too (10e). The preview runtime-seed path (12i-C) hits RouteStack
+    // search-hotels for a destination with no published hotels — if it used the LIVE transport while
+    // ROUTESTACK_MOCK=1, a Phuket chat with an empty prod DB would hang on the unstable sandbox and the
+    // serverless function would hit its 60s kill. The mock's appOrigin only matters for the payment-url
+    // deep link, which the seed path never calls, so '' is safe here.
+    const mock = routeStackMockEnabled();
+    const fetchImpl = mock ? createMockRouteStackFetch('') : createRouteStackFetch();
+    return { bookingDeps: { fetchImpl, cache: makeSupabaseIdCache(supabase), geocode, mock } };
   } catch {
     return undefined;
   }

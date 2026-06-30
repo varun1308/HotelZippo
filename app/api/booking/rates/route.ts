@@ -16,6 +16,7 @@ import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
 import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { resolveCityLocation } from '@/lib/curation/google-places';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
+import { startDebugTimer } from '@/lib/observability/debug-timing';
 import { BookingError } from '@/lib/booking/types';
 import type { RatesRequest, RatesResponse, BookingApiError } from '@/lib/booking/api-contract';
 
@@ -53,14 +54,19 @@ export async function POST(req: Request): Promise<Response> {
   // without depending on the unstable RouteStack sandbox. The mock returns a deep link to the in-app
   // /booking-demo checkout. Not NEXT_PUBLIC_ → never in the browser bundle → prod-safe.
   if (routeStackMockEnabled()) {
+    const t = startDebugTimer('booking.rates(mock)', { hotel: body.hotelName, dest: body.destination });
     try {
       const fetchImpl = createMockRouteStackFetch(req.url ? new URL(req.url).origin : '', body.hotelName);
       const result = await searchAndRates(body, { fetchImpl, mock: true });
+      t.done({ options: result.options.length });
       return Response.json(result satisfies RatesResponse, { status: 200 });
     } catch (e) {
+      t.fail(e);
       return bookingErr(e);
     }
   }
+
+  const t = startDebugTimer('booking.rates(live)', { hotel: body.hotelName, dest: body.destination });
 
   try {
     // The RouteStack id cache (service-role tables) lets repeat bookings skip search-destinations and
@@ -85,10 +91,13 @@ export async function POST(req: Request): Promise<Response> {
         return null;
       }
     };
+    t.mark('searchAndRates:start');
     const result = await searchAndRates(body, { fetchImpl: createRouteStackFetch(), cache, geocode, debugLog });
+    t.done({ options: result.options.length });
     const payload: RatesResponse = result;
     return Response.json(payload, { status: 200 });
   } catch (e) {
+    t.fail(e);
     return bookingErr(e);
   }
 }

@@ -24,6 +24,7 @@ import {
 } from '@/lib/preview/preview-recommendations';
 import { ensurePreviewSeed, runtimeSeedEnabled } from '@/lib/preview/runtime-seed';
 import type { BookingDeps } from '@/lib/booking/routestack';
+import { startDebugTimer } from '@/lib/observability/debug-timing';
 
 /** The "still seeding" variant (12i-C): a runtime seed is in progress, no cards yet this turn. */
 export interface PreviewSeeding {
@@ -56,6 +57,10 @@ export async function runAssembly(
   deps?: AssembleDeps,
   seedDeps?: RuntimeSeedDeps,
 ): Promise<AssemblyOrPreview> {
+  // DEBUG_BOOKING=1 → step-by-step timing in Vercel Runtime Logs; the LAST line before a 60s function
+  // kill names the step that hung. Free no-op when the flag is off.
+  const t = startDebugTimer('assemble', { dest: input.trip_brief.destination });
+
   const queryInput: QueryInput = {
     destination: input.trip_brief.destination,
     evaluateOnly: input.trip_brief.evaluate_only ?? false,
@@ -64,6 +69,7 @@ export async function runAssembly(
   };
 
   const candidates = await queryCandidates(supabase, queryInput);
+  t.mark('queryCandidates', { count: candidates.length });
 
   if (candidates.length === 0) {
     // No review intelligence for this destination. Before giving up, check for PREVIEW hotels (12i-B):
@@ -71,15 +77,24 @@ export async function runAssembly(
     let preview = await previewRecommendations(supabase, input.trip_brief.destination, {
       budgetTier: queryInput.budgetTier,
     });
-    if (preview.result === 'preview_recommendations') return preview;
+    t.mark('previewRecommendations', { result: preview.result });
+    if (preview.result === 'preview_recommendations') {
+      t.done({ via: 'preview' });
+      return preview;
+    }
 
     // 12i-C: still nothing — seed on the fly (once, race-safe, fast) if enabled, then re-query so the
     // SAME turn can surface cards. Gated by PREVIEW_RUNTIME_SEED + an injected RouteStack dep.
     if (seedDeps && runtimeSeedEnabled()) {
+      t.mark('ensurePreviewSeed:start', { mock: !!seedDeps.bookingDeps.mock });
       const seed = await ensurePreviewSeed(supabase, input.trip_brief.destination, seedDeps.bookingDeps);
+      t.mark('ensurePreviewSeed:done', { state: seed.state });
       if (seed.state === 'seeded' || seed.state === 'already_seeded') {
         preview = await previewRecommendations(supabase, input.trip_brief.destination, { budgetTier: queryInput.budgetTier });
-        if (preview.result === 'preview_recommendations') return preview;
+        if (preview.result === 'preview_recommendations') {
+          t.done({ via: 'runtime-seed' });
+          return preview;
+        }
       }
       // A seed is mid-flight (another request) or failed → tell the agent so it can say "gathering…".
       if (seed.state === 'in_progress') return { result: 'preview_seeding', destination: input.trip_brief.destination, state: 'in_progress' };
@@ -87,6 +102,7 @@ export async function runAssembly(
       // 'seeded'/'already_seeded' but the preview query still found nothing (e.g. budget filter excluded
       // all) or 'empty' → fall through to no_eligible_hotels.
     }
+    t.done({ via: 'no_eligible_hotels' });
     return {
       error: 'no_eligible_hotels',
       reason:
@@ -94,7 +110,10 @@ export async function runAssembly(
     };
   }
 
-  return assembleRecommendations(
+  // The assembly model call (Anthropic) — a common slow step. The next line after this mark is the model
+  // response; if the function dies between them, the model call is the hang.
+  t.mark('assembleRecommendations:start');
+  const assembled = await assembleRecommendations(
     {
       family_profile: input.family_profile ?? null,
       trip_brief: input.trip_brief,
@@ -102,4 +121,6 @@ export async function runAssembly(
     },
     deps,
   );
+  t.done({ via: 'assembled' });
+  return assembled;
 }
