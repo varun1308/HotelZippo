@@ -45,6 +45,12 @@ and the launch-specific decisions. Actual secret **values** never appear in the 
 - `GOOGLE_PLACES_API_KEY` — **secret** (curation place resolution; needed on the app only if curation
   routes run server-side in prod — otherwise worker-side).
 - `DASH0_API_KEY`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `DASH0_DATASET` — optional (prod observability).
+- `ROUTESTACK_MOCK` — **demo toggle (10e), optional.** `=1` → the booking flow uses the **mock RouteStack
+  transport** so the full booking journey is showable in production without the unstable RouteStack
+  sandbox (the curated hotel intelligence — the MOAT — stays 100% real; only the booking HTTP is mocked).
+  Server-only (NOT `NEXT_PUBLIC_`), so it is **safe to leave on in a prod deploy** and does **not** trip
+  the build guard. **Go-live with real bookings = UNSET `ROUTESTACK_MOCK` + redeploy** (no code change);
+  at that point `ROUTESTACK_API_*` must point at the production RouteStack endpoint.
 
 ### MUST be UNSET on Vercel (now build-guarded — leaving them on aborts the build)
 - `NEXT_PUBLIC_ENABLE_DEV_LOGIN` — would enable the email/password **auth bypass**.

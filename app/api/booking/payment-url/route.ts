@@ -10,6 +10,7 @@ import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { createServiceClient } from '@/lib/db/server';
 import { selectAndPaymentUrl } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { createMockRouteStackFetch, routeStackMockEnabled } from '@/lib/booking/mock-transport';
 import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { recordPendingOrder } from '@/lib/booking/webhook';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
@@ -44,16 +45,25 @@ export async function POST(req: Request): Promise<Response> {
     return e2ePaymentUrlStub(body);
   }
 
+  // Mock-demo seam (specs/10e): server-only ROUTESTACK_MOCK=1 swaps the transport for the mock so the
+  // real revalidate → get-payment-url logic runs and the deep link points at the in-app /booking-demo
+  // checkout. The pending-order write below is UNCHANGED — it's the bridge the (self-emitted) webhook
+  // correlates to. Not NEXT_PUBLIC_ → prod-safe.
+  const mock = routeStackMockEnabled();
+
   // Flag-gated RouteStack payload capture (ROUTESTACK_DEBUG_PAYLOADS=1). Best-effort: a failure to
-  // build the service client just means no capture — never blocks the booking.
+  // build the service client just means no capture — never blocks the booking. Skipped in mock mode.
   let debugLog;
   try {
-    if (payloadLoggingEnabled()) debugLog = makeSupabasePayloadLog(createServiceClient());
+    if (!mock && payloadLoggingEnabled()) debugLog = makeSupabasePayloadLog(createServiceClient());
   } catch {
     debugLog = undefined;
   }
 
   try {
+    const fetchImpl = mock
+      ? createMockRouteStackFetch(req.url ? new URL(req.url).origin : '', body.hotelName)
+      : createRouteStackFetch();
     const result = await selectAndPaymentUrl(
       {
         hotelId: body.hotelId,
@@ -64,7 +74,7 @@ export async function POST(req: Request): Promise<Response> {
         roomId: body.roomId,
         dates: body.dates,
       },
-      { fetchImpl: createRouteStackFetch(), debugLog },
+      { fetchImpl, debugLog, mock },
     );
     // Best-effort pending-order write (10d): the bridge a later RouteStack webhook matches to this
     // user by billing_email. Never blocks the handoff — the user gets their booking URL regardless.

@@ -86,6 +86,15 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - **Adaptive mapper:** the rooms/rates mapper is reconciled against a captured sandbox fixture (`specs/fixtures/routestack/rooms-rates.json`); the fixture-driven test keeps it honest after the real capture overwrites the placeholder.
 - **Test type:** unit/jsdom (auth HMAC + JWT cache, party inference + rooms builder, adaptive mapper, orchestrator success-envelope branching, flow state machine, room-picker modal, context wiring, fixture mapper) — all against mock fixtures, **key-free**. node integration (**sandbox smoke**, env-gated: skips without `ROUTESTACK_*` and skips gracefully if the account isn't provisioned; **never completes a live booking** — stops before `get-payment-url`). Live capture + the live booking path are verified manually once the founder provisions the sandbox account (member-token / anonymous config — see `specs/10c-booking-routestack.md` founder dependencies).
 
+#### Phase 7 follow-up — Mock RouteStack demo path (10e)
+(Source: `specs/10e-booking-mock.md`. The mock plugs into the existing injectable `RouteStackFetch` seam so the **real** orchestrator + rates mapper + webhook lifecycle run; only the upstream booking HTTP is faked.)
+- **AC1 — full happy path (mock).** With `ROUTESTACK_MOCK=1`, the real `searchAndRates` → `selectAndPaymentUrl` runs end-to-end through `createMockRouteStackFetch`, producing ≥2 mapped room options (one fully-described, one sparse → graceful omission) and a `/booking-demo` deep-link `bookingUrl`. No live RouteStack network call is made.
+- **AC2 — deterministic pricing.** Same hotel + dates → identical prices; a longer stay → a higher total (proves the per-hotel hash + nights scaling).
+- **AC3 — warm fallbacks.** A `hotelName` carrying `__NOAVAIL__` → `no-availability`; `__EXPIRED__` → `offer-expired` at revalidate — both via the real `BookingError` → spec-14 path.
+- **AC4 — prod safety + gating.** `routeStackMockEnabled()` is true **only** for the exact `'1'` flag and is read at call time; `POST /api/booking/mock-confirm` **403s** when the flag is off and **401s** an anonymous caller.
+- **AC5 — lifecycle self-emit.** When enabled + signed-in, mock-confirm self-emits a `BOOKING_SUCCESS` event (module HOTEL) carrying the user's email as `billing_email`, signed with `ROUTESTACK_WEBHOOK_SECRET` when set, to `/api/webhooks/routestack` — driving the **real** 10d correlation that flips the pending `booking_orders` row CONFIRMED (10d's correlation lifecycle is covered by `booking-webhook.test.ts`). A self-fetch failure never dead-ends the demo.
+- **Test type:** unit/jsdom (mock transport vs the real orchestrator, `tests/unit/booking-mock-transport.test.ts`) + node integration (mock-confirm gating/auth/self-emit, `tests/integration/booking-mock-confirm.test.ts`) — **key-free**, runs in CI without `ROUTESTACK_MOCK`.
+
 ## Later phases (reference)
 Phase 8 (launch checklist — Notion 18; founder-run, not build work in this campaign). See Notion 15.
 
