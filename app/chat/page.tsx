@@ -41,6 +41,7 @@ import { signOut } from '@/lib/auth/signIn';
 import { loadFamilyProfile, saveFamilyProfile } from '@/lib/db/persistence/family-profiles';
 import { saveShortlist, loadShortlistHotels } from '@/lib/db/persistence/shortlists';
 import { loadLatestSnapshot } from '@/lib/db/persistence/sessions';
+import { loadInflightJob } from '@/lib/recommendations/job-ledger';
 import { createSupabaseBrowserClient } from '@/lib/db/ssr';
 import { useSessionSnapshot } from '@/lib/chat/useSessionSnapshot';
 import type { ChatMessage } from '@/lib/chat/types';
@@ -80,6 +81,12 @@ export default function ChatPage() {
   const sessionSnapshotRef = useRef<string | null>(null);
   // Latest conversation, kept for the snapshot trigger hook (read at trigger time).
   const messagesRef = useRef<ChatMessage[]>([]);
+  // 03c durability: a recommendation that was still ASSEMBLING when the page closed. Loaded on mount
+  // from the user's in-flight recommendation_jobs row (owner-read RLS) and seeded as an
+  // assembly-progress block so the chat resumes the progress + lands the cards. `reattachReady` keys
+  // ChatShell so it re-inits with the seed once the (async) load settles.
+  const [reattachMessages, setReattachMessages] = useState<ChatMessage[] | null>(null);
+  const [reattachReady, setReattachReady] = useState(false);
   // The family profile to hand the agent each turn (so it greets by name + never re-asks
   // known fields). A ref because it's only read when a turn is sent. Holds the saved profile
   // when there is one; otherwise a minimal profile seeded with the user's auth name (Google
@@ -99,6 +106,43 @@ export default function ChatPage() {
       })
       .catch(() => {
         /* no prior session / no env → fresh onboarding */
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  // 03c: on mount, re-attach an in-flight assembly job (page closed mid-assembly) so the user resumes
+  // the progress and still gets their cards. Owner-read RLS scopes it to their own job. Best-effort:
+  // any failure → no seed (fresh chat), never blocks the page. `reattachReady` always flips so ChatShell
+  // mounts whether or not a job was found.
+  useEffect(() => {
+    if (!user) {
+      setReattachReady(true);
+      return;
+    }
+    let active = true;
+    loadInflightJob(createSupabaseBrowserClient())
+      .then((job) => {
+        if (!active) return;
+        if (job) {
+          setReattachMessages([
+            {
+              id: `reattach-${job.id}`,
+              role: 'assistant',
+              parts: [
+                { type: 'text', text: 'Picking your recommendations back up…' },
+                { type: 'component', component: 'assembly-progress', props: { jobId: job.id, destination: job.destination } },
+              ],
+            },
+          ]);
+        }
+      })
+      .catch(() => {
+        /* no job / no env → fresh chat */
+      })
+      .finally(() => {
+        if (active) setReattachReady(true);
       });
     return () => {
       active = false;
@@ -296,6 +340,9 @@ export default function ChatPage() {
     <ShortlistProvider actions={shortlistActions}>
       <BookingProvider actions={bookingActions}>
       <ChatShell
+        // Key on the re-attach load so ChatShell re-inits with the seeded in-flight job once it settles.
+        key={reattachReady ? (reattachMessages ? 'reattached' : 'fresh') : 'loading'}
+        initialMessages={reattachMessages ?? undefined}
         source={source}
         briefCount={brief.filledCount}
         shortlistCount={shortlist.count}

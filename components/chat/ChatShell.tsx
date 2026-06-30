@@ -57,6 +57,9 @@ export interface ChatShellProps {
   /** Phase 5: notified whenever the conversation changes, so the page can snapshot it
    *  at the session-memory trigger points. */
   onMessages?: (messages: ChatMessage[]) => void;
+  /** Seed the thread on mount — e.g. a re-attached in-flight assembly-progress block (03c) so a
+   *  reload resumes a recommendation that was still assembling. Read once at init. */
+  initialMessages?: ChatMessage[];
 }
 
 function GhostButton({
@@ -98,9 +101,10 @@ export function ChatShell({
   onOpenShortlist,
   accountMenu,
   onMessages,
+  initialMessages,
 }: ChatShellProps) {
   const { messages, status, researching, streamingMessageId, sendMessage, isBusy } =
-    useChatStream({ source });
+    useChatStream({ source, initialMessages });
 
   const streamRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ComposerHandle>(null);

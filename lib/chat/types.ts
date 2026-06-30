@@ -18,7 +18,15 @@ export interface TextPart {
 
 /** Names of the inline UI blocks the assistant may emit.
  *  Add a name here + a renderer in the MessageRow registry to extend. */
-export type ComponentName = 'recommendation-set' | 'hard-flag' | 'profile-update';
+export type ComponentName = 'recommendation-set' | 'hard-flag' | 'profile-update' | 'assembly-progress';
+
+/** Props for the async-assembly progress block (03c). The block self-polls the job by `jobId` and
+ *  renders an advancing status line, then swaps to the recommendation-set cards on success (or a warm
+ *  fallback on failure). `destination` is shown in the staged copy. */
+export interface AssemblyProgressProps {
+  jobId: string;
+  destination: string;
+}
 
 /** An inline rendered UI block emitted mid-conversation.
  *  `props` is intentionally `unknown` at the transport boundary — the registry

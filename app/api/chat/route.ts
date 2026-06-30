@@ -73,6 +73,7 @@ export async function POST(req: Request) {
       sessionSnapshot: body.sessionSnapshot ?? null,
       userId,
       profileClient,
+      appOrigin: new URL(req.url).origin, // for the async-assembly worker kick (03c)
     });
   } catch (e) {
     return Response.json(
@@ -94,11 +95,24 @@ export async function POST(req: Request) {
           if (part.type === 'text-delta') {
             controller.enqueue(encodeChunk({ type: 'text-delta', delta: part.text }));
           } else if (part.type === 'tool-result' && part.toolName === 'assemble_recommendations') {
-            const props = toRecommendationSetProps(part.output);
-            if (props) {
+            // ASYNC path (03c): the tool dispatched a job → emit a progress block the client polls.
+            const out = part.output as { result?: string; jobId?: string; destination?: string } | undefined;
+            if (out?.result === 'assembly_started' && out.jobId && out.destination) {
               controller.enqueue(
-                encodeChunk({ type: 'component', component: 'recommendation-set', props }),
+                encodeChunk({
+                  type: 'component',
+                  component: 'assembly-progress',
+                  props: { jobId: out.jobId, destination: out.destination },
+                }),
               );
+            } else {
+              // SYNCHRONOUS path: the tool returned the assembly inline → render cards now.
+              const props = toRecommendationSetProps(part.output);
+              if (props) {
+                controller.enqueue(
+                  encodeChunk({ type: 'component', component: 'recommendation-set', props }),
+                );
+              }
             }
           } else if (part.type === 'tool-result' && part.toolName === 'update_profile') {
             // Confirmed profile change persisted → emit the inline "profile updated" chip.

@@ -100,6 +100,25 @@ describe('/api/chat NDJSON translation', () => {
     expect(comp!.props.topPick.hotelName).toBe('JW Marriott Phuket');
   });
 
+  it('translates an ASYNC assembly_started tool-result into an assembly-progress component chunk (03c)', async () => {
+    mockRunConversation.mockResolvedValue(
+      fullStreamOf([
+        { type: 'tool-result', toolName: 'assemble_recommendations', output: { result: 'assembly_started', jobId: 'job-xyz', destination: 'Phuket' } },
+        { type: 'text-delta', text: 'On it.' },
+        { type: 'finish' },
+      ]),
+    );
+    const res = await POST(req(userMsg));
+    const chunks = await readNdjson(res);
+    const comp = chunks.find((c) => c.type === 'component') as
+      | { type: 'component'; component: string; props: { jobId: string; destination: string } }
+      | undefined;
+    expect(comp).toBeTruthy();
+    expect(comp!.component).toBe('assembly-progress');
+    expect(comp!.props.jobId).toBe('job-xyz');
+    expect(comp!.props.destination).toBe('Phuket');
+  });
+
   it('translates an update_profile tool-result into a profile-update component chunk', async () => {
     mockRunConversation.mockResolvedValue(
       fullStreamOf([

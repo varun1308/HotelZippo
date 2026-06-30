@@ -18,6 +18,8 @@ import type {
 import type { ChatMessage, ComponentPart } from '@/lib/chat/types';
 import { ChatStreamText } from './ChatStreamText';
 import { ProfileUpdatedChip, type ProfileUpdatedChipProps } from './ProfileUpdatedChip';
+import { AssemblyProgress } from './AssemblyProgress';
+import type { AssemblyProgressProps } from '@/lib/chat/types';
 
 /* ---- inline component registry ------------------------------------------- */
 /* Maps a component part name → renderer. `props` is narrowed here (the only
@@ -38,6 +40,8 @@ function InlineComponent({ part }: { part: ComponentPart }) {
       );
     case 'profile-update':
       return <ProfileUpdatedChip {...(part.props as ProfileUpdatedChipProps)} />;
+    case 'assembly-progress':
+      return <AssemblyProgress {...(part.props as AssemblyProgressProps)} />;
     default:
       return null;
   }
