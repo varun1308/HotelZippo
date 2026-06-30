@@ -1,0 +1,8 @@
+# Generated demo media — reproducible from the scripts + SCRIPT.md, not committed.
+.venv/
+*.mp3
+*.mov
+*.mp4
+*.aiff
+*.captioned.mp4
+*.cap.mp4
