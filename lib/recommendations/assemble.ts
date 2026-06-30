@@ -4,7 +4,7 @@
  * against the contract. Malformed output FAILS (spec 14) — never a partial recommendation.
  *
  * The model call is INJECTABLE (deps.callModel): the default implementation calls
- * Anthropic (claude-sonnet-4-6, ANTHROPIC_API_KEY server-side only); tests inject
+ * Anthropic (claude-haiku-4-5 default, env ASSEMBLY_MODEL; ANTHROPIC_API_KEY server-side only); tests inject
  * a fake so the contract tests + CI run with no API key. */
 import 'server-only';
 import { promises as fs } from 'node:fs';
@@ -16,7 +16,14 @@ import {
 import type { Candidate } from '@/lib/review-intelligence/query';
 import { startDebugTimer } from '@/lib/observability/debug-timing';
 
-export const ASSEMBLY_MODEL = 'claude-sonnet-4-6';
+/** Assembly model — defaults to Haiku 4.5 for LATENCY + COST. Measured locally (2026-06-30, the real
+ * agent path via scripts/dev/repro-chat-timeout.ts): the assembly call dropped from ~34s (Sonnet) to
+ * ~14-17s (Haiku) and the full chat turn from ~52s to ~27s — the fix for the prod 60s /api/chat timeout
+ * (the Sonnet assembly call was riding to the serverless wall-clock kill). The strict JSON contract
+ * (recommendationAssemblySchema) bounds output quality; behaviour note: Haiku tends to EXCLUDE a
+ * hard-flagged hotel and mention it, where Sonnet surfaces it WITH the flag — accepted trade-off.
+ * Env-overridable (ASSEMBLY_MODEL) → revert to claude-sonnet-4-6 on the host with no redeploy. */
+export const ASSEMBLY_MODEL = process.env.ASSEMBLY_MODEL || 'claude-haiku-4-5';
 
 /** Per-request timeout (ms) for the assembly model call. A hung/slow Anthropic response must fail WARM
  * BEFORE the serverless function's wall-clock kill (60s on /api/chat), so the chat speaks a graceful
