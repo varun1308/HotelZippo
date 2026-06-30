@@ -19,7 +19,7 @@ jest.mock('@/lib/preview/runtime-seed', () => ({
   runtimeSeedEnabled: () => mockRuntimeEnabled(),
 }));
 
-import { runAssembly } from '@/lib/recommendations/run-assembly';
+import { runAssembly, resolveEligibility } from '@/lib/recommendations/run-assembly';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BookingDeps } from '@/lib/booking/routestack';
 
@@ -98,5 +98,36 @@ describe('runAssembly — preview fallback', () => {
     const out = await runAssembly(client, input); // no seedDeps
     expect(mockEnsureSeed).not.toHaveBeenCalled();
     expect((out as { error?: string }).error).toBe('no_eligible_hotels');
+  });
+});
+
+// resolveEligibility is the model-free pre-check the ASYNC dispatcher (03c) runs BEFORE creating a job.
+// It must return {assemble: candidates} only when there's real work for the model; otherwise it returns
+// the TERMINAL result (preview / seeding / no_eligible_hotels) so the agent answers honestly THIS turn
+// instead of falsely promising "your cards will appear in a moment" for an unseeded destination.
+describe('resolveEligibility — async pre-check (03c, the false-promise fix)', () => {
+  it('candidates present → {assemble} (caller dispatches the async job)', async () => {
+    mockQueryCandidates.mockResolvedValue([{ hotel_id: 'x' }]);
+    const out = await resolveEligibility(client, input);
+    expect('assemble' in out && out.assemble).toEqual([{ hotel_id: 'x' }]);
+    expect(mockAssemble).not.toHaveBeenCalled(); // pre-check NEVER makes the model call
+    expect(mockPreviewRecommendations).not.toHaveBeenCalled();
+  });
+
+  it('no candidates + no preview (unseeded Bali) → no_eligible_hotels TERMINAL (no job, no false promise)', async () => {
+    mockRuntimeEnabled.mockReturnValue(false);
+    mockQueryCandidates.mockResolvedValue([]);
+    mockPreviewRecommendations.mockResolvedValue({ result: 'no_preview_hotels', destination: 'Bali' });
+    const out = await resolveEligibility(client, input, seedDeps);
+    expect('assemble' in out).toBe(false);
+    expect((out as { error?: string }).error).toBe('no_eligible_hotels');
+  });
+
+  it('no candidates + preview hotels exist → preview cards TERMINAL (no model job)', async () => {
+    mockQueryCandidates.mockResolvedValue([]);
+    mockPreviewRecommendations.mockResolvedValue({ result: 'preview_recommendations', destination: 'Bali', top_pick: { hotel_id: 'p' }, other_picks: [] });
+    const out = await resolveEligibility(client, input);
+    expect('assemble' in out).toBe(false);
+    expect((out as { result?: string }).result).toBe('preview_recommendations');
   });
 });

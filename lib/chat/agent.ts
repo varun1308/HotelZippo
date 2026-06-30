@@ -17,7 +17,7 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/db/server';
-import { runAssembly, type AssemblyOrPreview, type RuntimeSeedDeps } from '@/lib/recommendations/run-assembly';
+import { runAssembly, resolveEligibility, type AssemblyOrPreview, type RuntimeSeedDeps } from '@/lib/recommendations/run-assembly';
 import { createJob, findReusable } from '@/lib/recommendations/job-ledger';
 import { computeInputHash } from '@/lib/recommendations/input-hash';
 import { createRouteStackFetch } from '@/lib/booking/transport';
@@ -145,19 +145,26 @@ export async function runConversation(args: RunConversationArgs) {
         execute: async (input) => {
           const supabase = createServiceClient();
 
+          // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
+          // so an empty 5-enum destination can be seeded on the fly. Gated by PREVIEW_RUNTIME_SEED
+          // inside runAssembly / resolveEligibility; best-effort so a missing piece never breaks the turn.
+          const seedDeps = buildRuntimeSeedDeps(supabase);
+
           // ASYNC path (03c): dispatch the slow assembly as a JOB and return FAST — the chat turn never
           // makes the model call, so it can't ride the 60s function cap. The client polls the job for
           // staged progress + cards. Gated by ASYNC_ASSEMBLY=1; off → today's synchronous path below.
           if (asyncAssemblyEnabled()) {
-            const job = await dispatchAssemblyJob(supabase, input, args);
-            if (job) return job; // { result: 'assembly_started', jobId, destination }
-            // Fall through to synchronous on any dispatch failure — never dead-end a recommendation turn.
+            const dispatched = await dispatchAssemblyJob(supabase, input, args, seedDeps);
+            // A job was created (there ARE candidates to assemble) → return the sentinel; the client polls.
+            if (isAssemblyStarted(dispatched)) return dispatched;
+            // A terminal, model-free outcome (preview cards / still-seeding / no_eligible_hotels) was
+            // resolved by the cheap pre-check → return it hydrated NOW, so the agent narrates the TRUE
+            // result (e.g. "no options yet") instead of a false "cards coming in a moment" promise.
+            if (dispatched) return hydrateHotels(supabase, dispatched);
+            // null → dispatch hit an unexpected error; fall through to the synchronous path below
+            // (never dead-end a recommendation turn).
           }
 
-          // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
-          // so an empty 5-enum destination can be seeded on the fly. Gated by PREVIEW_RUNTIME_SEED
-          // inside runAssembly; built best-effort so a missing piece never breaks the turn.
-          const seedDeps = buildRuntimeSeedDeps(supabase);
           const assembly = await runAssembly(supabase, input, args.assembleModel, seedDeps);
           // Hydrate display metadata from `hotels` (spec 03b: single batched query by
           // hotel_id) so the client can render cards without a DB round-trip.
@@ -212,16 +219,38 @@ export interface AssemblyStarted {
   destination: string;
 }
 
-/** Dispatch an assembly JOB and return the sentinel (or null on any failure → caller falls back to the
- *  synchronous path). Reuses a recent identical job (input_hash) to avoid double-spend, then fires a
- *  best-effort worker kick. Never throws — a recommendation turn must never dead-end. */
+/** Discriminate the async sentinel from a terminal AssemblyOrPreview (which has top_pick/error/result
+ *  but never the 'assembly_started' literal). Null/undefined → not the sentinel. */
+function isAssemblyStarted(
+  x: AssemblyStarted | AssemblyOrPreview | null,
+): x is AssemblyStarted {
+  return !!x && 'result' in x && x.result === 'assembly_started';
+}
+
+/** Dispatch the async assembly (03c). First runs the CHEAP, model-free eligibility pre-check
+ *  (resolveEligibility): if the destination has no candidates and no preview (e.g. an unseeded Bali),
+ *  it returns that terminal result DIRECTLY — no job is created and the agent narrates the true
+ *  outcome, never a false "your cards will appear in a moment" promise. Only when there ARE candidates
+ *  to assemble does it create the job + sentinel and kick the worker.
+ *
+ *  Returns: AssemblyStarted (job dispatched) · a terminal AssemblyOrPreview (no model needed — caller
+ *  hydrates + returns it now) · or null on an unexpected error (caller falls back to the sync path).
+ *  Never throws — a recommendation turn must never dead-end. */
 async function dispatchAssemblyJob(
   supabase: SupabaseClient,
   input: Parameters<typeof runAssembly>[1],
   args: RunConversationArgs,
-): Promise<AssemblyStarted | null> {
+  seedDeps?: RuntimeSeedDeps,
+): Promise<AssemblyStarted | AssemblyOrPreview | null> {
   try {
     const destination = String(input.trip_brief.destination);
+
+    // Eligibility FIRST (cheap: queryCandidates + preview, no model call). A terminal result here
+    // (preview cards / still-seeding / no_eligible_hotels) is returned directly — we only create a
+    // background job when there are real candidates for the slow model call to assemble.
+    const eligibility = await resolveEligibility(supabase, input, seedDeps);
+    if (!('assemble' in eligibility)) return eligibility;
+
     const inputHash = computeInputHash({
       destination,
       tripType: (input.trip_brief.trip_type as string | undefined) ?? null,
