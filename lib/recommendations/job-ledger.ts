@@ -11,7 +11,6 @@
  *
  * The worker uses the SERVICE client (writes bypass RLS); the client poll uses the cookie/anon client
  * (owner-read RLS gates rows to auth.uid() = user_id). */
-import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const TABLE = 'recommendation_jobs';
@@ -80,25 +79,6 @@ function fromRow(r: JobRow): RecommendationJob {
     startedAt: r.started_at,
     finishedAt: r.finished_at,
   };
-}
-
-/** Stable idempotency/reuse key for an assembly request. Same inputs → same hash → the same job can be
- * re-attached instead of re-spending on the model. Order-independent over the fields that affect output. */
-export function computeInputHash(parts: {
-  destination: string;
-  tripType?: string | null;
-  budgetTier?: string | null;
-  food?: string | null;
-  candidatesKey?: string | null;
-}): string {
-  const canonical = JSON.stringify({
-    destination: parts.destination.trim().toLowerCase(),
-    tripType: parts.tripType ?? null,
-    budgetTier: parts.budgetTier ?? null,
-    food: parts.food ?? null,
-    candidatesKey: parts.candidatesKey ?? null,
-  });
-  return crypto.createHash('sha256').update(canonical).digest('hex').slice(0, 32);
 }
 
 export interface CreateJobInput {
@@ -174,6 +154,26 @@ export async function markFailed(client: SupabaseClient, id: string, errorKind: 
 /** Load one job by id, or null if absent. */
 export async function loadJob(client: SupabaseClient, id: string): Promise<RecommendationJob | null> {
   const { data, error } = await client.from(TABLE).select(SELECT).eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? fromRow(data as JobRow) : null;
+}
+
+/** The signed-in user's most-recent IN-FLIGHT job (pending/running) within `withinMs`, or null. Read
+ * through the user's RLS-scoped client so it only ever returns their own job. Used on chat mount to
+ * RE-ATTACH a recommendation that was still assembling when the page was closed (03c durability). */
+export async function loadInflightJob(
+  client: SupabaseClient,
+  withinMs = 5 * 60 * 1000,
+): Promise<RecommendationJob | null> {
+  const since = new Date(Date.now() - withinMs).toISOString();
+  const { data, error } = await client
+    .from(TABLE)
+    .select(SELECT)
+    .in('status', ['pending', 'running'])
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (error) throw error;
   return data ? fromRow(data as JobRow) : null;
 }

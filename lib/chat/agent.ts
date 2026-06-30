@@ -18,6 +18,8 @@ import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/db/server';
 import { runAssembly, type AssemblyOrPreview, type RuntimeSeedDeps } from '@/lib/recommendations/run-assembly';
+import { createJob, findReusable } from '@/lib/recommendations/job-ledger';
+import { computeInputHash } from '@/lib/recommendations/input-hash';
 import { createRouteStackFetch } from '@/lib/booking/transport';
 import { createMockRouteStackFetch, routeStackMockEnabled } from '@/lib/booking/mock-transport';
 import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
@@ -102,6 +104,16 @@ export interface RunConversationArgs {
   /** RLS-scoped client (cookie SSR) for profile reads/writes. Required alongside `userId`
    *  for `update_profile` to register; absent ⇒ tool not offered (CI/env-free stay green). */
   profileClient?: SupabaseClient;
+  /** Request origin (for the async-assembly worker kick). The route passes req.url's origin. */
+  appOrigin?: string;
+}
+
+/** Async-assembly flag (03c). When ASYNC_ASSEMBLY=1, the assemble_recommendations tool dispatches the
+ * slow LLM call as a JOB and returns fast (the client polls for staged progress + cards) instead of
+ * running the model inline on the chat turn's 60s budget. Off by default → today's synchronous path,
+ * byte-for-byte. Read at call time (never at import) so the module stays env-free to import. */
+export function asyncAssemblyEnabled(): boolean {
+  return process.env.ASYNC_ASSEMBLY === '1';
 }
 
 /**
@@ -132,6 +144,16 @@ export async function runConversation(args: RunConversationArgs) {
         inputSchema: assembleToolInput,
         execute: async (input) => {
           const supabase = createServiceClient();
+
+          // ASYNC path (03c): dispatch the slow assembly as a JOB and return FAST — the chat turn never
+          // makes the model call, so it can't ride the 60s function cap. The client polls the job for
+          // staged progress + cards. Gated by ASYNC_ASSEMBLY=1; off → today's synchronous path below.
+          if (asyncAssemblyEnabled()) {
+            const job = await dispatchAssemblyJob(supabase, input, args);
+            if (job) return job; // { result: 'assembly_started', jobId, destination }
+            // Fall through to synchronous on any dispatch failure — never dead-end a recommendation turn.
+          }
+
           // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
           // so an empty 5-enum destination can be seeded on the fly. Gated by PREVIEW_RUNTIME_SEED
           // inside runAssembly; built best-effort so a missing piece never breaks the turn.
@@ -180,6 +202,59 @@ export async function runUpdateProfile(
   if (updated.length === 0) return { updated: [] }; // patch matched current values → no write
   await saveFamilyProfile(mergeProfile(existing, patch), userId, client);
   return { updated };
+}
+
+/** The sentinel the async tool returns to the model (03c). The chat route translates this into an
+ *  `assembly-progress` component chunk; the client polls the jobId for staged progress + cards. */
+export interface AssemblyStarted {
+  result: 'assembly_started';
+  jobId: string;
+  destination: string;
+}
+
+/** Dispatch an assembly JOB and return the sentinel (or null on any failure → caller falls back to the
+ *  synchronous path). Reuses a recent identical job (input_hash) to avoid double-spend, then fires a
+ *  best-effort worker kick. Never throws — a recommendation turn must never dead-end. */
+async function dispatchAssemblyJob(
+  supabase: SupabaseClient,
+  input: Parameters<typeof runAssembly>[1],
+  args: RunConversationArgs,
+): Promise<AssemblyStarted | null> {
+  try {
+    const destination = String(input.trip_brief.destination);
+    const inputHash = computeInputHash({
+      destination,
+      tripType: (input.trip_brief.trip_type as string | undefined) ?? null,
+      budgetTier: (input.family_profile?.budget_tier as string | undefined) ?? null,
+      food: (input.family_profile?.food_preference as string | undefined) ?? null,
+    });
+
+    // Reuse guard: a recent non-failed job for the same input → re-attach (one model call, not two).
+    const reusable = await findReusable(supabase, inputHash).catch(() => null);
+    const job =
+      reusable ??
+      (await createJob(supabase, {
+        userId: args.userId ?? null,
+        destination,
+        inputHash,
+        input,
+      }));
+
+    // Best-effort worker kick (fire-and-forget; the poll route re-kicks if this is lost). No origin
+    // (standalone/test) → skip the kick; the first client poll's re-kick still runs it.
+    if (args.appOrigin && !reusable) {
+      void fetch(`${args.appOrigin}/api/assembly/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id }),
+        cache: 'no-store',
+      }).catch(() => {});
+    }
+
+    return { result: 'assembly_started', jobId: job.id, destination };
+  } catch {
+    return null; // fall back to synchronous assembly
+  }
 }
 
 /** Build the 12i-C runtime-seed seam (RouteStack transport + id-cache + warm-failing geocode). Returns

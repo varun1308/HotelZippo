@@ -2,8 +2,8 @@
  * Key-free: a tiny in-memory fake of the Supabase query builder exercises the lifecycle
  * (create → claim → markStage → markSucceeded/markFailed), the atomic claim guard, the reuse
  * lookup, and computeInputHash stability. */
+import { computeInputHash } from '@/lib/recommendations/input-hash';
 import {
-  computeInputHash,
   createJob,
   claimJob,
   markStage,
