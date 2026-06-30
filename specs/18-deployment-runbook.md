@@ -51,6 +51,19 @@ and the launch-specific decisions. Actual secret **values** never appear in the 
   Server-only (NOT `NEXT_PUBLIC_`), so it is **safe to leave on in a prod deploy** and does **not** trip
   the build guard. **Go-live with real bookings = UNSET `ROUTESTACK_MOCK` + redeploy** (no code change);
   at that point `ROUTESTACK_API_*` must point at the production RouteStack endpoint.
+- `ROUTESTACK_WEBHOOK_SECRET` — **secret, optional. It is a value YOU invent, not one RouteStack issues.**
+  It is the shared secret that authenticates webhook deliveries to `POST /api/webhooks/routestack` — when
+  set, the route verifies every inbound delivery (timing-safe) and 401s on mismatch; **when unset,
+  verification is skipped** (with a `console.warn`). Generate one with `openssl rand -hex 32`. Its meaning
+  depends on the mode:
+  - **Mock demo (`ROUTESTACK_MOCK=1`)** — it's a **self-loop**: `/api/booking/mock-confirm` signs the
+    self-emitted `BOOKING_SUCCESS` event with it and our own webhook route verifies it, so the value only
+    has to match itself. **You may leave it unset** — the demo still works end-to-end (booking flips
+    PENDING→CONFIRMED). Set a random value if you want the verification path exercised in the demo too.
+  - **Live RouteStack** — the value here **MUST equal the "Webhook access key" configured in RouteStack's
+    dashboard → Webhook Settings** (Live + Sandbox each have their own URL + key). That's how RouteStack
+    authenticates its real deliveries to us. Set the same string in both places.
+  Set it **only** as a server-side env var (never `NEXT_PUBLIC_`), never commit it.
 
 ### MUST be UNSET on Vercel (now build-guarded — leaving them on aborts the build)
 - `NEXT_PUBLIC_ENABLE_DEV_LOGIN` — would enable the email/password **auth bypass**.
