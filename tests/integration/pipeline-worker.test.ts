@@ -149,6 +149,61 @@ describe('pipeline worker — single hotel', () => {
   });
 });
 
+describe('cost guard — destination run skips hotels that already have intelligence', () => {
+  // Use a destination NOT in the demo seed (test owns its rows). 'Tokyo' is in-set + unseeded.
+  const DEST = 'Tokyo';
+  let doneHotel: string; // already has hotel_intelligence → must be SKIPPED
+  let missingHotel: string; // no intelligence → must be processed
+
+  beforeAll(async () => {
+    const { data: d } = await admin.from('hotels').insert({ name: 'Tokyo Done', destination: DEST, star_rating: 5, price_tier: 'luxury' }).select('id').single();
+    doneHotel = d!.id;
+    const { data: m } = await admin.from('hotels').insert({ name: 'Tokyo Missing', destination: DEST, star_rating: 5, price_tier: 'luxury' }).select('id').single();
+    missingHotel = m!.id;
+    // Seed an intelligence row for doneHotel so the guard skips it.
+    await admin.from('hotel_intelligence').insert({ hotel_id: doneHotel, review_count_total: 100, review_count_family: 10, low_confidence: false });
+  });
+  afterAll(async () => {
+    await admin.from('hotel_intelligence').delete().in('hotel_id', [doneHotel, missingHotel]);
+    await admin.from('pipeline_run_hotels').delete().in('hotel_id', [doneHotel, missingHotel]);
+    await admin.from('hotels').delete().in('id', [doneHotel, missingHotel]);
+  });
+
+  it('default run processes ONLY the hotel missing intelligence (no re-scrape of the done one)', async () => {
+    const runId = await newRun(DEST, 'destination');
+    try {
+      const before = process.env.PIPELINE_REFRESH;
+      delete process.env.PIPELINE_REFRESH;
+      const summary = await processRun(admin, runId, deps);
+      if (before !== undefined) process.env.PIPELINE_REFRESH = before;
+
+      // Only 1 hotel (the missing one) was in scope — the done one was skipped entirely.
+      expect(summary.total).toBe(1);
+      const { data: prh } = await admin.from('pipeline_run_hotels').select('hotel_id').eq('run_id', runId);
+      const touched = (prh ?? []).map((r: { hotel_id: string }) => r.hotel_id);
+      expect(touched).toContain(missingHotel);
+      expect(touched).not.toContain(doneHotel); // ← the cost guard: done hotel never re-processed
+    } finally {
+      await admin.from('pipeline_run_hotels').delete().eq('run_id', runId);
+      await admin.from('pipeline_runs').delete().eq('id', runId);
+    }
+  });
+
+  it('PIPELINE_REFRESH=1 forces BOTH hotels back into scope', async () => {
+    const runId = await newRun(DEST, 'destination');
+    const before = process.env.PIPELINE_REFRESH;
+    process.env.PIPELINE_REFRESH = '1';
+    try {
+      const summary = await processRun(admin, runId, deps);
+      expect(summary.total).toBe(2); // both reprocessed when forced
+    } finally {
+      if (before === undefined) delete process.env.PIPELINE_REFRESH; else process.env.PIPELINE_REFRESH = before;
+      await admin.from('pipeline_run_hotels').delete().eq('run_id', runId);
+      await admin.from('pipeline_runs').delete().eq('id', runId);
+    }
+  });
+});
+
 describe('TC-P19 single active run (DB-enforced)', () => {
   it('a second running run is rejected by the one_active_run index', async () => {
     const runId = await newRun(hotelA);

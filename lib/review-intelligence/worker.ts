@@ -163,6 +163,7 @@ export async function processHotel(
 async function resolveHotels(client: SupabaseClient, run: { scope_type: string; scope_value: string }): Promise<HotelRow[]> {
   const cols = 'id, name, destination, tripadvisor_url, google_place_id';
   if (run.scope_type === 'hotel') {
+    // Explicit single-hotel run is ALWAYS processed (the operator chose it — e.g. retry/refresh one).
     const { data } = await client.from('hotels').select(cols).eq('id', run.scope_value);
     return (data ?? []) as HotelRow[];
   }
@@ -172,7 +173,21 @@ async function resolveHotels(client: SupabaseClient, run: { scope_type: string; 
     .select(cols)
     .eq('destination', run.scope_value)
     .order('name', { ascending: true });
-  return (data ?? []) as HotelRow[];
+  let hotels = (data ?? []) as HotelRow[];
+
+  // COST GUARD: by default a destination run processes ONLY hotels that don't yet have intelligence
+  // (never-done + previously-failed), so re-running to finish a partial destination never re-scrapes
+  // (and re-bills Apify for) hotels that already completed. Set PIPELINE_REFRESH=1 to force a full
+  // re-synthesis of every hotel (e.g. a monthly refresh).
+  if (process.env.PIPELINE_REFRESH !== '1') {
+    const { data: existing } = await client
+      .from('hotel_intelligence')
+      .select('hotel_id')
+      .in('hotel_id', hotels.map((h) => h.id));
+    const done = new Set((existing ?? []).map((r: { hotel_id: string }) => r.hotel_id));
+    hotels = hotels.filter((h) => !done.has(h.id));
+  }
+  return hotels;
 }
 
 /** Process an entire run: hotels strictly sequential, per-hotel status + run totals updated,
