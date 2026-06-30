@@ -3,7 +3,7 @@
 - **Notion:** https://app.notion.com/p/3754958429ac81c080e1c9551ee80592
 - **Phase:** 2–3 · **Status:** specced (v1.0.0)
 - **Prompt artifact:** `/prompts/conversation-agent/recommendation-assembly.md`
-- **Model:** `claude-sonnet-4-6`
+- **Model:** `claude-haiku-4-5` (default; env-overridable via `ASSEMBLY_MODEL`. Chosen for latency/cost — the assembly call dropped ~34s→~15s, fixing the prod 60s `/api/chat` timeout. Revert to `claude-sonnet-4-6` via env.)
 
 The assembly engine receives `family_profile`, `trip_brief`, and ≤15 `hotel_intelligence` records; selects + ranks 2–3 hotels; outputs **structured JSON only** (no prose). Primary obligation: **hard flags must appear in output regardless of match quality.** Always commit to a clear top pick.
 
@@ -89,4 +89,4 @@ Score eligible hotels holistically across weighted parameters → strongest = to
 - ✅ Author the prompt at `/prompts/conversation-agent/recommendation-assembly.md`. **BUILT (phase-2-assemble).**
 - ✅ Encode the output schema as a Zod schema (`lib/contracts/recommendation-assembly.ts` — union of success + `no_eligible_hotels`/`budget_mismatch`); contract-test against 08b-4 RA-01…RA-05 (`tests/contract/recommendation-assembly.test.ts`, fixtures in `tests/fixtures/recommendation-assembly.ts`).
 - ✅ `hard-flag-audit`: every source hard flag survives into output (asserted for RA-01 + RA-05).
-- Assembler: `lib/recommendations/assemble.ts` — injectable `callModel` (default = Anthropic `claude-sonnet-4-6`, ANTHROPIC_API_KEY server-side only); malformed output → `AssemblyError`, never a partial (spec 14). Tests inject a fake model so CI runs with no key.
+- Assembler: `lib/recommendations/assemble.ts` — injectable `callModel` (default = Anthropic `claude-haiku-4-5`, env `ASSEMBLY_MODEL`; ANTHROPIC_API_KEY server-side only); malformed output → `AssemblyError`, never a partial (spec 14). Tests inject a fake model so CI runs with no key.

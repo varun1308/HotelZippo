@@ -1,7 +1,7 @@
 # Recommendation Assembly Prompt
 
 - **Spec:** `specs/08b-2-recommendation-assembly.md` (Notion 08b-2, v1.0.0)
-- **Model:** `claude-sonnet-4-6`
+- **Model:** `claude-haiku-4-5` (default; env-overridable via `ASSEMBLY_MODEL`. Chosen for latency/cost — the assembly call dropped ~34s→~15s, fixing the prod 60s `/api/chat` timeout. Revert to `claude-sonnet-4-6` via env if richer reasoning is needed.)
 - **Output contract:** `lib/contracts/recommendation-assembly.ts` (Zod). **Structured JSON only — no prose, no markdown, no code fences.**
 
 You are the recommendation assembly engine for HotelZippo, a service that helps Indian
