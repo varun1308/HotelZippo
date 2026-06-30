@@ -11,6 +11,7 @@ import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { createServiceClient } from '@/lib/db/server';
 import { searchAndRates } from '@/lib/booking/routestack';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { createMockRouteStackFetch, routeStackMockEnabled } from '@/lib/booking/mock-transport';
 import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
 import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { resolveCityLocation } from '@/lib/curation/google-places';
@@ -45,6 +46,20 @@ export async function POST(req: Request): Promise<Response> {
   if (e2eEnabled()) {
     const { e2eRatesStub } = await import('@/lib/booking/e2e-stub');
     return e2eRatesStub(body);
+  }
+
+  // Mock-demo seam (specs/10e): server-only ROUTESTACK_MOCK=1 swaps the RouteStack transport for a
+  // deterministic mock so the FULL booking stack (orchestrator → mapper → handles) runs unchanged,
+  // without depending on the unstable RouteStack sandbox. The mock returns a deep link to the in-app
+  // /booking-demo checkout. Not NEXT_PUBLIC_ → never in the browser bundle → prod-safe.
+  if (routeStackMockEnabled()) {
+    try {
+      const fetchImpl = createMockRouteStackFetch(req.url ? new URL(req.url).origin : '', body.hotelName);
+      const result = await searchAndRates(body, { fetchImpl, mock: true });
+      return Response.json(result satisfies RatesResponse, { status: 200 });
+    } catch (e) {
+      return bookingErr(e);
+    }
   }
 
   try {

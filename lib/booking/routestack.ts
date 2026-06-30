@@ -69,6 +69,9 @@ export interface BookingDeps {
    * ROUTESTACK_DEBUG_PAYLOADS=1), every call's REDACTED request/response is persisted for replay.
    * Best-effort: a failed/absent log never affects the booking. */
   debugLog?: PayloadLog;
+  /** OPTIONAL honesty marker — true when fetchImpl is the demo mock transport (10e). Tags every
+   * span with `mock: true` so Dash0 traces are never mistaken for a live booking. */
+  mock?: boolean;
 }
 
 const TRACER = 'hotelzippo';
@@ -130,6 +133,7 @@ async function tracedCall(
   const tracer = trace.getTracer(TRACER);
   return tracer.startActiveSpan(`routestack.${step}`, async (span: Span) => {
     for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v);
+    if (deps.mock) span.setAttribute('mock', true);
     const start = Date.now();
     // Debug-log capture (best-effort, flag-gated via deps.debugLog). Tracks the raw response +
     // outcome across every exit path so one record() in finally covers success AND failure.
