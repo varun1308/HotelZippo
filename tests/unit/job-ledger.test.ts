@@ -11,6 +11,7 @@ import {
   markFailed,
   loadJob,
   findReusable,
+  reclaimStale,
   JOB_STATUSES,
   JOB_STAGES,
 } from '@/lib/recommendations/job-ledger';
@@ -204,6 +205,39 @@ describe('findReusable (no double-spend guard)', () => {
     await markFailed(client, a.id, 'unknown');
     const found = await findReusable(client, 'dup2');
     expect(found).toBeNull();
+  });
+});
+
+describe('reclaimStale (stuck-job recovery)', () => {
+  const old = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+  const fresh = new Date().toISOString();
+
+  it('is a no-op on a fresh running job', async () => {
+    const client = makeFakeClient();
+    const job = await createJob(client, { destination: 'Phuket', inputHash: 's1', input: {} });
+    await claimJob(client, job.id);
+    const r = await reclaimStale(client, { id: job.id, status: 'running', startedAt: fresh, attempts: 1 });
+    expect(r).toBeNull();
+  });
+
+  it('flips a stale running job (under the attempts cap) back to pending', async () => {
+    const client = makeFakeClient();
+    const job = await createJob(client, { destination: 'Bali', inputHash: 's2', input: {} });
+    await claimJob(client, job.id);
+    const r = await reclaimStale(client, { id: job.id, status: 'running', startedAt: old, attempts: 1 });
+    expect(r).toBe('pending');
+    expect((await loadJob(client, job.id))?.status).toBe('pending');
+  });
+
+  it('fails a stale running job that has hit the attempts cap', async () => {
+    const client = makeFakeClient();
+    const job = await createJob(client, { destination: 'Tokyo', inputHash: 's3', input: {} });
+    await claimJob(client, job.id);
+    const r = await reclaimStale(client, { id: job.id, status: 'running', startedAt: old, attempts: 2 });
+    expect(r).toBe('failed');
+    const final = await loadJob(client, job.id);
+    expect(final?.status).toBe('failed');
+    expect(final?.errorKind).toBe('timeout');
   });
 });
 

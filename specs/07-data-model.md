@@ -8,7 +8,7 @@
 
 ## Scope
 
-10 core tables: `users`, `family_profiles`, `trip_briefs`, `hotels`, `raw_reviews`, `hotel_intelligence`, `sessions`, `shortlists`, `pipeline_runs`, `pipeline_run_hotels`. Plus `curation_hotels` staging (not in the core 10), `raw_review_payloads` (migration 0009 — original untouched Apify actor items, for re-mapping without a re-scrape), the RouteStack id-cache tables `routestack_destinations` + `routestack_hotels` (migration 0011 — cache the stable RouteStack destination/hotel ids for the booking flow), and `apify_runs` (migration 0012 — the Apify run ledger: one row per actor run, so an expensive run is recoverable/re-pullable/refreshable; see 12h).
+10 core tables: `users`, `family_profiles`, `trip_briefs`, `hotels`, `raw_reviews`, `hotel_intelligence`, `sessions`, `shortlists`, `pipeline_runs`, `pipeline_run_hotels`. Plus `curation_hotels` staging (not in the core 10), `raw_review_payloads` (migration 0009 — original untouched Apify actor items, for re-mapping without a re-scrape), the RouteStack id-cache tables `routestack_destinations` + `routestack_hotels` (migration 0011 — cache the stable RouteStack destination/hotel ids for the booking flow), and `apify_runs` (migration 0012 — the Apify run ledger: one row per actor run, so an expensive run is recoverable/re-pullable/refreshable; see 12h). Plus `recommendation_jobs` (migration 0018 — the async-assembly job ledger: one row per recommendation assembly so the slow LLM call runs off the `/api/chat` 60s budget; **owner-read** RLS so the client poll reads its own job; see 03c).
 
 Authoritative details (columns, types, indexes, SQL for pipeline + curation tables) are in `docs/data-model.md` and must match Notion 07 exactly.
 
@@ -24,7 +24,7 @@ Authoritative details (columns, types, indexes, SQL for pipeline + curation tabl
 
 ## RLS plan
 
-- Owner-only (`auth.uid() = user_id`): `family_profiles`, `trip_briefs`, `sessions`, `shortlists`.
+- Owner-only (`auth.uid() = user_id`): `family_profiles`, `trip_briefs`, `sessions`, `shortlists`. **Owner-READ-only** (service-role writes, owner SELECT): `booking_orders` (10d), `recommendation_jobs` (03c — the worker writes via service role; the client poll reads its own job).
 - Read-only for authenticated users: `hotels`, `hotel_intelligence`.
 - Service-role/admin only: `raw_reviews`, `raw_review_payloads`, `pipeline_runs`, `pipeline_run_hotels`, `curation_hotels`, `routestack_destinations`, `routestack_hotels`, `apify_runs`. (RLS enabled with **no** client policies — the service role bypasses RLS; authenticated/anon clients get zero rows.)
 

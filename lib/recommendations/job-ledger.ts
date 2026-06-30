@@ -151,6 +151,37 @@ export async function markFailed(client: SupabaseClient, id: string, errorKind: 
   if (error) throw error;
 }
 
+/** Reclaim a STUCK job — one stuck in `running` past `staleMs` (its worker died mid-run). Under the
+ * attempts cap → flip back to `pending` so the poll re-kick runs it again; at/over the cap → `failed`
+ * (no infinite spin). Returns the resulting status, or null if the job wasn't stale/claimable. Pure
+ * over the injected client; the conditional eq('status','running') makes it race-safe. */
+export async function reclaimStale(
+  client: SupabaseClient,
+  job: Pick<RecommendationJob, 'id' | 'status' | 'startedAt' | 'attempts'>,
+  opts: { staleMs?: number; maxAttempts?: number } = {},
+): Promise<'pending' | 'failed' | null> {
+  const staleMs = opts.staleMs ?? 90_000; // > the worker's 60s budget + margin
+  const maxAttempts = opts.maxAttempts ?? 2;
+  if (job.status !== 'running') return null;
+  const startedAt = job.startedAt ? Date.parse(job.startedAt) : 0;
+  if (!startedAt || Date.now() - startedAt < staleMs) return null;
+
+  const next = job.attempts >= maxAttempts ? 'failed' : 'pending';
+  const patch =
+    next === 'failed'
+      ? { status: 'failed', error_kind: 'timeout', finished_at: new Date().toISOString() }
+      : { status: 'pending', stage: 'queued', started_at: null };
+  const { data, error } = await client
+    .from(TABLE)
+    .update(patch)
+    .eq('id', job.id)
+    .eq('status', 'running')
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return data ? next : null;
+}
+
 /** Load one job by id, or null if absent. */
 export async function loadJob(client: SupabaseClient, id: string): Promise<RecommendationJob | null> {
   const { data, error } = await client.from(TABLE).select(SELECT).eq('id', id).maybeSingle();

@@ -12,6 +12,8 @@
  * props the client renders as cards. Server-side only. */
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
+import { createServiceClient } from '@/lib/db/server';
+import { reclaimStale } from '@/lib/recommendations/job-ledger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,16 +28,35 @@ export async function GET(req: Request, ctx: { params: Promise<{ jobId: string }
   // Owner-read: RLS scopes this SELECT to the signed-in user's own jobs. A non-owner / missing job → null.
   const { data, error } = await supabase
     .from('recommendation_jobs')
-    .select('status, stage, result, error_kind')
+    .select('status, stage, result, error_kind, started_at, attempts')
     .eq('id', jobId)
     .maybeSingle();
 
   if (error) return Response.json({ error: 'lookup_failed' }, { status: 500 });
   if (!data) return Response.json({ error: 'not_found' }, { status: 404 });
 
-  // Re-kick a still-pending job (a lost initial kick) so progress never stalls. Fire-and-forget; the
-  // worker's atomic claim guards against double-run. Never blocks the poll response.
-  if (data.status === 'pending') {
+  let status = data.status as string;
+
+  // Stuck-job reclaim: a job stuck in `running` past the worker budget (its worker died) is flipped
+  // back to pending (under the attempts cap) or failed (over it) via the service client — owner-read
+  // can't write. Best-effort; never blocks the poll. A reclaimed→pending job then re-kicks below.
+  if (status === 'running') {
+    try {
+      const reclaimed = await reclaimStale(createServiceClient(), {
+        id: jobId,
+        status: 'running',
+        startedAt: data.started_at as string | null,
+        attempts: (data.attempts as number) ?? 0,
+      });
+      if (reclaimed) status = reclaimed;
+    } catch {
+      /* reclaim is best-effort */
+    }
+  }
+
+  // Re-kick a pending job (a lost initial kick, or a just-reclaimed stale one) so progress never stalls.
+  // Fire-and-forget; the worker's atomic claim guards against double-run. Never blocks the response.
+  if (status === 'pending') {
     const origin = new URL(req.url).origin;
     void fetch(`${origin}/api/assembly/run`, {
       method: 'POST',
@@ -46,7 +67,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ jobId: string }
   }
 
   return Response.json(
-    { status: data.status, stage: data.stage, result: data.result ?? undefined, error_kind: data.error_kind ?? undefined },
+    {
+      status,
+      stage: status === 'failed' && data.status !== 'failed' ? 'done' : data.stage,
+      result: data.result ?? undefined,
+      error_kind: status === 'failed' && data.status !== 'failed' ? 'timeout' : (data.error_kind ?? undefined),
+    },
     { status: 200 },
   );
 }
