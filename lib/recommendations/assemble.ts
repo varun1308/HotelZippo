@@ -14,8 +14,19 @@ import {
   type RecommendationAssembly,
 } from '@/lib/contracts/recommendation-assembly';
 import type { Candidate } from '@/lib/review-intelligence/query';
+import { startDebugTimer } from '@/lib/observability/debug-timing';
 
 export const ASSEMBLY_MODEL = 'claude-sonnet-4-6';
+
+/** Per-request timeout (ms) for the assembly model call. A hung/slow Anthropic response must fail WARM
+ * BEFORE the serverless function's wall-clock kill (60s on /api/chat), so the chat speaks a graceful
+ * retry instead of the platform dropping the stream mid-flight (the prod 60s-timeout symptom — see prod
+ * logs 2026-06-30: queryCandidates Phuket count=15 → assembly call hung → 60s kill). Default 45s, env-
+ * overridable. Read at call time (never at import) so the module stays env-free to import. */
+export function assemblyTimeoutMs(): number {
+  const raw = Number(process.env.ASSEMBLY_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 45_000;
+}
 const PROMPT_PATH = path.join(
   process.cwd(),
   'prompts',
@@ -79,12 +90,18 @@ const defaultCallModel: CallModel = async ({ system, userJson, model }) => {
   }
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
-  const resp = await client.messages.create({
-    model,
-    max_tokens: 4096,
-    system,
-    messages: [{ role: 'user', content: userJson }],
-  });
+  // Per-request timeout (not the SDK's default): a hung model call throws APIConnectionTimeoutError,
+  // caught upstream and wrapped as a warm AssemblyError('model_call_failed') → the chat offers a retry,
+  // never the raw 60s platform kill that drops the stream.
+  const resp = await client.messages.create(
+    {
+      model,
+      max_tokens: 4096,
+      system,
+      messages: [{ role: 'user', content: userJson }],
+    },
+    { timeout: assemblyTimeoutMs() },
+  );
   const block = resp.content.find((b) => b.type === 'text');
   if (!block || block.type !== 'text') {
     throw new AssemblyError('model returned no text block', 'malformed_output');
@@ -110,10 +127,21 @@ export async function assembleRecommendations(
     candidates: input.candidates,
   });
 
+  // DEBUG_BOOKING=1 → time the model call specifically (prod 2026-06-30 showed the assembly step is
+  // where /api/chat hangs to the 60s kill). promptBytes/candidates help spot a too-large input; the
+  // model:done/model:timeout line tells us whether the 45s warm-fail fired. Free no-op when off.
+  const t = startDebugTimer('assemble.model', {
+    candidates: input.candidates.length,
+    promptBytes: userJson.length,
+    timeoutMs: assemblyTimeoutMs(),
+  });
+
   let raw: string;
   try {
     raw = await callModel({ system, userJson, model: ASSEMBLY_MODEL });
+    t.mark('model:done', { outBytes: raw.length });
   } catch (e) {
+    t.fail(e);
     if (e instanceof AssemblyError) throw e;
     throw new AssemblyError(
       `assembly model call failed: ${e instanceof Error ? e.message : String(e)}`,
