@@ -71,6 +71,10 @@ export default function ChatPage() {
   const sessionSnapshotRef = useRef<string | null>(null);
   // Latest conversation, kept for the snapshot trigger hook (read at trigger time).
   const messagesRef = useRef<ChatMessage[]>([]);
+  // Per-conversation correlation id (specs/14): minted once for the life of this chat page and
+  // sent with every /api/chat turn + assembly poll so the server can tie the whole session
+  // together under one hz.conversation_id in Dash0. A ref so it's stable across re-renders.
+  const conversationIdRef = useRef<string>(crypto.randomUUID());
   // 03c durability: a recommendation that was still ASSEMBLING when the page closed. Loaded on mount
   // from the user's in-flight recommendation_jobs row (owner-read RLS) and seeded as an
   // assembly-progress block so the chat resumes the progress + lands the cards. `reattachReady` keys
@@ -198,7 +202,13 @@ export default function ChatPage() {
       // <session_snapshot> and continues without repetition. Empty ⇒ fresh onboarding.
       // Also pass the signed-in user's profile (Phase 4) so the agent greets by name and
       // skips re-asking known fields.
-      const inner = chatHttpStream(input, history, sessionSnapshotRef.current, profileRef.current);
+      const inner = chatHttpStream(
+        input,
+        history,
+        sessionSnapshotRef.current,
+        profileRef.current,
+        conversationIdRef.current,
+      );
       return (async function* tap(): AsyncIterable<StreamChunk> {
         for await (const chunk of inner) {
           if (chunk.type === 'component' && chunk.component === 'recommendation-set') {

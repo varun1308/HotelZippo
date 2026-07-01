@@ -105,6 +105,9 @@ export interface RunConversationArgs {
   assembleModel?: Parameters<typeof runAssembly>[2];
   /** Signed-in user id — enables the `update_profile` tool (RLS-scoped writes). */
   userId?: string;
+  /** Per-conversation correlation id (specs/14) — stamped on the chat turn + tool spans (PR-3)
+   *  so Dash0 can follow one conversation end-to-end. */
+  conversationId?: string;
   /** RLS-scoped client (cookie SSR) for profile reads/writes. Required alongside `userId`
    *  for `update_profile` to register; absent ⇒ tool not offered (CI/env-free stay green). */
   profileClient?: SupabaseClient;

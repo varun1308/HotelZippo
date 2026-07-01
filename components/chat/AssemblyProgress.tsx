@@ -40,8 +40,8 @@ export interface AssemblyProgressComponentProps extends AssemblyProgressProps {
   poll?: AssemblyPoll;
 }
 
-export function AssemblyProgress({ jobId, destination, poll }: AssemblyProgressComponentProps) {
-  const job = useAssemblyJob(jobId, poll);
+export function AssemblyProgress({ jobId, destination, conversationId, poll }: AssemblyProgressComponentProps) {
+  const job = useAssemblyJob(jobId, poll, conversationId);
 
   if (job.status === 'succeeded') {
     const props = toRecommendationSetProps(job.result);

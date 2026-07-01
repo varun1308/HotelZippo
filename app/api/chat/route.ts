@@ -14,6 +14,7 @@ import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
 import { toModelMessages } from '@/lib/chat/to-model-messages';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { e2eEnabled } from '@/lib/chat/e2e-stub';
+import { withCorrelation, isValidConversationId } from '@/lib/otel/trace';
 import type { ChatMessage, StreamChunk } from '@/lib/chat/types';
 
 export const runtime = 'nodejs';
@@ -24,7 +25,12 @@ function encodeChunk(chunk: StreamChunk): Uint8Array {
 }
 
 export async function POST(req: Request) {
-  let body: { messages?: ChatMessage[]; familyProfile?: unknown; sessionSnapshot?: string | null };
+  let body: {
+    messages?: ChatMessage[];
+    familyProfile?: unknown;
+    sessionSnapshot?: string | null;
+    conversationId?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -33,6 +39,10 @@ export async function POST(req: Request) {
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return Response.json({ error: 'messages required' }, { status: 400 });
   }
+  const messages = body.messages;
+  // Client-minted per-conversation correlation id (specs/14). Validated so a hostile value can't
+  // poison the trace attribute; undefined when absent (older client / non-chat caller).
+  const conversationId = isValidConversationId(body.conversationId) ? body.conversationId : undefined;
 
   // E2E stub seam (specs/15a §1.1): when the Playwright harness sets NEXT_PUBLIC_E2E=1,
   // serve a deterministic, key-free scripted stream instead of the live Anthropic agent.
@@ -67,14 +77,20 @@ export async function POST(req: Request) {
 
   let result;
   try {
-    result = await runConversation({
-      messages: toModelMessages(body.messages),
-      familyProfile: body.familyProfile,
-      sessionSnapshot: body.sessionSnapshot ?? null,
-      userId,
-      profileClient,
-      appOrigin: new URL(req.url).origin, // for the async-assembly worker kick (03c)
-    });
+    // Bind conversation/user correlation into OTEL baggage for the whole turn so every span the
+    // agent creates (the streamText model spans, tool spans, DB spans) inherits
+    // hz.conversation_id + hz.user_id — one Dash0 view per conversation (specs/14).
+    result = await withCorrelation({ conversationId, userId }, () =>
+      runConversation({
+        messages: toModelMessages(messages),
+        familyProfile: body.familyProfile,
+        sessionSnapshot: body.sessionSnapshot ?? null,
+        userId,
+        conversationId,
+        profileClient,
+        appOrigin: new URL(req.url).origin, // for the async-assembly worker kick (03c)
+      }),
+    );
   } catch (e) {
     return Response.json(
       {
@@ -102,7 +118,7 @@ export async function POST(req: Request) {
                 encodeChunk({
                   type: 'component',
                   component: 'assembly-progress',
-                  props: { jobId: out.jobId, destination: out.destination },
+                  props: { jobId: out.jobId, destination: out.destination, conversationId },
                 }),
               );
             } else {

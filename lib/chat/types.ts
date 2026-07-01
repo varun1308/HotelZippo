@@ -26,6 +26,9 @@ export type ComponentName = 'recommendation-set' | 'hard-flag' | 'profile-update
 export interface AssemblyProgressProps {
   jobId: string;
   destination: string;
+  /** Per-conversation correlation id (specs/14), echoed by the server into this block so the
+   *  poll requests carry it and Dash0 ties the polls to the same conversation as the chat turn. */
+  conversationId?: string;
 }
 
 /** An inline rendered UI block emitted mid-conversation.

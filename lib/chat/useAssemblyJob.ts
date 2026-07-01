@@ -8,7 +8,7 @@
  * re-attaches the same jobId picks the progress right back up (the job row is the source of truth). */
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export type AssemblyJobStage = 'queued' | 'finding_hotels' | 'checking_intelligence' | 'writing' | 'done';
 export type AssemblyJobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
@@ -35,13 +35,28 @@ const MAX_MS = 5 * 60 * 1000; // stop polling after 5 min — a stuck job should
 /** Injectable fetch (tests pass a fake). Defaults to GET /api/assembly/:jobId. */
 export type AssemblyPoll = (jobId: string) => Promise<PollResponse>;
 
-const defaultPoll: AssemblyPoll = async (jobId) => {
-  const res = await fetch(`/api/assembly/${encodeURIComponent(jobId)}`, { cache: 'no-store' });
-  if (!res.ok) return {};
-  return (await res.json()) as PollResponse;
-};
+/** Build the live poll, appending the conversation id (specs/14) so each poll request correlates
+ *  to the chat turn that spawned the job in Dash0. */
+function makeDefaultPoll(conversationId?: string): AssemblyPoll {
+  return async (jobId) => {
+    const qs = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : '';
+    const res = await fetch(`/api/assembly/${encodeURIComponent(jobId)}${qs}`, { cache: 'no-store' });
+    if (!res.ok) return {};
+    return (await res.json()) as PollResponse;
+  };
+}
 
-export function useAssemblyJob(jobId: string, poll: AssemblyPoll = defaultPoll): AssemblyJobState {
+export function useAssemblyJob(
+  jobId: string,
+  poll?: AssemblyPoll,
+  conversationId?: string,
+): AssemblyJobState {
+  // An injected poll (tests) wins; otherwise build the live one bound to this conversation id.
+  // Memoized so the effect doesn't re-fire on every render (a fresh closure each render would).
+  const activePoll = useMemo(
+    () => poll ?? makeDefaultPoll(conversationId),
+    [poll, conversationId],
+  );
   const [state, setState] = useState<AssemblyJobState>({ status: 'unknown', stage: 'queued', result: null, errorKind: null });
   const startedRef = useRef<number>(0);
 
@@ -54,7 +69,7 @@ export function useAssemblyJob(jobId: string, poll: AssemblyPoll = defaultPoll):
       if (!active) return;
       let r: PollResponse = {};
       try {
-        r = await poll(jobId);
+        r = await activePoll(jobId);
       } catch {
         /* transient — try again next tick */
       }
@@ -78,7 +93,7 @@ export function useAssemblyJob(jobId: string, poll: AssemblyPoll = defaultPoll):
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [jobId, poll]);
+  }, [jobId, activePoll]);
 
   return state;
 }
