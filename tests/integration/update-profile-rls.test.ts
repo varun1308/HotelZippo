@@ -1,8 +1,9 @@
 /* Agent profile persistence — end-to-end against local Supabase, AS a real signed-in user so
  * the write goes through RLS (auth.uid() = user_id) exactly as in the browser. Asserts the
- * `update_profile` tool path: a confirmed change to an EXISTING profile updates the row, no
- * profile → no-op, and a no-change patch writes nothing. Cross-user isolation is already
- * proven by rls.test.ts (WITH CHECK on family_profiles); here we focus on the tool semantics. */
+ * `update_profile` tool path: a first confirmed fact CREATES the row (onboarding capture), a
+ * confirmed change to an existing profile updates it, and a no-change patch writes nothing.
+ * Cross-user isolation is already proven by rls.test.ts (WITH CHECK on family_profiles); here
+ * we focus on the tool semantics. */
 import { createTestUser, deleteTestUser, serviceClient, type TestUser } from './helpers';
 import { saveFamilyProfile } from '@/lib/db/persistence/family-profiles';
 import type { FamilyProfile } from '@/components/profile';
@@ -34,14 +35,19 @@ const seeded: FamilyProfile = {
 };
 
 describe('update_profile against a real RLS client', () => {
-  it('no-ops when the user has no profile yet', async () => {
-    const res = await runUpdateProfile({ budgetTier: 'luxury' }, user.id, user.client);
-    expect(res).toEqual({ updated: [] });
+  it('CREATES the row from the first confirmed fact when the user has no profile yet', async () => {
+    const res = await runUpdateProfile(
+      { children: [{ name: 'Aanya', age: 7 }, { name: 'Vir', age: 2 }] },
+      user.id,
+      user.client,
+    );
+    expect(res.updated).toEqual(['children']);
     const { data } = await serviceClient()
       .from('family_profiles')
-      .select('id')
-      .eq('user_id', user.id);
-    expect(data ?? []).toHaveLength(0);
+      .select('family_members')
+      .eq('user_id', user.id)
+      .single();
+    expect((data?.family_members as { children: unknown[] }).children).toHaveLength(2);
   });
 
   it('persists a confirmed change to an existing profile (budget → luxury)', async () => {

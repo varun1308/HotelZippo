@@ -31,6 +31,7 @@ import {
   saveFamilyProfile,
   mergeProfile,
   changedFieldLabels,
+  emptyProfile,
   type ProfilePatch,
 } from '@/lib/db/persistence/family-profiles';
 import type { Child } from '@/components/profile';
@@ -175,18 +176,19 @@ export async function runConversation(args: RunConversationArgs) {
         },
       }),
       // Only offered to a signed-in user with an RLS-scoped client (env-free build + key-free
-      // CI never register it). It changes a KNOWN profile only — onboarding owns the first save.
+      // CI never register it). Creates the profile row if none exists, else merges — so it is
+      // the save path for BOTH first-time onboarding capture AND later edits.
       ...(args.userId && args.profileClient
         ? {
             update_profile: tool({
               description:
-                'Persist a CONFIRMED change or addition to the signed-in family’s saved ' +
-                'profile (e.g. they switch budget to luxury, or tell you they’re now ' +
-                'vegetarian). Call ONLY after the user confirms the change, and ONLY for a ' +
-                'returning user who already has a saved profile — never during first-time ' +
-                'onboarding (the summary/form saves that), and never for an unconfirmed or ' +
-                'hypothetical preference. Send only the fields that changed. If no profile ' +
-                'exists yet it is a safe no-op.',
+                'Persist a CONFIRMED profile fact for the signed-in family — during first-time ' +
+                'onboarding (e.g. they tell you their kids’ ages, food preference, budget) OR a ' +
+                'later change (e.g. they switch budget to luxury, or say they’re now vegetarian). ' +
+                'Creates the profile if none exists yet, otherwise merges. Call after the user ' +
+                'confirms the fact, as EACH field is captured — never for an unconfirmed or ' +
+                'hypothetical preference. Send only the fields that changed. If nothing actually ' +
+                'changed it is a safe no-op.',
               inputSchema: updateProfileInput,
               execute: (input): Promise<ProfileUpdateResult> =>
                 runUpdateProfile(input, args.userId!, args.profileClient!),
@@ -197,16 +199,20 @@ export async function runConversation(args: RunConversationArgs) {
   });
 }
 
-/** Merge a confirmed patch into the signed-in user's EXISTING profile (RLS-scoped). No-op
- *  (returns `{updated: []}`) when there is no profile yet (onboarding owns the first save) or
- *  the patch matches current values — so no chip ever fires on a non-change. */
+/** Merge a confirmed patch into the signed-in user's profile (RLS-scoped), CREATING the row
+ *  from a blank base if they have none yet — so this is the persist path for both first-time
+ *  onboarding capture and later edits. No-op (returns `{updated: []}`) only when the patch
+ *  matches current values — so no chip ever fires on a non-change. */
 export async function runUpdateProfile(
   input: z.infer<typeof updateProfileInput>,
   userId: string,
   client: SupabaseClient,
 ): Promise<ProfileUpdateResult> {
-  const existing = await loadFamilyProfile(client);
-  if (!existing) return { updated: [] }; // no known profile → onboarding's job, not ours
+  // No row yet (first-time onboarding) → merge the confirmed fields onto a blank profile and
+  // CREATE it. This is the only path that persists conversationally-captured onboarding data
+  // (name/kids/food/budget); without it, everything the concierge gathers before the structured
+  // form is lost. saveFamilyProfile upserts on user_id, so the merged-from-empty write inserts.
+  const existing = (await loadFamilyProfile(client)) ?? emptyProfile();
   const patch = input as ProfilePatch & { children?: Child[] };
   const updated = changedFieldLabels(existing, patch);
   if (updated.length === 0) return { updated: [] }; // patch matched current values → no write
