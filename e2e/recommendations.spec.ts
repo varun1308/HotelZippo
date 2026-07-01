@@ -21,11 +21,14 @@ test.describe('J2 · Onboarding → recommendations', () => {
 
   test('AC2.2 — filling the brief hard gates enables "Find hotels"', async ({ page }) => {
     const findHotels = page.getByRole('button', { name: /find hotels/i });
-    // Disabled before the two hard gates (destination + trip type) are known.
+    // Disabled before all four hard gates (destination + trip type + dates + who) are known.
     await expect(findHotels).toBeDisabled();
-    // One message carrying BOTH a destination and a trip-type fills both gates (the
-    // deterministic detector reads the user's own words).
+    // Destination + trip type alone is NOT enough anymore — the deterministic detector fills
+    // only two of the four gates, so the button stays disabled.
     await sendMessage(page, 'We want Phuket — a beach resort.');
+    await expect(findHotels).toBeDisabled();
+    // Adding WHEN (dates) and WHO (travelling party) fills the remaining two gates → enabled.
+    await sendMessage(page, 'Travelling in December with my wife and two kids.');
     await expect(findHotels).toBeEnabled();
   });
 
