@@ -14,6 +14,8 @@ import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
 import { toModelMessages } from '@/lib/chat/to-model-messages';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { e2eEnabled } from '@/lib/chat/e2e-stub';
+import { SpanStatusCode } from '@opentelemetry/api';
+import { withCorrelation, startManagedSpan, HZ, isValidConversationId } from '@/lib/otel/trace';
 import type { ChatMessage, StreamChunk } from '@/lib/chat/types';
 
 export const runtime = 'nodejs';
@@ -24,7 +26,12 @@ function encodeChunk(chunk: StreamChunk): Uint8Array {
 }
 
 export async function POST(req: Request) {
-  let body: { messages?: ChatMessage[]; familyProfile?: unknown; sessionSnapshot?: string | null };
+  let body: {
+    messages?: ChatMessage[];
+    familyProfile?: unknown;
+    sessionSnapshot?: string | null;
+    conversationId?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -33,6 +40,10 @@ export async function POST(req: Request) {
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return Response.json({ error: 'messages required' }, { status: 400 });
   }
+  const messages = body.messages;
+  // Client-minted per-conversation correlation id (specs/14). Validated so a hostile value can't
+  // poison the trace attribute; undefined when absent (older client / non-chat caller).
+  const conversationId = isValidConversationId(body.conversationId) ? body.conversationId : undefined;
 
   // E2E stub seam (specs/15a §1.1): when the Playwright harness sets NEXT_PUBLIC_E2E=1,
   // serve a deterministic, key-free scripted stream instead of the live Anthropic agent.
@@ -65,17 +76,36 @@ export async function POST(req: Request) {
     /* no env / no cookies → run without profile persistence */
   }
 
+  // The chat.turn root span spans the WHOLE turn — including the stream drain that runs after
+  // this handler returns — so the streamText model spans + chat.tool spans nest under it and the
+  // turn is one legible unit in Dash0 (specs/14). withCorrelation binds hz.conversation_id +
+  // hz.user_id into baggage so the span (and its children) inherit them. Ended in the stream's
+  // finally. recordInputs/Outputs stay OFF (no conversation content in spans).
+  const turn = withCorrelation({ conversationId, userId }, () =>
+    startManagedSpan('chat.turn', {
+      attrs: {
+        [HZ.turnIndex]: messages.length,
+        [HZ.authenticated]: Boolean(userId),
+      },
+    }),
+  );
+
   let result;
   try {
-    result = await runConversation({
-      messages: toModelMessages(body.messages),
-      familyProfile: body.familyProfile,
-      sessionSnapshot: body.sessionSnapshot ?? null,
-      userId,
-      profileClient,
-      appOrigin: new URL(req.url).origin, // for the async-assembly worker kick (03c)
-    });
+    result = await turn.runInContext(() =>
+      runConversation({
+        messages: toModelMessages(messages),
+        familyProfile: body.familyProfile,
+        sessionSnapshot: body.sessionSnapshot ?? null,
+        userId,
+        conversationId,
+        profileClient,
+        appOrigin: new URL(req.url).origin, // for the async-assembly worker kick (03c)
+      }),
+    );
   } catch (e) {
+    turn.span.recordException(e as Error);
+    turn.end(SpanStatusCode.ERROR);
     return Response.json(
       {
         error: 'chat_failed',
@@ -86,9 +116,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // Translate the SDK fullStream → our NDJSON StreamChunk protocol.
+  // Translate the SDK fullStream → our NDJSON StreamChunk protocol. Drained inside the chat.turn
+  // context so the SDK's lazily-created model/tool spans nest under it.
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    start: (controller) => turn.runInContext(async () => {
+      let turnError = false;
       try {
         controller.enqueue(encodeChunk({ type: 'typing' }));
         for await (const part of result.fullStream) {
@@ -102,7 +134,7 @@ export async function POST(req: Request) {
                 encodeChunk({
                   type: 'component',
                   component: 'assembly-progress',
-                  props: { jobId: out.jobId, destination: out.destination },
+                  props: { jobId: out.jobId, destination: out.destination, conversationId },
                 }),
               );
             } else {
@@ -124,6 +156,8 @@ export async function POST(req: Request) {
               );
             }
           } else if (part.type === 'error') {
+            turnError = true;
+            turn.span.addEvent('stream_error');
             controller.enqueue(
               encodeChunk({
                 type: 'text-delta',
@@ -134,6 +168,8 @@ export async function POST(req: Request) {
         }
         controller.enqueue(encodeChunk({ type: 'done' }));
       } catch (e) {
+        turnError = true;
+        turn.span.recordException(e as Error);
         controller.enqueue(
           encodeChunk({
             type: 'text-delta',
@@ -141,11 +177,11 @@ export async function POST(req: Request) {
           }),
         );
         controller.enqueue(encodeChunk({ type: 'done' }));
-        void e;
       } finally {
         controller.close();
+        turn.end(turnError ? SpanStatusCode.ERROR : SpanStatusCode.OK);
       }
-    },
+    }),
   });
 
   return new Response(stream, {

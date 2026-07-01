@@ -14,6 +14,7 @@ import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { createServiceClient } from '@/lib/db/server';
 import { reclaimStale } from '@/lib/recommendations/job-ledger';
+import { withSpan, HZ, isValidConversationId } from '@/lib/otel/trace';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,19 @@ export async function GET(req: Request, ctx: { params: Promise<{ jobId: string }
   const { jobId } = await ctx.params;
   if (!jobId) return Response.json({ error: 'jobId required' }, { status: 400 });
 
+  // Correlate this poll to the conversation that spawned the job (specs/14). The client passes
+  // conversation_id as a query param; validated so a hostile value can't poison the attribute.
+  const convParam = new URL(req.url).searchParams.get('conversation_id');
+  const conversationId = isValidConversationId(convParam) ? convParam : undefined;
+
+  return withSpan(
+    'assembly.poll',
+    { attrs: { [HZ.jobId]: jobId, ...(conversationId ? { [HZ.conversationId]: conversationId } : {}) } },
+    () => pollJob(req, jobId),
+  );
+}
+
+async function pollJob(req: Request, jobId: string): Promise<Response> {
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient({ getAll: () => cookieStore.getAll(), setAll: () => {} });
 

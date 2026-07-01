@@ -14,13 +14,20 @@ import { createMockRouteStackFetch, routeStackMockEnabled } from '@/lib/booking/
 import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { recordPendingOrder } from '@/lib/booking/webhook';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
+import { withSpan, HZ } from '@/lib/otel/trace';
 import { BookingError } from '@/lib/booking/types';
 import type { PaymentUrlRequest, PaymentUrlResponse, BookingApiError } from '@/lib/booking/api-contract';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request): Promise<Response> {
+export function POST(req: Request): Promise<Response> {
+  // booking.payment_url root span (specs/14): the revalidate → get-payment-url phase, so its
+  // RouteStack child spans + the pending-order write nest under one named parent.
+  return withSpan('booking.payment_url', {}, (span) => handlePaymentUrl(req, span));
+}
+
+async function handlePaymentUrl(req: Request, span: import('@opentelemetry/api').Span): Promise<Response> {
   let body: PaymentUrlRequest;
   try {
     body = (await req.json()) as PaymentUrlRequest;
@@ -30,6 +37,7 @@ export async function POST(req: Request): Promise<Response> {
   if (!body?.hotelId || !body?.token || !body?.correlationId || !body?.recommendationId || !body?.roomId || !body?.dates) {
     return errJson('transport', 'Missing room selection', 400);
   }
+  span.setAttribute(HZ.hotelId, body.hotelId);
 
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient({ getAll: () => cookieStore.getAll(), setAll: () => {} });

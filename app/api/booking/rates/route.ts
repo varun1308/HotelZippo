@@ -17,13 +17,20 @@ import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/pay
 import { resolveCityLocation } from '@/lib/curation/google-places';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
 import { startDebugTimer } from '@/lib/observability/debug-timing';
+import { withSpan, HZ } from '@/lib/otel/trace';
 import { BookingError } from '@/lib/booking/types';
 import type { RatesRequest, RatesResponse, BookingApiError } from '@/lib/booking/api-contract';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request): Promise<Response> {
+export function POST(req: Request): Promise<Response> {
+  // booking.rates root span (specs/14): a named parent so the RouteStack child spans nest under
+  // the request instead of floating as orphan routestack.* spans.
+  return withSpan('booking.rates', {}, (span) => handleRates(req, span));
+}
+
+async function handleRates(req: Request, span: import('@opentelemetry/api').Span): Promise<Response> {
   let body: RatesRequest;
   try {
     body = (await req.json()) as RatesRequest;
@@ -33,6 +40,8 @@ export async function POST(req: Request): Promise<Response> {
   if (!body?.hotelName || !body?.destination || !body?.dates?.checkIn || !body?.dates?.checkOut || !body?.party) {
     return errJson('transport', 'Missing booking details', 400);
   }
+  span.setAttribute(HZ.destination, body.destination);
+  if (body.hotelId) span.setAttribute(HZ.hotelId, body.hotelId);
 
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient({ getAll: () => cookieStore.getAll(), setAll: () => {} });

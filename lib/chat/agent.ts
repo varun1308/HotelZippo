@@ -17,6 +17,7 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/db/server';
+import { withSpan, HZ } from '@/lib/otel/trace';
 import { runAssembly, resolveEligibility, type AssemblyOrPreview, type RuntimeSeedDeps } from '@/lib/recommendations/run-assembly';
 import { createJob, findReusable } from '@/lib/recommendations/job-ledger';
 import { computeInputHash } from '@/lib/recommendations/input-hash';
@@ -105,6 +106,9 @@ export interface RunConversationArgs {
   assembleModel?: Parameters<typeof runAssembly>[2];
   /** Signed-in user id — enables the `update_profile` tool (RLS-scoped writes). */
   userId?: string;
+  /** Per-conversation correlation id (specs/14) — stamped on the chat turn + tool spans (PR-3)
+   *  so Dash0 can follow one conversation end-to-end. */
+  conversationId?: string;
   /** RLS-scoped client (cookie SSR) for profile reads/writes. Required alongside `userId`
    *  for `update_profile` to register; absent ⇒ tool not offered (CI/env-free stay green). */
   profileClient?: SupabaseClient;
@@ -138,6 +142,17 @@ export async function runConversation(args: RunConversationArgs) {
     messages: args.messages,
     // Allow the model to call the tool and then narrate the result in the same turn.
     stopWhen: stepCountIs(4),
+    // OTEL (specs/14): let the AI SDK emit its own model spans (token usage, stop reason, tool
+    // calls) instead of the opaque `fetch POST api.anthropic.com` span. recordInputs/Outputs OFF
+    // so conversation content + the injected family profile never land in a span (warm-error /
+    // no-PII principle). conversationId rides in metadata so these spans join the same Dash0 view.
+    experimental_telemetry: {
+      isEnabled: true,
+      recordInputs: false,
+      recordOutputs: false,
+      functionId: 'chat.turn',
+      ...(args.conversationId ? { metadata: { [HZ.conversationId]: args.conversationId } } : {}),
+    },
     tools: {
       assemble_recommendations: tool({
         description:
@@ -146,46 +161,70 @@ export async function runConversation(args: RunConversationArgs) {
           'are known. Returns structured recommendation JSON (top pick + alternatives, ' +
           'with hard flags). Never invent hotels — this is the only source of hotel facts.',
         inputSchema: assembleToolInput,
-        execute: async (input) => {
-          const supabase = createServiceClient();
+        execute: (input) =>
+          // chat.tool span (specs/14): what the concierge actually DID this turn — which tool, for
+          // where, and how it resolved. The narrated decision points (async-dispatched vs. inline,
+          // no-eligible-hotels) become span events so a turn's control flow is legible in Dash0.
+          withSpan(
+            'chat.tool',
+            {
+              attrs: {
+                [HZ.toolName]: 'assemble_recommendations',
+                [HZ.destination]: String(input.trip_brief?.destination ?? ''),
+              },
+            },
+            async (span) => {
+              const supabase = createServiceClient();
 
-          // Deterministic safety net: if the model gathered profile facts (kids/food/budget) but
-          // skipped the update_profile call (Haiku sometimes narrates instead of calling), persist
-          // them now from the family_profile it passed to run this search. Fire-and-forget through
-          // the RLS-scoped client so it can't block or break the recommendation.
-          if (args.userId && args.profileClient) {
-            void reconcileProfileFromAssembleInput(
-              input.family_profile as Record<string, unknown>,
-              args.userId,
-              args.profileClient,
-            );
-          }
+              // Deterministic safety net: if the model gathered profile facts (kids/food/budget) but
+              // skipped the update_profile call (Haiku sometimes narrates instead of calling), persist
+              // them now from the family_profile it passed to run this search. Fire-and-forget through
+              // the RLS-scoped client so it can't block or break the recommendation.
+              if (args.userId && args.profileClient) {
+                span.addEvent('profile_reconcile_dispatched');
+                void reconcileProfileFromAssembleInput(
+                  input.family_profile as Record<string, unknown>,
+                  args.userId,
+                  args.profileClient,
+                );
+              }
 
-          // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
-          // so an empty 5-enum destination can be seeded on the fly. Gated by PREVIEW_RUNTIME_SEED
-          // inside runAssembly / resolveEligibility; best-effort so a missing piece never breaks the turn.
-          const seedDeps = buildRuntimeSeedDeps(supabase);
+              // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
+              // so an empty 5-enum destination can be seeded on the fly. Gated by PREVIEW_RUNTIME_SEED
+              // inside runAssembly / resolveEligibility; best-effort so a missing piece never breaks the turn.
+              const seedDeps = buildRuntimeSeedDeps(supabase);
 
-          // ASYNC path (03c): dispatch the slow assembly as a JOB and return FAST — the chat turn never
-          // makes the model call, so it can't ride the 60s function cap. The client polls the job for
-          // staged progress + cards. Gated by ASYNC_ASSEMBLY=1; off → today's synchronous path below.
-          if (asyncAssemblyEnabled()) {
-            const dispatched = await dispatchAssemblyJob(supabase, input, args, seedDeps);
-            // A job was created (there ARE candidates to assemble) → return the sentinel; the client polls.
-            if (isAssemblyStarted(dispatched)) return dispatched;
-            // A terminal, model-free outcome (preview cards / still-seeding / no_eligible_hotels) was
-            // resolved by the cheap pre-check → return it hydrated NOW, so the agent narrates the TRUE
-            // result (e.g. "no options yet") instead of a false "cards coming in a moment" promise.
-            if (dispatched) return hydrateHotels(supabase, dispatched);
-            // null → dispatch hit an unexpected error; fall through to the synchronous path below
-            // (never dead-end a recommendation turn).
-          }
+              // ASYNC path (03c): dispatch the slow assembly as a JOB and return FAST — the chat turn never
+              // makes the model call, so it can't ride the 60s function cap. The client polls the job for
+              // staged progress + cards. Gated by ASYNC_ASSEMBLY=1; off → today's synchronous path below.
+              if (asyncAssemblyEnabled()) {
+                const dispatched = await dispatchAssemblyJob(supabase, input, args, seedDeps);
+                // A job was created (there ARE candidates to assemble) → return the sentinel; the client polls.
+                if (isAssemblyStarted(dispatched)) {
+                  span.setAttribute(HZ.outcome, 'assembly_started');
+                  span.addEvent('async_dispatched');
+                  return dispatched;
+                }
+                // A terminal, model-free outcome (preview cards / still-seeding / no_eligible_hotels) was
+                // resolved by the cheap pre-check → return it hydrated NOW, so the agent narrates the TRUE
+                // result (e.g. "no options yet") instead of a false "cards coming in a moment" promise.
+                if (dispatched) {
+                  span.setAttribute(HZ.outcome, 'terminal_precheck');
+                  span.addEvent('terminal_precheck_resolved');
+                  return hydrateHotels(supabase, dispatched);
+                }
+                // null → dispatch hit an unexpected error; fall through to the synchronous path below
+                // (never dead-end a recommendation turn).
+                span.addEvent('async_dispatch_fell_through');
+              }
 
-          const assembly = await runAssembly(supabase, input, args.assembleModel, seedDeps);
-          // Hydrate display metadata from `hotels` (spec 03b: single batched query by
-          // hotel_id) so the client can render cards without a DB round-trip.
-          return hydrateHotels(supabase, assembly);
-        },
+              const assembly = await runAssembly(supabase, input, args.assembleModel, seedDeps);
+              span.setAttribute(HZ.outcome, 'assembled_inline');
+              // Hydrate display metadata from `hotels` (spec 03b: single batched query by
+              // hotel_id) so the client can render cards without a DB round-trip.
+              return hydrateHotels(supabase, assembly);
+            },
+          ),
       }),
       // Only offered to a signed-in user with an RLS-scoped client (env-free build + key-free
       // CI never register it). Creates the profile row if none exists, else merges — so it is
@@ -203,7 +242,18 @@ export async function runConversation(args: RunConversationArgs) {
                 'changed it is a safe no-op.',
               inputSchema: updateProfileInput,
               execute: (input): Promise<ProfileUpdateResult> =>
-                runUpdateProfile(input, args.userId!, args.profileClient!),
+                withSpan(
+                  'chat.tool',
+                  { attrs: { [HZ.toolName]: 'update_profile' } },
+                  async (span) => {
+                    const res = await runUpdateProfile(input, args.userId!, args.profileClient!);
+                    // How many profile fields this confirmed change actually persisted (0 ⇒ no-op).
+                    span.setAttribute('hz.profile.updated_count', res.updated.length);
+                    span.setAttribute(HZ.outcome, res.updated.length > 0 ? 'profile_updated' : 'profile_noop');
+                    if (res.updated.length > 0) span.addEvent('profile_persisted');
+                    return res;
+                  },
+                ),
             }),
           }
         : {}),
@@ -405,10 +455,19 @@ export async function hydrateHotels(
     success.top_pick.hotel_id,
     ...success.other_picks.map((p) => p.hotel_id),
   ];
-  const { data } = await supabase
-    .from('hotels')
-    .select('id, destination, area, price_tier, star_rating, images, source')
-    .in('id', ids);
+  // db.query span (specs/14): the single batched card-hydration lookup (spec 03b).
+  const { data } = await withSpan(
+    'db.query',
+    { attrs: { [HZ.dbTable]: 'hotels', [HZ.dbOp]: 'select', [HZ.hotelCount]: ids.length } },
+    async (span) => {
+      const res = await supabase
+        .from('hotels')
+        .select('id, destination, area, price_tier, star_rating, images, source')
+        .in('id', ids);
+      if (!res.error) span.setAttribute(HZ.dbRows, res.data?.length ?? 0);
+      return res;
+    },
+  );
 
   const byId = new Map((data ?? []).map((h) => [h.id, h]));
   const attach = <T extends { hotel_id: string }>(pick: T) => ({

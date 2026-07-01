@@ -13,6 +13,7 @@ function toRequestBody(
   history: ChatMessage[],
   sessionSnapshot?: string | null,
   familyProfile?: unknown,
+  conversationId?: string,
 ) {
   return {
     messages: [
@@ -21,6 +22,9 @@ function toRequestBody(
     ],
     ...(sessionSnapshot ? { sessionSnapshot } : {}),
     ...(familyProfile ? { familyProfile } : {}),
+    // Per-conversation id minted on the client (specs/14): the server stamps it on the chat
+    // turn span + propagates it to every child span so the whole session is one Dash0 view.
+    ...(conversationId ? { conversationId } : {}),
   };
 }
 
@@ -33,13 +37,14 @@ export async function* chatHttpStream(
   history: ChatMessage[],
   sessionSnapshot?: string | null,
   familyProfile?: unknown,
+  conversationId?: string,
 ): AsyncIterable<StreamChunk> {
   let res: Response;
   try {
     res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(toRequestBody(input, history, sessionSnapshot, familyProfile)),
+      body: JSON.stringify(toRequestBody(input, history, sessionSnapshot, familyProfile, conversationId)),
     });
   } catch {
     yield { type: 'text-delta', delta: "I couldn't reach my notes just now — try me again in a moment?" };

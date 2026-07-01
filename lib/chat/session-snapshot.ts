@@ -13,7 +13,7 @@
 import 'server-only';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { withSpan, HZ } from '@/lib/otel/trace';
 import type { ModelMessage } from 'ai';
 
 /* Session-summarisation model. Defaults to Haiku and is env-overridable (SNAPSHOT_MODEL) to revert to
@@ -116,40 +116,36 @@ export async function generateSnapshot(
   const system = deps.systemPrompt ?? (await loadPrompt());
   const transcript = renderTranscript(messages);
 
-  const tracer = trace.getTracer('hotelzippo');
-  return tracer.startActiveSpan('anthropic.session_snapshot', async (span) => {
-    span.setAttribute('model', SNAPSHOT_MODEL);
-    const start = Date.now();
-    try {
-      const raw = await callModel({ system, transcript, model: SNAPSHOT_MODEL });
+  return withSpan(
+    'anthropic.session_snapshot',
+    { attrs: { [HZ.model]: SNAPSHOT_MODEL } },
+    async (span) => {
+      let raw: string;
+      try {
+        raw = await callModel({ system, transcript, model: SNAPSHOT_MODEL });
+      } catch (e) {
+        if (e instanceof SnapshotError) throw e;
+        throw new SnapshotError(
+          `snapshot model call failed: ${e instanceof Error ? e.message : String(e)}`,
+          'model_call_failed',
+          e,
+        );
+      }
       const summary = raw.trim();
       if (summary.length === 0) {
         throw new SnapshotError('snapshot output was empty', 'empty_output');
       }
 
       const tokens = estimateTokens(summary);
-      span.setAttribute('snapshot.estimated_tokens', tokens);
-      span.setAttribute('snapshot.token_ceiling', SNAPSHOT_TOKEN_CEILING);
+      span.setAttribute('hz.snapshot.estimated_tokens', tokens);
+      span.setAttribute('hz.snapshot.token_ceiling', SNAPSHOT_TOKEN_CEILING);
       if (tokens > SNAPSHOT_TOKEN_CEILING) {
         // Over the hard ceiling: record it for Dash0 but STILL return the summary
         // (prompt-enforced budget; truncating mid-sentence is worse). Spec 08b-3 + 14.
-        span.setAttribute('snapshot.over_ceiling', true);
+        span.setAttribute('hz.snapshot.over_ceiling', true);
         span.addEvent('snapshot_over_token_ceiling', { estimated_tokens: tokens });
       }
-      span.setStatus({ code: SpanStatusCode.OK });
       return summary;
-    } catch (e) {
-      span.recordException(e as Error);
-      span.setStatus({ code: SpanStatusCode.ERROR });
-      if (e instanceof SnapshotError) throw e;
-      throw new SnapshotError(
-        `snapshot model call failed: ${e instanceof Error ? e.message : String(e)}`,
-        'model_call_failed',
-        e,
-      );
-    } finally {
-      span.setAttribute('duration_ms', Date.now() - start);
-      span.end();
-    }
-  });
+    },
+  );
 }
