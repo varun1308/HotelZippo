@@ -29,6 +29,15 @@
 4. Dash0 credentials are env vars — never hardcoded.
 5. Every spec involving a server-side operation references this page for error + observability handling.
 
+### Span helper, attribute convention, and conversation correlation
+
+- **One helper.** All spans go through `withSpan(name, { attrs }, fn)` in `lib/otel/trace.ts` (or `startManagedSpan` for spans that outlive the handler, e.g. streaming routes). Never hand-roll `startActiveSpan` + duration/status/`recordException`/`end` — the helper owns that. It records `hz.duration_ms`, sets OK/ERROR, records the exception on throw, and always ends the span.
+- **`hz.*` attribute namespace.** Attribute keys come from the `HZ` constants in `lib/otel/trace.ts` — one stable, discoverable vocabulary in Dash0: `hz.conversation_id`, `hz.user_id`, `hz.turn_index`, `hz.model`, `hz.tokens.input/output`, `hz.stop_reason`, `hz.tool.name`, `hz.db.table/op/rows`, `hz.job_id`, `hz.hotel_id`, `hz.destination`, `hz.outcome`.
+- **Conversation correlation.** The client mints one `conversationId` (UUID v4) per chat session and sends it with each `/api/chat` turn + `/api/assembly/:jobId` poll. The server validates it and binds `conversation_id` + `user_id` into OTEL baggage (`withCorrelation`) so **every** child span (model, tool, DB) inherits `hz.conversation_id`/`hz.user_id`. A whole conversation — turns, tool calls, LLM calls, the assembly job, its polls, any booking — is filterable as one view in Dash0 by `hz.conversation_id`.
+- **Decision points as span events.** Narrated branch points (async-dispatched vs. inline assembly, no-eligible-hotels, profile persisted, snapshot over token ceiling, webhook matched/unmatched) are emitted as span `addEvent` calls so a turn's control flow is legible.
+- **Span names:** `<area>.<operation>` — `chat.turn`, `chat.tool`, `anthropic.assemble`, `anthropic.session_snapshot`, `anthropic.review_synthesis`, `db.query`, `routestack.<step>`, `booking.rates`, `booking.payment_url`, `webhook.routestack`, `assembly.run`, `assembly.poll`, `apify.*`, `google.places.*`.
+- **No PII in spans.** Never record conversation content, prompts, or profile fields as attributes/events. The AI SDK model call sets `experimental_telemetry.recordInputs/recordOutputs = false` — token counts + outcomes only.
+
 ## Warm error states (Phase 3 UI; see 05 / Interaction States.html)
 
 - **Inline chat error** — concierge voice ("Hmm — I lost my footing for a second… That's on me, not you. Give me another go?") + Try-again.
