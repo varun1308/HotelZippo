@@ -63,6 +63,23 @@ export function fromRow(row: Record<string, unknown>): FamilyProfile {
   };
 }
 
+/** A blank profile — the base the agent's `update_profile` merges onto when the user has no
+ * row yet (first-time onboarding), and the seed the chat page uses for a name-only starter.
+ * Isomorphic (no client-only imports) so both the server tool and the client page can use it. */
+export function emptyProfile(): FamilyProfile {
+  return {
+    name: '',
+    hometown: null,
+    spouse: false,
+    children: [],
+    food: 'none',
+    indianFoodMatters: false,
+    budgetTier: 'comfort',
+    brandPreferences: [],
+    notes: null,
+  };
+}
+
 /** Load the signed-in user's profile, or null if none saved yet. RLS restricts to own. */
 export async function loadFamilyProfile(
   client: SupabaseClient = createSupabaseBrowserClient(),

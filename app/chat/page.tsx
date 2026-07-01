@@ -38,7 +38,7 @@ import { useBookingFlow } from '@/lib/booking/useBookingFlow';
 import { RoomPickerModal } from '@/components/booking/RoomPickerModal';
 import { useUser } from '@/lib/auth/useUser';
 import { signOut } from '@/lib/auth/signIn';
-import { loadFamilyProfile, saveFamilyProfile } from '@/lib/db/persistence/family-profiles';
+import { loadFamilyProfile, saveFamilyProfile, emptyProfile } from '@/lib/db/persistence/family-profiles';
 import { saveShortlist, loadShortlistHotels } from '@/lib/db/persistence/shortlists';
 import { loadLatestSnapshot } from '@/lib/db/persistence/sessions';
 import { loadInflightJob } from '@/lib/recommendations/job-ledger';
@@ -54,17 +54,7 @@ interface RecoProps {
 /** A minimal profile used only to carry the auth name to the agent for a user who hasn't
  * onboarded yet. Every other field is left at its "unknown" default (empty children, null
  * hometown, etc.) so the concierge still collects them — only the name is pre-known. */
-const EMPTY_PROFILE: FamilyProfile = {
-  name: '',
-  hometown: null,
-  spouse: false,
-  children: [],
-  food: 'none',
-  indianFoodMatters: false,
-  budgetTier: 'comfort',
-  brandPreferences: [],
-  notes: null,
-};
+const EMPTY_PROFILE: FamilyProfile = emptyProfile();
 
 export default function ChatPage() {
   const brief = useTripBrief();

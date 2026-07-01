@@ -44,9 +44,22 @@ describe('detectBriefUpdates', () => {
     );
   });
 
+  it('detects who from common "who\'s travelling?" answers (partner / counts / crew size)', () => {
+    expect(detectBriefUpdates('me, my wife and our son').who).toBeTruthy();
+    expect(detectBriefUpdates('just the four of us').who).toBeTruthy();
+    expect(detectBriefUpdates('2 adults and 1 child').who).toBeTruthy();
+    expect(detectBriefUpdates('travelling with my partner').who).toBeTruthy();
+  });
+
   it('detects rough dates from month names and relative phrases', () => {
     expect(detectBriefUpdates('we travel in December').dates).toBe('December');
     expect(detectBriefUpdates('thinking next month').dates).toBe('Next month');
+  });
+
+  it('detects dates from durations and weekend phrasing', () => {
+    expect(detectBriefUpdates('for a week').dates).toBeTruthy();
+    expect(detectBriefUpdates('a long weekend away').dates).toBeTruthy();
+    expect(detectBriefUpdates('5 nights would be ideal').dates).toBeTruthy();
   });
 
   it('NEVER invents — unrelated text yields an empty patch', () => {

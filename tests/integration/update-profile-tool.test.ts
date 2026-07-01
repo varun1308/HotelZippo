@@ -1,7 +1,8 @@
 /* The `update_profile` tool's execute logic (runUpdateProfile), driven with a MOCK client —
- * no real DB. Asserts the three branches: no existing profile → no-op; existing + real change →
- * merged save + correct labels; existing + no-change patch → no write. Runs in the integration
- * (node) project because the agent module imports the AI SDK (web-stream globals). */
+ * no real DB. Asserts the branches: no existing profile → CREATE from a blank base (onboarding
+ * capture); existing + real change → merged save + correct labels; existing + no-change patch →
+ * no write. Runs in the integration (node) project because the agent module imports the AI SDK
+ * (web-stream globals). */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 jest.mock('server-only', () => ({}));
@@ -42,9 +43,23 @@ const existing = {
 const USER = '00000000-0000-0000-0000-0000000000aa';
 
 describe('runUpdateProfile (update_profile tool execute)', () => {
-  it('no-ops when the user has no saved profile (onboarding owns the first save)', async () => {
+  it('CREATES the profile from a blank base when the user has none yet (onboarding capture)', async () => {
     const { client, upserts } = mockClient(null);
-    const res = await runUpdateProfile({ budgetTier: 'luxury' }, USER, client);
+    const res = await runUpdateProfile(
+      { children: [{ name: 'Aanya', age: 7 }, { name: 'Vir', age: 2 }] },
+      USER,
+      client,
+    );
+    expect(res.updated).toEqual(['children']);
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]).toMatchObject({ user_id: USER });
+    expect((upserts[0].family_members as { children: unknown[] }).children).toHaveLength(2);
+  });
+
+  it('still no-ops when a fresh user sends a patch equal to the blank defaults', async () => {
+    // budget 'comfort' is the empty-profile default, so this changes nothing → no write.
+    const { client, upserts } = mockClient(null);
+    const res = await runUpdateProfile({ budgetTier: 'comfort' }, USER, client);
     expect(res).toEqual({ updated: [] });
     expect(upserts).toHaveLength(0);
   });

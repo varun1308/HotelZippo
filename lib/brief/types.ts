@@ -22,10 +22,11 @@ export const BRIEF_KEYS = [
 
 export type BriefKey = (typeof BRIEF_KEYS)[number];
 
-/** The recommendation hard gates (08b-1): destination + trip type. Only these
- *  enable the "Find hotels" button — the other rows enrich the brief but are not
- *  required to recommend. */
-export const CORE_GATE_KEYS: readonly BriefKey[] = ['destination', 'type'];
+/** The recommendation hard gates (08b-1): the four fields that materially change a
+ *  family hotel match — destination, trip type, WHEN (dates) and WHO'S travelling.
+ *  Only these enable the "Find hotels" button; budget + food enrich the brief but
+ *  are not required (they're usually already on the saved family profile). */
+export const CORE_GATE_KEYS: readonly BriefKey[] = ['destination', 'type', 'dates', 'who'];
 
 /** A lucide icon name (kept as a string so this module stays import-free / safe
  *  to unit-test anywhere; the rail maps the name to a component). */

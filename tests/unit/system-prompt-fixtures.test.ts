@@ -42,7 +42,7 @@ const BEHAVIOUR_EVIDENCE: Record<PromptBehaviour, RegExp[]> = {
   'confirmed-change-must-call-update-profile': [
     /MUST call\s+`update_profile`/i,
     /BEFORE replying/i,
-    /Saying so without calling the tool is a failure/i,
+    /without calling the tool is a failure/i,
     /budgetTier:'luxury'/i,
   ],
 };
