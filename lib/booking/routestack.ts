@@ -26,6 +26,7 @@
  * construction (RouteStack creds) and imported only by API routes + server libs — never a client
  * component (verified: all importers are server-side). */
 import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
+import { HZ, stampCorrelation } from '@/lib/otel/trace';
 import { getPartnerToken, type RouteStackFetch } from './auth';
 import { buildRoomsOccupancy } from './party';
 import { mapRoomRateOptions } from './rates';
@@ -133,7 +134,10 @@ async function tracedCall(
   const tracer = trace.getTracer(TRACER);
   return tracer.startActiveSpan(`routestack.${step}`, async (span: Span) => {
     for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v);
-    if (deps.mock) span.setAttribute('mock', true);
+    // Inherit conversation/user correlation from baggage so a booking span joins the same
+    // Dash0 view as the chat turn that started it (specs/14).
+    stampCorrelation(span);
+    if (deps.mock) span.setAttribute(HZ.mock, true);
     const start = Date.now();
     // Debug-log capture (best-effort, flag-gated via deps.debugLog). Tracks the raw response +
     // outcome across every exit path so one record() in finally covers success AND failure.
@@ -153,8 +157,8 @@ async function tracedCall(
       const env = asEnvelope(raw);
       logSuccess = env.success;
       logCode = env.code ?? null;
-      span.setAttribute('success', env.success);
-      if (env.code !== undefined) span.setAttribute('code', env.code);
+      span.setAttribute(HZ.success, env.success);
+      if (env.code !== undefined) span.setAttribute(HZ.code, env.code);
       if (!env.success) {
         const err = attachTrace(envelopeError(env, step), span);
         logError = err.message;
@@ -178,7 +182,7 @@ async function tracedCall(
       span.setStatus({ code: SpanStatusCode.ERROR });
       throw e;
     } finally {
-      span.setAttribute('duration_ms', Date.now() - start);
+      span.setAttribute(HZ.durationMs, Date.now() - start);
       if (deps.debugLog) {
         // Fire-and-forget, fully isolated: the injected log is an arbitrary impl, so we guard against
         // BOTH a synchronous throw and a rejected promise — a misbehaving debug log must NEVER surface
