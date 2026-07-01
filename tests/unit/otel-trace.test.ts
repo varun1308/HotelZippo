@@ -15,6 +15,7 @@ import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-ho
 import {
   withSpan,
   withCorrelation,
+  startManagedSpan,
   HZ,
   isValidConversationId,
 } from '@/lib/otel/trace';
@@ -82,6 +83,37 @@ describe('withCorrelation', () => {
     const span = byName('test.partial');
     expect(span.attributes[HZ.conversationId]).toBe('conv-only');
     expect(span.attributes[HZ.userId]).toBeUndefined();
+  });
+});
+
+describe('startManagedSpan', () => {
+  it('nests child spans created in its context, propagates correlation, and records duration', async () => {
+    // This mirrors the chat.turn pattern: a span opened in the handler, kept active across an
+    // async boundary (the stream drain), under which the SDK/tool spans nest.
+    await withCorrelation({ conversationId: 'conv-turn', userId: 'user-turn' }, async () => {
+      const turn = startManagedSpan('chat.turn', { attrs: { [HZ.turnIndex]: 3 } });
+      await turn.runInContext(() => withSpan('chat.tool', {}, async () => undefined));
+      turn.end();
+    });
+
+    const parent = byName('chat.turn');
+    const child = byName('chat.tool');
+    // Child's parent is the managed span → they share a trace and the child nests under it.
+    // (ReadableSpan exposes the parent id as `parentSpanId` in this SDK version.)
+    expect(child.spanContext().traceId).toBe(parent.spanContext().traceId);
+    expect((child as unknown as { parentSpanId?: string }).parentSpanId).toBe(parent.spanContext().spanId);
+    // Correlation flowed from baggage onto BOTH spans.
+    expect(parent.attributes[HZ.conversationId]).toBe('conv-turn');
+    expect(child.attributes[HZ.conversationId]).toBe('conv-turn');
+    expect(parent.attributes[HZ.turnIndex]).toBe(3);
+    expect(typeof parent.attributes[HZ.durationMs]).toBe('number');
+    expect(parent.status.code).toBe(SpanStatusCode.OK);
+  });
+
+  it('ends with the status the caller passes (ERROR path)', () => {
+    const turn = startManagedSpan('chat.turn.err', {});
+    turn.end(SpanStatusCode.ERROR);
+    expect(byName('chat.turn.err').status.code).toBe(SpanStatusCode.ERROR);
   });
 });
 

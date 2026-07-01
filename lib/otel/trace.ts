@@ -133,6 +133,39 @@ export function stampCorrelation(span: Span): void {
   if (user) span.setAttribute(HZ.userId, user);
 }
 
+/**
+ * Start a span whose lifetime spans an async boundary the `withSpan` scoped form can't cover —
+ * e.g. a streaming route handler where the work happens inside a ReadableStream callback that
+ * runs AFTER the handler returns. Returns the live `span` plus a `runInContext` that executes a
+ * function with this span active (so child spans nest + inherit correlation) and an `end` that
+ * records `hz.duration_ms` and closes the span. The CALLER owns ending it (in the stream's
+ * `finally`). Attributes + active correlation baggage are set up front.
+ */
+export function startManagedSpan(
+  name: string,
+  opts: WithSpanOptions = {},
+): {
+  span: Span;
+  runInContext: <T>(fn: () => T) => T;
+  end: (status?: SpanStatusCode) => void;
+} {
+  const tracer = trace.getTracer(TRACER);
+  const span = tracer.startSpan(name, { kind: opts.kind ?? SpanKind.INTERNAL });
+  if (opts.attrs) span.setAttributes(opts.attrs);
+  stampCorrelation(span);
+  const start = Date.now();
+  const ctx = trace.setSpan(context.active(), span);
+  return {
+    span,
+    runInContext: (fn) => context.with(ctx, fn),
+    end: (status = SpanStatusCode.OK) => {
+      span.setAttribute(HZ.durationMs, Date.now() - start);
+      span.setStatus({ code: status });
+      span.end();
+    },
+  };
+}
+
 /** The trace id of the currently-active span, or null when nothing is being traced. Handy for
  * surfacing a Dash0 reference on a warm error (specs/14). */
 export function currentTraceId(): string | null {

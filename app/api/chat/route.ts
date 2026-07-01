@@ -14,7 +14,8 @@ import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
 import { toModelMessages } from '@/lib/chat/to-model-messages';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { e2eEnabled } from '@/lib/chat/e2e-stub';
-import { withCorrelation, isValidConversationId } from '@/lib/otel/trace';
+import { SpanStatusCode } from '@opentelemetry/api';
+import { withCorrelation, startManagedSpan, HZ, isValidConversationId } from '@/lib/otel/trace';
 import type { ChatMessage, StreamChunk } from '@/lib/chat/types';
 
 export const runtime = 'nodejs';
@@ -75,12 +76,23 @@ export async function POST(req: Request) {
     /* no env / no cookies → run without profile persistence */
   }
 
+  // The chat.turn root span spans the WHOLE turn — including the stream drain that runs after
+  // this handler returns — so the streamText model spans + chat.tool spans nest under it and the
+  // turn is one legible unit in Dash0 (specs/14). withCorrelation binds hz.conversation_id +
+  // hz.user_id into baggage so the span (and its children) inherit them. Ended in the stream's
+  // finally. recordInputs/Outputs stay OFF (no conversation content in spans).
+  const turn = withCorrelation({ conversationId, userId }, () =>
+    startManagedSpan('chat.turn', {
+      attrs: {
+        [HZ.turnIndex]: messages.length,
+        [HZ.authenticated]: Boolean(userId),
+      },
+    }),
+  );
+
   let result;
   try {
-    // Bind conversation/user correlation into OTEL baggage for the whole turn so every span the
-    // agent creates (the streamText model spans, tool spans, DB spans) inherits
-    // hz.conversation_id + hz.user_id — one Dash0 view per conversation (specs/14).
-    result = await withCorrelation({ conversationId, userId }, () =>
+    result = await turn.runInContext(() =>
       runConversation({
         messages: toModelMessages(messages),
         familyProfile: body.familyProfile,
@@ -92,6 +104,8 @@ export async function POST(req: Request) {
       }),
     );
   } catch (e) {
+    turn.span.recordException(e as Error);
+    turn.end(SpanStatusCode.ERROR);
     return Response.json(
       {
         error: 'chat_failed',
@@ -102,9 +116,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // Translate the SDK fullStream → our NDJSON StreamChunk protocol.
+  // Translate the SDK fullStream → our NDJSON StreamChunk protocol. Drained inside the chat.turn
+  // context so the SDK's lazily-created model/tool spans nest under it.
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    start: (controller) => turn.runInContext(async () => {
+      let turnError = false;
       try {
         controller.enqueue(encodeChunk({ type: 'typing' }));
         for await (const part of result.fullStream) {
@@ -140,6 +156,8 @@ export async function POST(req: Request) {
               );
             }
           } else if (part.type === 'error') {
+            turnError = true;
+            turn.span.addEvent('stream_error');
             controller.enqueue(
               encodeChunk({
                 type: 'text-delta',
@@ -150,6 +168,8 @@ export async function POST(req: Request) {
         }
         controller.enqueue(encodeChunk({ type: 'done' }));
       } catch (e) {
+        turnError = true;
+        turn.span.recordException(e as Error);
         controller.enqueue(
           encodeChunk({
             type: 'text-delta',
@@ -157,11 +177,11 @@ export async function POST(req: Request) {
           }),
         );
         controller.enqueue(encodeChunk({ type: 'done' }));
-        void e;
       } finally {
         controller.close();
+        turn.end(turnError ? SpanStatusCode.ERROR : SpanStatusCode.OK);
       }
-    },
+    }),
   });
 
   return new Response(stream, {
