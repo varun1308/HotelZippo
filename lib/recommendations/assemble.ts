@@ -15,6 +15,8 @@ import {
 } from '@/lib/contracts/recommendation-assembly';
 import type { Candidate } from '@/lib/review-intelligence/query';
 import { startDebugTimer } from '@/lib/observability/debug-timing';
+import { trace } from '@opentelemetry/api';
+import { withSpan, HZ } from '@/lib/otel/trace';
 
 /** Assembly model — defaults to Haiku 4.5 for LATENCY + COST. Measured locally (2026-06-30, the real
  * agent path via scripts/dev/repro-chat-timeout.ts): the assembly call dropped from ~34s (Sonnet) to
@@ -109,6 +111,14 @@ const defaultCallModel: CallModel = async ({ system, userJson, model }) => {
     },
     { timeout: assemblyTimeoutMs() },
   );
+  // Token usage + stop reason onto the enclosing anthropic.assemble span (specs/14) so cost /
+  // truncation are visible in Dash0 without recording prompt content.
+  const active = trace.getActiveSpan();
+  if (active) {
+    active.setAttribute(HZ.tokensInput, resp.usage.input_tokens);
+    active.setAttribute(HZ.tokensOutput, resp.usage.output_tokens);
+    if (resp.stop_reason) active.setAttribute(HZ.stopReason, resp.stop_reason);
+  }
   const block = resp.content.find((b) => b.type === 'text');
   if (!block || block.type !== 'text') {
     throw new AssemblyError('model returned no text block', 'malformed_output');
@@ -143,9 +153,26 @@ export async function assembleRecommendations(
     timeoutMs: assemblyTimeoutMs(),
   });
 
+  // anthropic.assemble span (specs/14): the recommendation model call — previously an untraced
+  // opaque fetch that could hang to the 60s platform kill. Records model, candidate count, prompt
+  // size, and (from defaultCallModel) token usage + stop reason. Inherits hz.conversation_id.
   let raw: string;
   try {
-    raw = await callModel({ system, userJson, model: ASSEMBLY_MODEL });
+    raw = await withSpan(
+      'anthropic.assemble',
+      {
+        attrs: {
+          [HZ.model]: ASSEMBLY_MODEL,
+          'hz.assemble.candidates': input.candidates.length,
+          'hz.assemble.prompt_bytes': userJson.length,
+        },
+      },
+      async (span) => {
+        const out = await callModel({ system, userJson, model: ASSEMBLY_MODEL });
+        span.setAttribute('hz.assemble.output_bytes', out.length);
+        return out;
+      },
+    );
     t.mark('model:done', { outBytes: raw.length });
   } catch (e) {
     t.fail(e);

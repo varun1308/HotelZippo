@@ -455,10 +455,19 @@ export async function hydrateHotels(
     success.top_pick.hotel_id,
     ...success.other_picks.map((p) => p.hotel_id),
   ];
-  const { data } = await supabase
-    .from('hotels')
-    .select('id, destination, area, price_tier, star_rating, images, source')
-    .in('id', ids);
+  // db.query span (specs/14): the single batched card-hydration lookup (spec 03b).
+  const { data } = await withSpan(
+    'db.query',
+    { attrs: { [HZ.dbTable]: 'hotels', [HZ.dbOp]: 'select', [HZ.hotelCount]: ids.length } },
+    async (span) => {
+      const res = await supabase
+        .from('hotels')
+        .select('id, destination, area, price_tier, star_rating, images, source')
+        .in('id', ids);
+      if (!res.error) span.setAttribute(HZ.dbRows, res.data?.length ?? 0);
+      return res;
+    },
+  );
 
   const byId = new Map((data ?? []).map((h) => [h.id, h]));
   const attach = <T extends { hotel_id: string }>(pick: T) => ({

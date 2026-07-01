@@ -9,6 +9,7 @@
  *
  * Server-side (service client + webhook secret never reach the client). */
 import { createServiceClient } from '@/lib/db/server';
+import { withSpan, HZ } from '@/lib/otel/trace';
 import {
   parseWebhookEvent,
   verifyWebhookSecret,
@@ -20,7 +21,13 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request): Promise<Response> {
+export function POST(req: Request): Promise<Response> {
+  // webhook.routestack span (specs/14): the order-lifecycle ingestion path was previously
+  // untraced — now the correlate + persist DB writes hang under one named, filterable parent.
+  return withSpan('webhook.routestack', {}, (span) => handleWebhook(req, span));
+}
+
+async function handleWebhook(req: Request, span: import('@opentelemetry/api').Span): Promise<Response> {
   // 1. authenticate the caller via the shared secret (when configured).
   if (!verifyWebhookSecret(req)) {
     return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
@@ -41,9 +48,13 @@ export async function POST(req: Request): Promise<Response> {
   if (!event) {
     return Response.json({ ok: false, error: 'invalid_event' }, { status: 400 });
   }
+  span.setAttribute('hz.webhook.event', event.event);
+  if (event.module) span.setAttribute('hz.webhook.module', event.module);
+  if (event.orderstatus) span.setAttribute('hz.webhook.order_status', event.orderstatus);
 
   // Non-HOTEL modules are acked + skipped (v1 tracks hotels only).
   if (event.module && event.module.toUpperCase() !== 'HOTEL') {
+    span.setAttribute(HZ.outcome, 'skipped_non_hotel');
     return Response.json({ ok: true, skipped: 'non_hotel_module' }, { status: 200 });
   }
 
@@ -52,8 +63,11 @@ export async function POST(req: Request): Promise<Response> {
     const client = createServiceClient();
     const link = await correlateOrder(client, event);
     await recordWebhookEvent(client, event, link);
+    span.setAttribute('hz.webhook.matched', link.matched);
+    span.setAttribute(HZ.outcome, link.matched ? 'matched' : 'unmatched');
     return Response.json({ ok: true, matched: link.matched }, { status: 200 });
   } catch {
+    span.setAttribute(HZ.outcome, 'persist_failed');
     // Service client couldn't be built / unexpected error: still 200 so RouteStack doesn't retry
     // forever, but signal we didn't persist. (Authentic event; our side failed, not theirs.)
     return Response.json({ ok: true, persisted: false }, { status: 200 });

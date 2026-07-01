@@ -11,7 +11,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { withSpan, HZ } from '@/lib/otel/trace';
 import { SIGNAL_STRENGTHS, hardFlagSchema } from '@/lib/db/schemas';
 
 export const SYNTHESIS_MODEL = 'claude-sonnet-4-6';
@@ -155,11 +155,10 @@ export async function synthesise(
   const callModel = deps.callModel ?? defaultCallModel;
   const system = deps.systemPrompt ?? (await loadPrompt());
 
-  const tracer = trace.getTracer('hotelzippo');
-  return tracer.startActiveSpan('anthropic.review_synthesis', async (span) => {
-    span.setAttribute('model', SYNTHESIS_MODEL);
-    const start = Date.now();
-    try {
+  return withSpan(
+    'anthropic.review_synthesis',
+    { attrs: { [HZ.model]: SYNTHESIS_MODEL } },
+    async (span) => {
       let raw: string;
       try {
         raw = await callModel({ system, input, model: SYNTHESIS_MODEL });
@@ -189,18 +188,10 @@ export async function synthesise(
       }
 
       const gate = confidenceGate(result.data.confidence.overall);
-      span.setAttribute('confidence', result.data.confidence.overall);
-      span.setAttribute('hard_flag_count', result.data.hard_flags.length);
-      span.setAttribute('low_confidence', gate.lowConfidence);
-      span.setStatus({ code: SpanStatusCode.OK });
+      span.setAttribute('hz.confidence', result.data.confidence.overall);
+      span.setAttribute('hz.hard_flag_count', result.data.hard_flags.length);
+      span.setAttribute('hz.low_confidence', gate.lowConfidence);
       return { output: result.data, gate };
-    } catch (e) {
-      span.recordException(e as Error);
-      span.setStatus({ code: SpanStatusCode.ERROR });
-      throw e;
-    } finally {
-      span.setAttribute('duration_ms', Date.now() - start);
-      span.end();
-    }
-  });
+    },
+  );
 }

@@ -13,6 +13,7 @@
  * Server-side only (uses the service client at the call site). */
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { withSpan, HZ } from '@/lib/otel/trace';
 import {
   DESTINATIONS,
   BUDGET_TIERS,
@@ -82,12 +83,21 @@ export async function queryCandidates(
 ): Promise<Candidate[]> {
   // Join hotel_intelligence → hotels and filter to the destination at the DB level.
   // Exclude low_confidence + zero-review records in the query (spec 02 step 2).
-  const { data, error } = await supabase
-    .from('hotel_intelligence')
-    .select('*, hotel:hotels!inner(*)')
-    .eq('hotel.destination', input.destination)
-    .eq('low_confidence', false)
-    .gt('review_count_total', 0);
+  // db.query span (specs/14): candidate resolution — step (a) of the two-step assembly.
+  const { data, error } = await withSpan(
+    'db.query',
+    { attrs: { [HZ.dbTable]: 'hotel_intelligence', [HZ.dbOp]: 'select', [HZ.destination]: input.destination } },
+    async (span) => {
+      const res = await supabase
+        .from('hotel_intelligence')
+        .select('*, hotel:hotels!inner(*)')
+        .eq('hotel.destination', input.destination)
+        .eq('low_confidence', false)
+        .gt('review_count_total', 0);
+      if (!res.error) span.setAttribute(HZ.dbRows, res.data?.length ?? 0);
+      return res;
+    },
+  );
   if (error) throw new Error(`candidate query failed: ${error.message}`);
 
   // Validate the join shape; a malformed row is a contract violation, fail loud.
