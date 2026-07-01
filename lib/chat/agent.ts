@@ -35,7 +35,10 @@ import {
 } from '@/lib/db/persistence/family-profiles';
 import type { Child } from '@/components/profile';
 
-export const AGENT_MODEL = 'claude-sonnet-4-6';
+/* The conversation-loop model. Defaults to Haiku (fast/cheap; keeps chat turns well under the 60s
+ * Vercel function cap) and is env-overridable (AGENT_MODEL) so prod can revert to claude-sonnet-4-6
+ * with no redeploy if the tool-use loop needs the stronger model. Mirrors ASSEMBLY_MODEL. */
+export const AGENT_MODEL = process.env.AGENT_MODEL || 'claude-haiku-4-5';
 
 const SYSTEM_PROMPT_PATH = path.join(
   process.cwd(),

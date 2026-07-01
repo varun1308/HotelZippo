@@ -16,7 +16,9 @@ import path from 'node:path';
 import { trace, SpanStatusCode } from '@opentelemetry/api';
 import type { ModelMessage } from 'ai';
 
-export const SNAPSHOT_MODEL = 'claude-sonnet-4-6';
+/* Session-summarisation model. Defaults to Haiku and is env-overridable (SNAPSHOT_MODEL) to revert to
+ * claude-sonnet-4-6 with no redeploy. Mirrors AGENT_MODEL / ASSEMBLY_MODEL. */
+export const SNAPSHOT_MODEL = process.env.SNAPSHOT_MODEL || 'claude-haiku-4-5';
 const PROMPT_PATH = path.join(process.cwd(), 'prompts/conversation-agent/session-snapshot.md');
 
 /** Token budget from the contract. ~4 chars/token heuristic for the overflow check —
