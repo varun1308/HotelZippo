@@ -61,10 +61,21 @@ function detectFood(text: string): string | null {
   return parts.join(' · ') || null;
 }
 
-/** Detect who's travelling — only when there's a concrete party signal. */
+/** Detect who's travelling — fires on any concrete party signal (a "who's travelling?"
+ *  answer typically names the crew: kids, a partner, an adult count, or "just the four of us"). */
 function detectWho(text: string): string | null {
-  if (/\b(kids?|children|child|toddlers?|baby|babies|grandparents?|family of \d+)\b/i.test(text)) {
+  if (/\b(kids?|children|child|toddlers?|baby|babies|grandparents?)\b/i.test(text)) {
     return 'Family with young children';
+  }
+  const count = '(\\d+|two|three|four|five|six|seven|eight)';
+  if (new RegExp(`\\b(family of ${count}|(just )?(the )?${count} of us|party of ${count})\\b`, 'i').test(text)) {
+    return 'Family group';
+  }
+  if (/\b(spouse|partner|wife|husband|my (wife|husband|partner))\b/i.test(text)) {
+    return 'Couple / family';
+  }
+  if (/\b(\d+\s*adults?)\b/i.test(text)) {
+    return 'Family group';
   }
   return null;
 }
@@ -78,12 +89,13 @@ function detectDates(text: string): string | null {
     const word = m[0];
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   }
-  if (/\b(next month|next week|this summer|this winter|christmas|new year|holidays?)\b/i.test(text)) {
-    const rel = text.match(
-      /\b(next month|next week|this summer|this winter|christmas|new year|holidays?)\b/i,
-    );
-    return rel ? rel[0].charAt(0).toUpperCase() + rel[0].slice(1) : null;
-  }
+  const rel = text.match(
+    /\b(next month|next week|this summer|this winter|christmas|new year|holidays?|long weekend|a weekend|the weekend)\b/i,
+  );
+  if (rel) return rel[0].charAt(0).toUpperCase() + rel[0].slice(1);
+  // Durations / relative spans people give as dates: "for a week", "for 5 nights", "10 days".
+  const span = text.match(/\b(?:for )?(a|\d+)\s*(nights?|days?|weeks?)\b/i);
+  if (span) return span[0].replace(/^for /i, '').replace(/^\w/, (c) => c.toUpperCase());
   return null;
 }
 

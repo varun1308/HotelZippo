@@ -60,17 +60,27 @@ describe('TripBrief', () => {
     expect(meter).toHaveAttribute('aria-valuemax', '6');
   });
 
-  it('disables "Find hotels" when only one gate (destination) is filled', () => {
+  it('disables "Find hotels" when only some gates are filled', () => {
     render(<TripBrief brief={makeBrief({ destination: 'Phuket' })} />);
     expect(screen.getByRole('button', { name: /find hotels/i })).toBeDisabled();
   });
 
-  it('enables "Find hotels" and fires onFindHotels once both gates are filled', async () => {
+  it('disables "Find hotels" when destination + type are set but dates/who are missing', () => {
+    render(<TripBrief brief={makeBrief({ destination: 'Phuket', type: 'Beach getaway' })} />);
+    expect(screen.getByRole('button', { name: /find hotels/i })).toBeDisabled();
+  });
+
+  it('enables "Find hotels" and fires onFindHotels once all four gates are filled', async () => {
     const user = userEvent.setup();
     const onFindHotels = jest.fn();
     render(
       <TripBrief
-        brief={makeBrief({ destination: 'Phuket', type: 'Beach getaway' })}
+        brief={makeBrief({
+          destination: 'Phuket',
+          type: 'Beach getaway',
+          dates: 'Mid-July, one week',
+          who: 'Two adults, two kids',
+        })}
         onFindHotels={onFindHotels}
       />,
     );
