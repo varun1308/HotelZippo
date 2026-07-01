@@ -149,6 +149,18 @@ export async function runConversation(args: RunConversationArgs) {
         execute: async (input) => {
           const supabase = createServiceClient();
 
+          // Deterministic safety net: if the model gathered profile facts (kids/food/budget) but
+          // skipped the update_profile call (Haiku sometimes narrates instead of calling), persist
+          // them now from the family_profile it passed to run this search. Fire-and-forget through
+          // the RLS-scoped client so it can't block or break the recommendation.
+          if (args.userId && args.profileClient) {
+            void reconcileProfileFromAssembleInput(
+              input.family_profile as Record<string, unknown>,
+              args.userId,
+              args.profileClient,
+            );
+          }
+
           // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
           // so an empty 5-enum destination can be seeded on the fly. Gated by PREVIEW_RUNTIME_SEED
           // inside runAssembly / resolveEligibility; best-effort so a missing piece never breaks the turn.
@@ -218,6 +230,62 @@ export async function runUpdateProfile(
   if (updated.length === 0) return { updated: [] }; // patch matched current values → no write
   await saveFamilyProfile(mergeProfile(existing, patch), userId, client);
   return { updated };
+}
+
+/** Deterministic safety net (the Haiku-skips-the-tool fix): map the `family_profile` the model
+ *  passes into `assemble_recommendations` onto a ProfilePatch, tolerating the loose shape the model
+ *  produces (snake_case `food_preference`/`budget_tier`, `children`/`kids`, `spouse`). Only keys we
+ *  can confidently interpret are returned — anything unrecognised is dropped, never guessed. */
+export function profilePatchFromAssembleInput(
+  familyProfile: Record<string, unknown> | null | undefined,
+): ProfilePatch & { children?: Child[] } {
+  const fp = familyProfile ?? {};
+  const patch: ProfilePatch & { children?: Child[] } = {};
+
+  const budget = fp.budget_tier ?? fp.budgetTier;
+  if (typeof budget === 'string' && (BUDGET_TIERS as readonly string[]).includes(budget)) {
+    patch.budgetTier = budget as ProfilePatch['budgetTier'];
+  }
+
+  const food = fp.food_preference ?? fp.food;
+  if (typeof food === 'string' && (FOOD_VALUES as readonly string[]).includes(food)) {
+    patch.food = food as ProfilePatch['food'];
+  }
+
+  const kids = (fp.children ?? fp.kids) as unknown;
+  if (Array.isArray(kids)) {
+    const children = kids
+      .map((c) => {
+        const o = (c ?? {}) as Record<string, unknown>;
+        const age = typeof o.age === 'number' ? o.age : Number(o.age);
+        if (!Number.isInteger(age) || age < 0 || age > 17) return null;
+        return { name: typeof o.name === 'string' ? o.name : '', age };
+      })
+      .filter((c): c is Child => c != null);
+    if (children.length > 0) patch.children = children;
+  }
+
+  if (typeof fp.spouse === 'boolean') patch.spouse = fp.spouse;
+
+  return patch;
+}
+
+/** Best-effort reconcile: persist any profile facts the model USED to run a search but never saved
+ *  (Haiku sometimes narrates "noted your kids" without emitting `update_profile`). Reuses the
+ *  create-or-merge path, so it only writes genuinely-new fields and never fires the visible chip on
+ *  a non-change. Never throws — a reconcile failure must not break the recommendation turn. */
+export async function reconcileProfileFromAssembleInput(
+  familyProfile: Record<string, unknown> | null | undefined,
+  userId: string,
+  client: SupabaseClient,
+): Promise<void> {
+  try {
+    const patch = profilePatchFromAssembleInput(familyProfile);
+    if (Object.keys(patch).length === 0) return;
+    await runUpdateProfile(patch, userId, client);
+  } catch {
+    /* reconcile is a safety net — swallow any error so the recommendation still renders */
+  }
 }
 
 /** The sentinel the async tool returns to the model (03c). The chat route translates this into an
