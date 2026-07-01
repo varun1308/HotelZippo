@@ -8,7 +8,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 jest.mock('server-only', () => ({}));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { runUpdateProfile } = require('@/lib/chat/agent') as typeof import('@/lib/chat/agent');
+const { runUpdateProfile, profilePatchFromAssembleInput, reconcileProfileFromAssembleInput } =
+  require('@/lib/chat/agent') as typeof import('@/lib/chat/agent');
 
 /** A minimal Supabase stub: .from('family_profiles').select().maybeSingle() returns the seeded
  * row (snake_case, as PostgREST would), and .upsert() records what was written. */
@@ -90,5 +91,73 @@ describe('runUpdateProfile (update_profile tool execute)', () => {
     expect(upserts[0].food_preferences).toEqual(
       expect.arrayContaining(['vegetarian', 'indian-food-matters']),
     );
+  });
+});
+
+// The deterministic safety net for when the model runs a search having gathered profile facts but
+// never calling update_profile (Haiku sometimes narrates instead of emitting the tool call).
+describe('profilePatchFromAssembleInput (loose family_profile → ProfilePatch)', () => {
+  it('reads snake_case model keys (food_preference, budget_tier) + structured children', () => {
+    const patch = profilePatchFromAssembleInput({
+      food_preference: 'vegetarian',
+      budget_tier: 'comfort',
+      children: [{ name: 'Aanya', age: 7 }, { name: 'Vir', age: 2 }],
+    });
+    expect(patch.food).toBe('vegetarian');
+    expect(patch.budgetTier).toBe('comfort');
+    expect(patch.children).toHaveLength(2);
+  });
+
+  it('tolerates camelCase + the `kids` alias + numeric-string ages', () => {
+    const patch = profilePatchFromAssembleInput({
+      budgetTier: 'luxury',
+      kids: [{ name: 'Vir', age: '2' }],
+    });
+    expect(patch.budgetTier).toBe('luxury');
+    expect(patch.children).toEqual([{ name: 'Vir', age: 2 }]);
+  });
+
+  it('DROPS unrecognised / out-of-range values instead of guessing', () => {
+    const patch = profilePatchFromAssembleInput({
+      budget_tier: 'platinum', // not a valid tier
+      food_preference: 'pescatarian', // not a valid enum
+      children: [{ name: 'X', age: 40 }], // out of 0–17 range
+    });
+    expect(patch).toEqual({});
+  });
+
+  it('empty / null input → empty patch', () => {
+    expect(profilePatchFromAssembleInput(null)).toEqual({});
+    expect(profilePatchFromAssembleInput({})).toEqual({});
+  });
+});
+
+describe('reconcileProfileFromAssembleInput (safety-net persist)', () => {
+  it('CREATES the row with the gathered kids when the model skipped update_profile', async () => {
+    const { client, upserts } = mockClient(null);
+    await reconcileProfileFromAssembleInput(
+      { children: [{ name: 'Aanya', age: 7 }, { name: 'Vir', age: 2 }] },
+      USER,
+      client,
+    );
+    expect(upserts).toHaveLength(1);
+    expect((upserts[0].family_members as { children: unknown[] }).children).toHaveLength(2);
+  });
+
+  it('writes nothing when the search input carries no interpretable profile facts', async () => {
+    const { client, upserts } = mockClient(null);
+    await reconcileProfileFromAssembleInput({ destination: 'Phuket' }, USER, client);
+    expect(upserts).toHaveLength(0);
+  });
+
+  it('never throws — a persistence failure is swallowed', async () => {
+    const throwing = {
+      from() {
+        throw new Error('db down');
+      },
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+    await expect(
+      reconcileProfileFromAssembleInput({ children: [{ name: 'A', age: 7 }] }, USER, throwing),
+    ).resolves.toBeUndefined();
   });
 });
