@@ -74,6 +74,14 @@ export function e2eRatesStub(body: RatesRequest): Response {
     correlationId: 'e2e-correlation',
     token: 'e2e-token',
     options: STUB_OPTIONS,
+    display: {
+      hotelAddress: '123 E2E Test Street, Testville',
+      hotelImage: 'https://example.test/hero.jpg',
+      hotelLatitude: 1,
+      hotelLongitude: 1,
+      hotelStarRating: 5,
+      hotelRating: 5,
+    },
   };
   return Response.json(payload, { status: 200 });
 }

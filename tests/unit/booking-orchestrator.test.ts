@@ -12,6 +12,7 @@ import {
   NO_AVAILABILITY_RESPONSE,
   OFFER_EXPIRED_RESPONSE,
   PAYMENT_URL_RESPONSE,
+  REVALIDATE_RESPONSE,
 } from '@/tests/fixtures/routestack';
 
 const ENV = { ROUTESTACK_API_KEY: 'rs_test_key', ROUTESTACK_API_SECRET: 'shhh', ROUTESTACK_API_URL: 'https://evolvemcp.routestack.ai' };
@@ -54,6 +55,27 @@ describe('searchAndRates (phase 1)', () => {
     expect(res.token).toBe('listing-token-abc');
     expect(res.options).toHaveLength(2);
     expect(res.options[0]).toMatchObject({ recommendationId: 'reco-A', roomId: 'room-A', board: 'Breakfast included' });
+  });
+
+  it('extracts hotel display metadata (address/image/geo/rating) from the details content node (10c)', async () => {
+    const { fetchImpl } = makeMockFetch();
+    const res = await searchAndRates(INPUT, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE });
+    expect(res.display).toEqual({
+      hotelImage: 'https://cdn.example.test/beach-resort.jpg',
+      hotelAddress: '99 Beach Rd, Patong, Phuket, Thailand',
+      hotelLatitude: 7.8804,
+      hotelLongitude: 98.3923,
+      hotelStarRating: 5,
+      hotelRating: 5,
+    });
+  });
+
+  it('returns an empty display object (never throws) when details carry no content node', async () => {
+    const { fetchImpl } = makeMockFetch({
+      '/mcp/hotel/get-hotel-details-and-rates': { success: true, result: { hotelId: 'H-1001', rooms: [{ rates: [{ recommendationId: 'reco-A', roomId: 'room-A' }] }] } },
+    });
+    const res = await searchAndRates(INPUT, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE });
+    expect(res.display).toEqual({});
   });
 
   it('threads correlationId + token + bearer into downstream calls', async () => {
@@ -250,6 +272,48 @@ describe('selectAndPaymentUrl (phase 2)', () => {
     expect(order).toEqual(['/mcp/auth/partner-token', '/mcp/hotel/revalidate', '/mcp/hotel/get-payment-url']);
     const payment = calls.find((c) => c.path === '/mcp/hotel/get-payment-url')!;
     expect(payment.body).toMatchObject({ recommendationId: 'reco-A', roomId: 'room-A', correlationId: 'corr-fixture-123' });
+  });
+
+  it('sends the RouteStack checkout-page enrichment (10c, live-verified 2026-07-03): publishedRate on revalidate, display/destination/displayedPrice/travellers + priceCheckResult on get-payment-url', async () => {
+    const { fetchImpl, calls } = makeMockFetch();
+    const enriched: RoomSelection = {
+      ...SEL,
+      display: { hotelAddress: '99 Beach Rd, Patong, Phuket, Thailand', hotelImage: 'https://cdn.example.test/beach-resort.jpg', hotelLatitude: 7.8804, hotelLongitude: 98.3923, hotelStarRating: 5, hotelRating: 5 },
+      destination: 'Phuket',
+      displayedPrice: 175.14,
+      party: { adults: 2, childAges: [], rooms: 1 },
+    };
+    await selectAndPaymentUrl(enriched, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE });
+
+    const revalidate = calls.find((c) => c.path === '/mcp/hotel/revalidate')!;
+    expect(revalidate.body).toMatchObject({ publishedRate: 175.14 });
+
+    const payment = calls.find((c) => c.path === '/mcp/hotel/get-payment-url')!;
+    expect(payment.body).toMatchObject({
+      hotelAddress: '99 Beach Rd, Patong, Phuket, Thailand',
+      hotelImage: 'https://cdn.example.test/beach-resort.jpg',
+      hotelLatitude: 7.8804,
+      hotelLongitude: 98.3923,
+      hotelStarRating: 5,
+      hotelRating: 5,
+      destination: 'Phuket',
+      displayedPrice: 175.14,
+      travellers: 'Room 1: 2A/0C',
+      priceCheckResult: REVALIDATE_RESPONSE,
+    });
+  });
+
+  it('omits the enrichment fields (never sends undefined/guessed values) when the selection carries none', async () => {
+    const { fetchImpl, calls } = makeMockFetch();
+    await selectAndPaymentUrl(SEL, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE });
+    const revalidate = calls.find((c) => c.path === '/mcp/hotel/revalidate')!;
+    expect(revalidate.body).not.toHaveProperty('publishedRate');
+    const payment = calls.find((c) => c.path === '/mcp/hotel/get-payment-url')!;
+    for (const key of ['hotelAddress', 'hotelImage', 'hotelLatitude', 'hotelLongitude', 'hotelStarRating', 'hotelRating', 'destination', 'displayedPrice', 'travellers']) {
+      expect(payment.body).not.toHaveProperty(key);
+    }
+    // priceCheckResult is always sent — it's the just-fetched revalidate result, never guessed.
+    expect(payment.body).toMatchObject({ priceCheckResult: REVALIDATE_RESPONSE });
   });
 
   it('maps a 5148 revalidate envelope to offer-expired', async () => {

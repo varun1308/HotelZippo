@@ -39,6 +39,7 @@ import {
   type RoomsAndRates,
   type RoomSelection,
   type BookingHandoff,
+  type HotelDisplayInfo,
 } from './types';
 
 /** Phase-1 input: the chosen hotel + confirmed party + resolved dates. `destination` and
@@ -517,6 +518,47 @@ function extractHeroImage(detailsResult: unknown): string | null {
   return null;
 }
 
+/** Pull the display metadata RouteStack's own hosted checkout page renders (10c, live-verified
+ * 2026-07-03) out of a get-hotel-details-and-rates result's `content` node: street address,
+ * coordinates, and star/guest rating. Every field is best-effort — an absent/malformed value is
+ * simply omitted, never guessed. */
+function extractDisplayInfo(detailsResult: unknown): HotelDisplayInfo {
+  const content = (detailsResult as Record<string, unknown> | undefined)?.content as Record<string, unknown> | undefined;
+  const out: HotelDisplayInfo = {};
+  if (!content) return out;
+
+  const heroImage = extractHeroImage(detailsResult);
+  if (heroImage) out.hotelImage = heroImage;
+
+  const contact = content.contact as Record<string, unknown> | undefined;
+  const address = contact?.address as Record<string, unknown> | undefined;
+  if (address) {
+    const line1 = typeof address.line1 === 'string' ? address.line1 : undefined;
+    const city = (address.city as Record<string, unknown> | undefined)?.name;
+    const state = (address.state as Record<string, unknown> | undefined)?.name;
+    const country = (address.country as Record<string, unknown> | undefined)?.name;
+    const parts = [line1, city, state, country].filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+    if (parts.length > 0) out.hotelAddress = parts.join(', ');
+  }
+
+  const geo = content.geoCode as Record<string, unknown> | undefined;
+  const lat = geo?.lat;
+  const long = geo?.long;
+  const latNum = typeof lat === 'number' ? lat : typeof lat === 'string' ? Number(lat) : NaN;
+  const longNum = typeof long === 'number' ? long : typeof long === 'string' ? Number(long) : NaN;
+  if (Number.isFinite(latNum)) out.hotelLatitude = latNum;
+  if (Number.isFinite(longNum)) out.hotelLongitude = longNum;
+
+  if (typeof content.starRating === 'number') {
+    out.hotelStarRating = content.starRating;
+    // RouteStack's own live payload sends the same figure for both hotelStarRating + hotelRating
+    // (no separate guest-review score surfaced by this endpoint) — mirror that rather than
+    // omitting a field their checkout page expects.
+    out.hotelRating = content.starRating;
+  }
+  return out;
+}
+
 /** A real, bookable RouteStack hotel ready to stage as a preview row (12i — RouteStack-first flow). */
 export interface RouteStackPreviewHotel {
   rsHotelId: string;
@@ -692,6 +734,7 @@ export async function searchAndRates(
     correlationId: handles.correlationId,
     token: handles.token,
     options,
+    display: extractDisplayInfo(ratesEnv.result),
   };
 }
 
@@ -710,8 +753,26 @@ function extractUrl(env: Envelope): string | null {
   return null;
 }
 
+/** Render "Room 1: 2A/0C"-style traveller summary RouteStack's own checkout page expects
+ * (confirmed 2026-07-03 against a live captured booking). v1 books a single room, so this is
+ * always "Room 1: …" — matches every captured example. */
+function describeTravellersForCheckout(party?: TravelParty): string | undefined {
+  if (!party) return undefined;
+  return `Room 1: ${party.adults}A/${party.childAges.length}C`;
+}
+
 /** PHASE 2 — revalidate the chosen rate, then fetch the deep-link payment URL. Called only
- * after the user picks a room in the modal. Threads the session handles from phase 1. */
+ * after the user picks a room in the modal. Threads the session handles from phase 1.
+ *
+ * Both calls carry more than RouteStack's OpenAPI marks `required`: `publishedRate` on
+ * revalidate, and the display/pricing enrichment (hotelAddress/hotelImage/coordinates/
+ * ratings/travellers/destination/displayedPrice + the revalidate result as `priceCheckResult`)
+ * on get-payment-url. Confirmed 2026-07-03 against a live captured successful booking
+ * (`scripts/booking/RouteStack.ai Hotel API.postman_collection.json`) — RouteStack decodes
+ * these fields straight into the guest checkout page it hosts (deep-link `hotel/guests` URL),
+ * so omitting them (as the wrapper previously did) ships a checkout page missing the hotel
+ * photo, address, star rating, and price breakdown a real guest sees. Every field here is
+ * still optional server-side — a caller with only the required ids still books. */
 export async function selectAndPaymentUrl(
   sel: RoomSelection,
   deps: BookingDeps,
@@ -719,15 +780,19 @@ export async function selectAndPaymentUrl(
   const attrs = { hotel_id: sel.hotelId, check_in: sel.dates.checkIn, check_out: sel.dates.checkOut };
   const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce, mock: deps.mock });
 
-  // revalidate the selected rate before payment (recommended immediately before payment-url)
-  await tracedCall(deps, 'revalidate', '/mcp/hotel/revalidate', jwt, {
+  // revalidate the selected rate before payment (recommended immediately before payment-url).
+  // publishedRate (when known) is the rate's own list price — RouteStack's request schema marks
+  // it optional, but every live successful booking sends it.
+  const revalidateEnv = await tracedCall(deps, 'revalidate', '/mcp/hotel/revalidate', jwt, {
     hotelId: sel.hotelId,
     recommendationId: sel.recommendationId,
     token: sel.token,
     correlationId: sel.correlationId,
+    ...(sel.displayedPrice !== undefined ? { publishedRate: sel.displayedPrice } : {}),
   }, attrs);
 
-  // get the deep-link checkout URL
+  // get the deep-link checkout URL — enriched with display metadata + the revalidate result
+  // (priceCheckResult) so RouteStack's hosted checkout page renders fully (see doc comment above).
   const payEnv = await tracedCall(deps, 'get_payment_url', '/mcp/hotel/get-payment-url', jwt, {
     hotelId: sel.hotelId,
     hotelName: sel.hotelName,
@@ -737,6 +802,16 @@ export async function selectAndPaymentUrl(
     roomId: sel.roomId,
     checkIn: sel.dates.checkIn,
     checkOut: sel.dates.checkOut,
+    ...(sel.display?.hotelAddress !== undefined ? { hotelAddress: sel.display.hotelAddress } : {}),
+    ...(sel.display?.hotelImage !== undefined ? { hotelImage: sel.display.hotelImage } : {}),
+    ...(sel.display?.hotelLatitude !== undefined ? { hotelLatitude: sel.display.hotelLatitude } : {}),
+    ...(sel.display?.hotelLongitude !== undefined ? { hotelLongitude: sel.display.hotelLongitude } : {}),
+    ...(sel.display?.hotelStarRating !== undefined ? { hotelStarRating: sel.display.hotelStarRating } : {}),
+    ...(sel.display?.hotelRating !== undefined ? { hotelRating: sel.display.hotelRating } : {}),
+    ...(sel.destination !== undefined ? { destination: sel.destination } : {}),
+    ...(sel.displayedPrice !== undefined ? { displayedPrice: sel.displayedPrice } : {}),
+    ...(describeTravellersForCheckout(sel.party) !== undefined ? { travellers: describeTravellersForCheckout(sel.party) } : {}),
+    priceCheckResult: revalidateEnv.raw,
   }, attrs);
 
   const url = extractUrl(payEnv);

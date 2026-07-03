@@ -36,13 +36,28 @@ export const SEARCH_HOTELS_RESPONSE = {
 };
 
 /** Mimics the trimmed get-hotel-details-and-rates payload: rooms each with rate plans that
- * carry the two ids + descriptive fields (under plausible aliases the mapper probes). */
+ * carry the two ids + descriptive fields (under plausible aliases the mapper probes), plus a
+ * `content` node with the hotel display metadata (address/geo/star/heroImage) confirmed live
+ * 2026-07-03 against a real successful booking — see extractDisplayInfo. */
 export const DETAILS_AND_RATES_RESPONSE = {
   success: true,
   message: null,
   code: 200,
   result: {
     hotelId: 'H-1001',
+    content: {
+      heroImage: 'https://cdn.example.test/beach-resort.jpg',
+      contact: {
+        address: {
+          line1: '99 Beach Rd',
+          city: { name: 'Patong' },
+          state: { name: 'Phuket' },
+          country: { name: 'Thailand' },
+        },
+      },
+      geoCode: { lat: 7.8804, long: 98.3923 },
+      starRating: 5,
+    },
     rooms: [
       {
         roomType: 'Deluxe Twin',
@@ -79,7 +94,14 @@ export const DETAILS_AND_RATES_RESPONSE = {
   },
 };
 
-export const REVALIDATE_RESPONSE = { success: true, message: null, code: 200, result: { ok: true } };
+/** A representative revalidate result (pricing breakdown + room/rate echo) — the whole envelope
+ * is forwarded verbatim as get-payment-url's `priceCheckResult` (10c, live-verified 2026-07-03). */
+export const REVALIDATE_RESPONSE = {
+  success: true,
+  message: 'data retrieved',
+  code: 200,
+  result: { token: 'listing-token-abc', currency: 'USD', hotelId: 'H-1001', ourprice: 372.13, totalRate: 336.72, publishedRate: 416.78 },
+};
 
 export const PAYMENT_URL_RESPONSE = {
   success: true,

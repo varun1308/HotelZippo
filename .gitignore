@@ -67,3 +67,8 @@ Thumbs.db
 
 # Claude Code scheduled-task runtime lock (not source)
 .claude/scheduled_tasks.lock
+scripts/booking/_vegas-walk.ts
+scripts/booking/_watch-curation.ts
+scripts/booking/live-vegas-correlation.ts
+scripts/dev/repro-chat-timeout.ts
+scripts/booking/RouteStack.ai Hotel API.postman_collection.json

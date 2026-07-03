@@ -54,6 +54,22 @@ export interface RoomRateOption {
   currencyRate?: number;
 }
 
+/** Hotel display metadata RouteStack's OWN hosted checkout page renders (decoded from the
+ * `get-payment-url` request into the guest's deep-link payload — confirmed 2026-07-03 against
+ * a live captured booking, `scripts/booking/RouteStack.ai Hotel API.postman_collection.json`):
+ * address, hero photo, coordinates, and star/guest rating. Sourced from the
+ * get-hotel-details-and-rates `content` node (10c); every field optional and OMITTED (not
+ * guessed) when RouteStack didn't return it — the checkout page degrades gracefully either way,
+ * this only makes it render fully when the data exists. */
+export interface HotelDisplayInfo {
+  hotelAddress?: string;
+  hotelImage?: string;
+  hotelLatitude?: number;
+  hotelLongitude?: number;
+  hotelStarRating?: number;
+  hotelRating?: number;
+}
+
 /** Phase-1 result: the matched hotel's available rooms/rates for the picker, plus the
  * session handles (correlationId + token) that phase 2 must thread back. */
 export interface RoomsAndRates {
@@ -62,6 +78,9 @@ export interface RoomsAndRates {
   correlationId: string;
   token: string;
   options: RoomRateOption[];
+  /** Display metadata for RouteStack's checkout page (see HotelDisplayInfo) — best-effort,
+   * whatever get-hotel-details-and-rates returned. */
+  display: HotelDisplayInfo;
 }
 
 /** Phase-2 result: the deep-link checkout URL the user is handed off to (new tab). */
@@ -78,6 +97,15 @@ export interface RoomSelection {
   recommendationId: string;
   roomId: string;
   dates: BookingDates;
+  /** Carried straight from phase 1's RoomsAndRates.display (see HotelDisplayInfo) so phase 2 can
+   * pass RouteStack's checkout page what it needs to render — never re-fetched. */
+  display?: HotelDisplayInfo;
+  /** Free-text destination + the option's displayed total, purely for the checkout page (never
+   * used for RouteStack request logic). */
+  destination?: string;
+  displayedPrice?: number;
+  /** Confirmed party, for the "Room 1: 2A/0C"-style traveller summary the checkout page shows. */
+  party?: TravelParty;
 }
 
 /** Why a booking step failed — drives the warm conversational fallback (specs/14). The

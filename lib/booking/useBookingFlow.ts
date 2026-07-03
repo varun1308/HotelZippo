@@ -18,7 +18,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { FamilyProfile } from '@/components/profile';
 import { inferParty, type InferredParty } from './party';
 import type { BookingHotel } from './context';
-import type { TravelParty, BookingDates, RoomRateOption, BookingErrorKind } from './types';
+import type { TravelParty, BookingDates, RoomRateOption, BookingErrorKind, HotelDisplayInfo } from './types';
 import type {
   RatesRequest,
   RatesResponse,
@@ -121,8 +121,17 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
   }, []);
 
   // Session handles from phase 1, needed by phase 2 (kept off render state). `destination` rides
-  // along so the payment-url route can record it on the pending booking_orders row (10d).
-  const handlesRef = useRef<{ correlationId: string; token: string; hotelId: string; hotelName: string; destination: string } | null>(null);
+  // along so the payment-url route can record it on the pending booking_orders row (10d) AND
+  // forward it to RouteStack's own get-payment-url; `display` is the hotel metadata (address/
+  // image/coords/rating) RouteStack's hosted checkout page renders (10c).
+  const handlesRef = useRef<{
+    correlationId: string;
+    token: string;
+    hotelId: string;
+    hotelName: string;
+    destination: string;
+    display: HotelDisplayInfo;
+  } | null>(null);
 
   const proceed = useCallback(
     (hotel: BookingHotel) => {
@@ -166,7 +175,14 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
         setState((s) => ({ ...s, step: 'error', error: { kind: json.error, message: json.message } }));
         return;
       }
-      handlesRef.current = { correlationId: json.correlationId, token: json.token, hotelId: json.hotelId, hotelName: json.hotelName, destination: hotel.destination };
+      handlesRef.current = {
+        correlationId: json.correlationId,
+        token: json.token,
+        hotelId: json.hotelId,
+        hotelName: json.hotelName,
+        destination: hotel.destination,
+        display: json.display,
+      };
       setState((s) => ({ ...s, step: 'picking', options: json.options }));
     } catch {
       setState((s) => ({ ...s, step: 'error', error: { kind: 'transport', message: 'I couldn’t reach the booking service.' } }));
@@ -194,6 +210,11 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
         // phase 1 searched with (the server defaults an omitted currency to USD — v1 is USD-only).
         destination: handles.destination,
         currency: deps.currency ?? 'USD',
+        // RouteStack checkout-page enrichment (10c, live-verified 2026-07-03): the hotel display
+        // metadata from phase 1 + this option's price + the confirmed party.
+        display: handles.display,
+        displayedPrice: option.price,
+        party: stateRef.current.party,
         // Conversation correlation (specs/14): same id phase 1 carried.
         conversationId: deps.conversationId,
       };

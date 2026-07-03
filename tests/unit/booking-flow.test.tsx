@@ -32,6 +32,7 @@ const RATES: RatesResponse = {
   options: [
     { recommendationId: 'reco-A', roomId: 'room-A', roomName: 'Deluxe Twin', price: 482.5, currency: 'USD', board: 'Breakfast included' },
   ],
+  display: { hotelAddress: '1 Beach Rd, Phuket', hotelImage: 'https://example.test/hero.jpg', hotelStarRating: 5, hotelRating: 5 },
 };
 const PAYMENT: PaymentUrlResponse = { bookingUrl: 'https://evolve.routestack.ai/hotel/guests?x=1&deeplink=Y' };
 
@@ -100,7 +101,9 @@ describe('useBookingFlow', () => {
     expect(result.current.state.step).toBe('idle'); // handed off → modal closed
 
     // payment-url request threaded the session handles + chosen room, plus the pending-order
-    // context (10d): destination from the chosen hotel, currency defaulting to USD (v1).
+    // context (10d): destination from the chosen hotel, currency defaulting to USD (v1). Also
+    // threads RouteStack checkout-page enrichment (10c, live-verified 2026-07-03): phase 1's
+    // display metadata, the option's price, and the confirmed party.
     const payCall = fetchImpl.mock.calls.find((c) => (c[0] as string).includes('/payment-url'))!;
     const body = JSON.parse((payCall[1] as RequestInit).body as string);
     expect(body).toMatchObject({
@@ -110,6 +113,9 @@ describe('useBookingFlow', () => {
       roomId: 'room-A',
       destination: 'Phuket',
       currency: 'USD',
+      display: RATES.display,
+      displayedPrice: 482.5,
+      party: { adults: 2, childAges: [2, 7], rooms: 1 },
     });
   });
 

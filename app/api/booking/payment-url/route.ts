@@ -103,6 +103,10 @@ async function paymentUrlForUser(
         recommendationId: body.recommendationId,
         roomId: body.roomId,
         dates: body.dates,
+        display: body.display,
+        destination: body.destination,
+        displayedPrice: body.displayedPrice,
+        party: body.party,
       },
       { fetchImpl, debugLog, mock },
     );
