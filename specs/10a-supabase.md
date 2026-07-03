@@ -1,7 +1,7 @@
 # 10a · Supabase
 
 - **Notion:** https://app.notion.com/p/3754958429ac8115aed6fec93b39ff39
-- **Phase:** 1 · **Status:** starter (expand with concrete policies during Phase 1)
+- **Phase:** 1 · **Status:** built ✅ (concrete tables/policies live in **07-data-model.md** — that page is the canonical contract; this page stays a thin platform brief)
 
 ## Summary
 
@@ -23,3 +23,10 @@ See `docs/data-model.md` → RLS plan. Owner-only for user-scoped tables; read-o
 
 - Implement RLS policies matching the intent; never expose the service-role key to the client.
 - Provide typed client factories (`browserClient`, `serviceClient`) with the service client guarded against client bundling.
+
+## Acceptance criteria (as built)
+
+- **AC1** — cross-user RLS isolation holds for every user-scoped table (`tests/integration/rls.test.ts`, `update-profile-rls.test.ts`).
+- **AC2** — `SUPABASE_SERVICE_ROLE_KEY` never reaches a client bundle (`server-only` guard on `lib/db/server.ts`; `tests/unit/persistence-not-client.test.ts`).
+- **AC3** — migrations apply cleanly to a pristine DB (`supabase db reset` green — exercised on every CI integration run).
+- **AC4** — the SSR/browser/server client trio (`lib/db/ssr.ts` / `client.ts` / `server.ts`) is the only place Supabase clients are constructed.

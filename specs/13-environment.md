@@ -17,7 +17,10 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 | `APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID` | server-only | TripAdvisor Reviews Scraper actor (Phase 6) |
 | `APIFY_GOOGLE_REVIEWS_ACTOR_ID` | server-only | Google Maps Reviews Scraper actor (Phase 6) |
 | `APIFY_TRIPADVISOR_SEARCH_ACTOR_ID` | server-only | TripAdvisor Hotel **Search** actor used by curation tool (12a). Confirm exact name against 12a. |
-| `APIFY_SEARCH_MAX_RESULTS` | server-only | Curation hotel-search over-fetch cap (`lib/curation/fetch.ts`; optional, default 50) |
+| `APIFY_SEARCH_MAX_RESULTS` | server-only | Curation hotel-search **top-N selection** size (`lib/curation/fetch.ts`; optional, default 50) |
+| `APIFY_SEARCH_POOL_SIZE` | server-only | Curation hotel-search **candidate pool** fetched from the search actor before top-N selection (`lib/curation/apify-mapper.ts`; optional, default 500). Pool ≫ top-N so the 4/5-star preference + 3-star backfill (12a, 2026-06-30 rule) has enough candidates. |
+| `APIFY_LIVE_SMOKE` | server-only | **Test opt-in.** `=1` lets `tests/integration/apify-live.test.ts` make REAL, PAID actor runs. Without it, the integration env loader (`tests/integration/load-env.ts`) strips all `APIFY_*` credentials so a routine `npm run test:integration` can never bill Apify. Never set in CI. |
+| `ROUTESTACK_LIVE_SMOKE` | server-only | **Test opt-in.** `=1` lets `tests/integration/booking-sandbox.test.ts` hit the live RouteStack sandbox (it loads its own creds from `.env.local`). Never set in CI. |
 | `APIFY_REVIEWS_MAX_RESULTS` | server-only | Per-source review-scrape over-fetch cap (`lib/review-intelligence/apify.ts`; optional, default 600) |
 | `ROUTESTACK_API_KEY` | server-only | RouteStack partner API key (public identifier) — used in the HMAC token exchange (Phase 7) |
 | `ROUTESTACK_API_SECRET` | server-only | RouteStack partner secret — signs the HMAC (`apiKey:timestamp:nonce`) for the partner-token exchange; never exposed to client (Phase 7) |
@@ -65,6 +68,13 @@ Actual values are never stored in the repo — only variable names + purpose. `.
 - Scaffold `.env.example` from this page directly (all names, empty values, one-line descriptions).
 - Ensure `.env.local` is in `.gitignore` in the initial scaffold.
 
+## Acceptance criteria
+
+- **AC1** — every variable named in any spec exists in this table AND in `.env.example` (name + one-line description, empty value).
+- **AC2** — no server-only variable is read in client-bundled code (`server-only` guards + `tests/unit/persistence-not-client.test.ts`); `NEXT_PUBLIC_` only for genuinely public values.
+- **AC3** — `next build` fails when a dev/E2E-only flag is set (`scripts/build/preflight.mjs` guard; `tests/unit/build-preflight.test.ts`).
+- **AC4** — the full unit + integration suite is green with NO env vars beyond `.env.test`'s public local-Supabase defaults (key-free CI invariant, 15).
+
 ## Pre-flight note
 
-All variable **names** are known and can be templated now. **No values exist yet** — every variable is currently unset and must be filled per the setup order before the corresponding phase can run live.
+*(historical — Phase 0)* All variable **names** were templated before any values existed. Values now live in `.env.local` (dev) and Vercel project settings (prod) per the setup order above; see 18 for which host carries which variable.

@@ -1,7 +1,7 @@
 # 12 · Hotel Seeding Strategy
 
 - **Notion:** https://app.notion.com/p/3744958429ac81faad33ee4727baf8fc
-- **Phase:** 1 · **Status:** specced
+- **Phase:** 1 · **Status:** built ✅ (curation + publish + demo seed live-verified; see 12a/12d)
 
 ## Selection
 
@@ -19,7 +19,14 @@
 
 10 records power the Phase 2–3 demo **before** the real pipeline (Phase 6). Structure + selection rules in 12d.
 
-> ⚠️ **Open item:** the 10 demo records' *content* is not yet authored (see `docs/spec-coverage.md` / plan §Risks). Only the structure exists in 12d.
+> ⚠️ **Open item (2026-06-05):** the 10 demo records now EXIST as Claude-authored *placeholder* content (fabricated, not from real reviews) — the founder owns final content and may revise wholesale before launch. Structure + selection rules in 12d.
+
+## Acceptance criteria
+
+- **AC1** — each curated destination has its top-N published rows in `hotels` (N = `APIFY_SEARCH_MAX_RESULTS`, default 50), every row satisfying the publish gates: 100+ reviews and ≥1 image (12a / 01b).
+- **AC2** — exactly 10 demo `hotel_intelligence` records seeded (5 Phuket, 5 Bali), idempotent on re-seed (12d scenarios).
+- **AC3** — no published hotel renders a broken hero image (01b placeholder rule).
+- **AC4** — the recommendation flow (03b) can assemble cards for a seeded destination without touching `raw_reviews`.
 
 ## Action items
 

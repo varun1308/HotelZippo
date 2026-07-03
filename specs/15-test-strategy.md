@@ -61,6 +61,14 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - OAuth failure path returns to `/` with a non-blocking error and no broken state.
 - **Test type:** unit/jsdom (landing, account menu), node integration (gating + callback, `public.users` trigger, RLS isolation, persistence round-trip). Live Google sign-in is verified manually once creds land.
 
+### Phase 5 — Session Memory
+(Source: `specs/08b-3-session-snapshot.md`.)
+- Snapshot generated at the trigger points (session end / 30 min inactivity / nav away) and persisted to `sessions`, user-scoped.
+- Snapshot is schema-valid (contract test), ≤500 tokens hard / ≤400 preferred, dense prose, **no PII** beyond what the schema allows.
+- Returning user: snapshot loads as context and the agent resumes naturally; **missing snapshot → start fresh** (no error state).
+- Snapshot writes never block or break the chat turn (fire-and-forget failure tolerated).
+- **Test type:** unit/jsdom (`session-snapshot`, `use-session-snapshot`), contract (`session-snapshot-prompt`), node integration (`session-snapshot-route`, `session-persistence`).
+
 ### Phase 6 — Review Intelligence Pipeline
 (Source: `specs/02-review-intelligence-pipeline.md`; full case list = 08a-6 TC-P1..P22 + the 7 synthesis cases in 08a-3.)
 - Pipeline runs end-to-end for test hotels without error (scrape → tag → store → synthesise → upsert).
@@ -94,6 +102,13 @@ Tests written **alongside** code (never after). Every spec produces a test file.
 - **AC4 — prod safety + gating.** `routeStackMockEnabled()` is true **only** for the exact `'1'` flag and is read at call time; `POST /api/booking/mock-confirm` **403s** when the flag is off and **401s** an anonymous caller.
 - **AC5 — lifecycle self-emit.** When enabled + signed-in, mock-confirm self-emits a `BOOKING_SUCCESS` event (module HOTEL) carrying the user's email as `billing_email`, signed with `ROUTESTACK_WEBHOOK_SECRET` when set, to `/api/webhooks/routestack` — driving the **real** 10d correlation that flips the pending `booking_orders` row CONFIRMED (10d's correlation lifecycle is covered by `booking-webhook.test.ts`). A self-fetch failure never dead-ends the demo.
 - **Test type:** unit/jsdom (mock transport vs the real orchestrator, `tests/unit/booking-mock-transport.test.ts`) + node integration (mock-confirm gating/auth/self-emit, `tests/integration/booking-mock-confirm.test.ts`) — **key-free**, runs in CI without `ROUTESTACK_MOCK`.
+
+## Suite invariants (hardened 2026-07-03)
+
+1. **Forced test mode.** `jest.config.mjs` sets `NODE_ENV=test` unconditionally — a stray shell `NODE_ENV` (e.g. `dev`) would otherwise make next/jest load `.env.local` (leaking live paid creds into the suite) and defeat every `NODE_ENV==='test'` gate (TC-P4), failing the worker happy path locally while CI stays green.
+2. **No paid calls without opt-in.** The integration env loader strips all `APIFY_*` credentials unless `APIFY_LIVE_SMOKE=1`; the RouteStack sandbox smoke requires `ROUTESTACK_LIVE_SMOKE=1` and loads its own creds. A routine `npm run test` can never bill a provider. CI sets neither flag.
+3. **Key-free CI.** The full unit + contract + integration + E2E suite is green with no secrets beyond `.env.test`'s public local-Supabase defaults (models injected/stubbed, providers mocked).
+4. **Coverage regression floor.** CI runs `npm run test:coverage` (jsdom project) with a global `coverageThreshold` in `jest.config.mjs`, measured over ALL of `app/ components/ lib/ middleware.ts` — an untested new module counts as 0%, not invisible. Thresholds sit just under the measured baseline; raise them as coverage improves, never lower them to admit a regression.
 
 ## Later phases (reference)
 Phase 8 (launch checklist — Notion 18; founder-run, not build work in this campaign). See Notion 15.

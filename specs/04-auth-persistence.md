@@ -104,6 +104,8 @@ Reads are automatically scoped by the owner-only RLS.
 - Sign-out clears the session and returns to `/`.
 - Landing renders from the prototype, Google-only (no email button), responsive 375–430px.
 - OAuth failure path returns to `/` with a non-blocking error and no broken state.
+- **Server-side API gate:** with Supabase auth env configured, an unauthenticated `POST /api/chat` or `POST /api/recommendations/assemble` is rejected **401 `auth_required`** (paid-model routes; page redirect alone is insufficient — see Design note above). Key-free CI: routes stay open (`tests/unit/route-auth-gates.test.ts`).
+- **Session expiry mid-use:** an expired/invalid session on a gated API behaves as unauthenticated (401 `auth_required`); the client surfaces a warm retry line (`lib/chat/httpStream.ts` non-OK path) rather than a broken state. *(Known gap: the client does not yet distinguish 401 → "please sign in again" from other failures — candidate Phase-4 follow-up.)*
 
 ## Claude Code Action Items (from Notion)
 

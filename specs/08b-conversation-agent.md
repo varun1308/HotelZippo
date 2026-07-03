@@ -1,9 +1,17 @@
 # 08b · Conversation Agent
 
 - **Notion:** https://app.notion.com/p/3754958429ac81dca34bf484b049de61
-- **Phase:** 3 (recommendation assembly 2–3) · **Status:** specced
+- **Phase:** 3 (recommendation assembly 2–3) · **Status:** built ✅ (runtime `lib/chat/agent.ts`; this page is the parent contract — build against the sub-specs below)
 
 Powers the real-time user experience: onboarding, family-profile collection, trip-brief capture, recommendation assembly, session memory. Framework: **Vercel AI SDK** (streaming, tool use).
+
+## Runtime contract (as built — summary of locked decisions)
+
+- Runtime: `lib/chat/agent.ts` (`runConversation`, injectable model for key-free tests) behind `POST /api/chat` — **signed-in users only** (401 `auth_required`, per 04).
+- Model: `claude-haiku-4-5` default, env-overridable via `AGENT_MODEL` (revert to `claude-sonnet-4-6` in prod if quality regresses) — same pattern as `ASSEMBLY_MODEL` / `SNAPSHOT_MODEL` (08b-2 / 08b-3).
+- Tools: `assemble_recommendations` (→ query 08a-5 consumption + assemble 08b-2; async dispatch when `ASYNC_ASSEMBLY=1`, see 03c), `update_profile` (RLS-scoped; requires signed-in user id — absent ⇒ tool not offered so CI/env-free stays green), `offer_profile_form` (inline chip UX).
+- Deterministic persistence net: profile facts passed to `assemble_recommendations` are persisted at assemble-time even if the model skipped `update_profile` (Haiku safety net, PR #75).
+- Onboarding gates, hard-flag prominence, and prose discipline live in the system prompt (08b-1); never query `raw_reviews` at request time.
 
 ## Flows
 

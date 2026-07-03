@@ -129,12 +129,15 @@ jobs:
         if: steps.detect.outputs.has_app == 'true'
         run: npm run lint --if-present
 
-      # Unit/contract/smoke only (jsdom project) — no DB. Falls back to full `test`
-      # if the split scripts aren't present yet.
+      # Unit/contract/smoke only (jsdom project) — no DB. Runs with coverage so the
+      # jest coverageThreshold regression floor gates the PR. Falls back to the plain
+      # split script, then full `test`, if the newer scripts aren't present yet.
       - name: Unit & contract tests
         if: steps.detect.outputs.has_app == 'true'
         run: |
-          if npm run | grep -q "test:unit"; then npm run test:unit; else npm run test --if-present; fi
+          if npm run | grep -q "test:coverage"; then npm run test:coverage; \
+          elif npm run | grep -q "test:unit"; then npm run test:unit; \
+          else npm run test --if-present; fi
 
       - name: Build
         if: steps.detect.outputs.has_app == 'true'

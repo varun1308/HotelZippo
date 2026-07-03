@@ -1,6 +1,6 @@
-# Spec Coverage (Phases 0–3)
+# Spec Coverage
 
-> Mirrors Notion **16 · Spec Index** for the Phase 0–3 build. Maps each spec page → its `/specs` file → phase → status. `status` here tracks the **in-repo `/specs` contract**, not the Notion page.
+> Mirrors Notion **16 · Spec Index**. Maps each spec page → its `/specs` file → phase → status. `status` here tracks the **in-repo `/specs` contract**, not the Notion page. *(Originally scoped to Phases 0–3; extended 2026-07-03 through Phase 7 + launch workstreams.)*
 >
 > **Status key:** `generated` = `/specs` file written from Notion Action Items · `pending` = not yet generated · `n/a` = reference page, no contract file · `deferred` = specced but built in a later phase.
 
@@ -66,13 +66,13 @@ Log pages (`08a-4/7`, `08b-5`, `12c/f`) and pure reference pages (01, 02, 03, 04
 
 | Spec page | `/specs` file | Status |
 |---|---|---|
-| 17 · Auth & Persistence Spec | `specs/04-auth-persistence.md` | generated (SPECCED — not yet built) |
+| 17 · Auth & Persistence Spec | `specs/04-auth-persistence.md` | generated — BUILT |
 
 ## Phase 5 — Session Memory
 
 | Spec page | `/specs` file | Status |
 |---|---|---|
-| 08b-3 · Session Snapshot Prompt | `specs/08b-3-session-snapshot.md` | generated (SPECCED — not yet built) |
+| 08b-3 · Session Snapshot Prompt | `specs/08b-3-session-snapshot.md` | generated — BUILT |
 
 ## Phase 6 — Review Intelligence Pipeline
 
@@ -88,6 +88,21 @@ The full producer pipeline (scrape → store → tag → synthesise → write, t
 
 Already built (no Phase 6 action): schema (`supabase/migrations/0002_pipeline_tables.sql`), consumption `query.ts`, and both `APIFY_*_REVIEWS_ACTOR_ID` env vars in `.env.example`.
 
-## Out of scope for this plan (Phases 7–8)
+## Phase 7 — Booking (RouteStack)
 
-Not built now: 08c (booking, Phase 7), 10c (RouteStack, Phase 7). The Review Intelligence pipeline pieces (08a / 08a-1/2/3/6, the Apify review-scraping path) are no longer out of scope — they are contracted under **Phase 6** above.
+| Spec page | `/specs` file | Status |
+|---|---|---|
+| 10c · RouteStack Integration (+ 08c briefing) | `specs/10c-booking-routestack.md` | generated — BUILT (deep-link + room picker; mock demo mode in prod) |
+| — (RouteStack REST ground truth) | `specs/openapi.yaml` | captured from live sandbox — **authoritative API doc** (fixtures: `specs/fixtures/routestack/`) |
+| 10c §webhooks (no dedicated Notion page yet) | `specs/10d-booking-webhooks.md` | generated — BUILT (order lifecycle + secret verification) |
+| 10c §mock (no dedicated Notion page yet) | `specs/10e-booking-mock.md` | generated — BUILT (`ROUTESTACK_MOCK=1` demo path) |
+
+## Launch / post-v1 workstreams
+
+| Spec page | `/specs` file | Status |
+|---|---|---|
+| 03c · Async Recommendation Assembly (under 08b) | `specs/03c-async-assembly.md` | generated — BUILT & MERGED (PR #71), `ASYNC_ASSEMBLY=1` gated, off by default |
+| 12h · Apify Run Ledger | `specs/12h-apify-run-ledger.md` | generated — BUILT (async fetch → poll → ingest) |
+| 12i · Preview Destinations | `specs/12i-preview-seeding.md` | generated — BUILT (12i-B surfacing + 12i-C runtime seed; Claude-proposes path NOT wired) |
+| 15a · E2E Test Strategy | `specs/15a-e2e-test-strategy.md` | generated — ACTIVE (journeys J1–J5) |
+| 18 · Deployment & Launch Checklist | `specs/18-deployment-runbook.md` | generated — prod deployed (mock demo mode) |
