@@ -35,7 +35,9 @@ import { useShortlist } from '@/lib/shortlist/useShortlist';
 import { ShortlistProvider } from '@/lib/shortlist/context';
 import { BookingProvider, type BookingHotel } from '@/lib/booking/context';
 import { useBookingFlow } from '@/lib/booking/useBookingFlow';
-import { resolveDates } from '@/lib/booking';
+// Import from party directly, NOT the barrel: the barrel re-exports the server-only
+// auth module (node:crypto), which webpack refuses in a client bundle.
+import { resolveDates } from '@/lib/booking/party';
 import { RoomPickerModal } from '@/components/booking/RoomPickerModal';
 import { useUser } from '@/lib/auth/useUser';
 import { signOut } from '@/lib/auth/signIn';
