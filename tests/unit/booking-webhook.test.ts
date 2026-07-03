@@ -55,10 +55,21 @@ describe('verifyWebhookSecret', () => {
     url,
   });
 
-  it('unset secret → skips verification (returns true)', () => {
+  it('unset secret → skips verification OUTSIDE production only (dev/sandbox allowance)', () => {
     delete process.env.ROUTESTACK_WEBHOOK_SECRET;
-    expect(verifyWebhookSecret(reqWith({}))).toBe(true);
+    expect(verifyWebhookSecret(reqWith({}))).toBe(true); // jest runs with NODE_ENV=test
     expect(webhookSecretConfigured()).toBe(false);
+  });
+  it('unset secret in PRODUCTION → fails closed (rejects every delivery)', () => {
+    delete process.env.ROUTESTACK_WEBHOOK_SECRET;
+    const prevNodeEnv = process.env.NODE_ENV;
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+    try {
+      expect(verifyWebhookSecret(reqWith({}))).toBe(false);
+      expect(verifyWebhookSecret(reqWith({ 'x-webhook-key': 'anything' }))).toBe(false);
+    } finally {
+      (process.env as Record<string, string | undefined>).NODE_ENV = prevNodeEnv;
+    }
   });
   it('matches via x-webhook-key header', () => {
     process.env.ROUTESTACK_WEBHOOK_SECRET = 's3cr3t';
@@ -69,9 +80,10 @@ describe('verifyWebhookSecret', () => {
     process.env.ROUTESTACK_WEBHOOK_SECRET = 's3cr3t';
     expect(verifyWebhookSecret(reqWith({ authorization: 'Bearer s3cr3t' }))).toBe(true);
   });
-  it('matches via query param', () => {
+  it('REJECTS query-param carriers (a secret in the URL is persisted by request logs)', () => {
     process.env.ROUTESTACK_WEBHOOK_SECRET = 's3cr3t';
-    expect(verifyWebhookSecret(reqWith({}, 'https://h/api/webhooks/routestack?key=s3cr3t'))).toBe(true);
+    expect(verifyWebhookSecret(reqWith({}, 'https://h/api/webhooks/routestack?key=s3cr3t'))).toBe(false);
+    expect(verifyWebhookSecret(reqWith({}, 'https://h/api/webhooks/routestack?access_key=s3cr3t'))).toBe(false);
   });
   it('mismatch / missing → false when configured', () => {
     process.env.ROUTESTACK_WEBHOOK_SECRET = 's3cr3t';
@@ -81,6 +93,27 @@ describe('verifyWebhookSecret', () => {
 });
 
 /* ---- fake supabase client for correlation/persistence ------------------- */
+
+/** Interpret an ILIKE pattern the way Postgres does (case-insensitive; % = any run, _ = any one
+ * char; backslash escapes a metachar) — so these tests actually prove billing_email is matched as
+ * a LITERAL (escaped), not as a pattern. */
+function ilikeToRegex(pattern: string): RegExp {
+  const escapeRe = (c: string) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let out = '';
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === '\\' && i + 1 < pattern.length) {
+      out += escapeRe(pattern[++i]);
+    } else if (ch === '%') {
+      out += '.*';
+    } else if (ch === '_') {
+      out += '.';
+    } else {
+      out += escapeRe(ch);
+    }
+  }
+  return new RegExp(`^${out}$`, 'i');
+}
 
 interface FakeState {
   /** booking_orders rows. */
@@ -107,8 +140,9 @@ function fakeClient(state: FakeState): SupabaseClient {
             return { data: row ?? null };
           }
           if (ctx.ilike) {
+            const re = ilikeToRegex(String(ctx.ilike.val));
             const row = [...state.orders]
-              .filter((o) => o.linked === false && String(o.user_email).toLowerCase() === String(ctx.ilike.val).toLowerCase())
+              .filter((o) => o.linked === false && re.test(String(o.user_email)))
               .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0];
             return { data: row ?? null };
           }
@@ -183,6 +217,45 @@ describe('correlateOrder', () => {
     // event orderid RSA-1234567890 doesn't match p1's rs_order_id, and p1 is linked → no email match
     const res = await correlateOrder(fakeClient(state), BOOKING_SUCCESS as any);
     expect(res.matched).toBe(false);
+  });
+
+  it('matches an email containing `_` LITERALLY — `_` is not a one-char wildcard (H6)', async () => {
+    // Unescaped, ilike would let 'raj_mehta@…' match 'rajxmehta@…' (`_` = any char) → wrong user.
+    const state = freshState([
+      { id: 'wrong', rs_order_id: null, linked: false, user_email: 'rajxmehta@example.com', created_at: '2026-06-24T11:30:00Z' },
+      { id: 'right', rs_order_id: null, linked: false, user_email: 'raj_mehta@example.com', created_at: '2026-06-24T11:00:00Z' },
+    ]);
+    const res = await correlateOrder(fakeClient(state), { ...BOOKING_SUCCESS, billing_email: 'raj_mehta@example.com' } as any);
+    expect(res).toEqual({ bookingOrderId: 'right', matched: true });
+  });
+
+  it("a crafted '%' billing_email matches NOTHING (no wildcard linking of arbitrary orders)", async () => {
+    const state = freshState([
+      { id: 'p1', rs_order_id: null, linked: false, user_email: 'raj@example.com', created_at: '2026-06-24T11:00:00Z' },
+    ]);
+    const res = await correlateOrder(fakeClient(state), { ...BOOKING_SUCCESS, billing_email: '%' } as any);
+    expect(res).toEqual({ bookingOrderId: null, matched: false });
+    expect(state.updates).toHaveLength(0); // the pending row was not consumed
+  });
+
+  it('a null-orderid failure event does NOT consume the pending row; the successful retry links (M30)', async () => {
+    // ORDER_CREATION_FAILED (10d table) carries orderid:null. If it linked the row (linked=true,
+    // rs_order_id=null), the user's successful retry could never correlate — step 1 finds no
+    // rs_order_id row, step 2 finds no linked=false row → confirmed booking untracked forever.
+    const state = freshState([
+      { id: 'p1', rs_order_id: null, linked: false, user_email: 'raj@example.com', created_at: '2026-06-24T11:00:00Z' },
+    ]);
+    const failed = { event: 'ORDER_CREATION_FAILED', orderid: null, orderstatus: 'INCOMPLETE', billing_email: 'raj@example.com', module: 'HOTEL' };
+    const res1 = await correlateOrder(fakeClient(state), failed as any);
+    expect(res1).toEqual({ bookingOrderId: null, matched: false }); // recorded by the caller, row untouched
+    expect(state.updates).toHaveLength(0);
+    expect(state.orders[0].linked).toBe(false);
+
+    // The retry succeeds with a real orderid → the pending row links normally.
+    const res2 = await correlateOrder(fakeClient(state), BOOKING_SUCCESS as any);
+    expect(res2).toEqual({ bookingOrderId: 'p1', matched: true });
+    expect(state.orders[0].linked).toBe(true);
+    expect(state.orders[0].rs_order_id).toBe('RSA-1234567890');
   });
 });
 

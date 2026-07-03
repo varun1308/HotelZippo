@@ -78,6 +78,17 @@ describe('createMockRouteStackFetch — full happy path through the real orchest
     expect(priceOf(c)).toBeGreaterThan(priceOf(a)); // 7 nights > 3 nights
   });
 
+  it('session correlation ids are UNIQUE per booking, even for the same hotel (M31)', async () => {
+    // The demo webhook's orderid derives from the correlationId and booking_orders.rs_order_id is
+    // UNIQUE (10d) — two users demo-booking the same hotel must never share one rs_order_id.
+    const a = await searchAndRates(INPUT, { fetchImpl: createMockRouteStackFetch(ORIGIN, INPUT.hotelName), mock: true });
+    const b = await searchAndRates(INPUT, { fetchImpl: createMockRouteStackFetch(ORIGIN, INPUT.hotelName), mock: true });
+    expect(a.correlationId).toMatch(/^mock-corr-/);
+    expect(b.correlationId).toMatch(/^mock-corr-/);
+    expect(a.correlationId).not.toBe(b.correlationId);
+    expect(a.token).not.toBe(b.token);
+  });
+
   it('selectAndPaymentUrl returns an in-app /booking-demo deep link', async () => {
     const rates = await searchAndRates(INPUT, { fetchImpl: createMockRouteStackFetch(ORIGIN, INPUT.hotelName), mock: true });
     const chosen = rates.options[0];

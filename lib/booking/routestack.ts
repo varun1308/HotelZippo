@@ -27,7 +27,7 @@
  * component (verified: all importers are server-side). */
 import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
 import { HZ, stampCorrelation } from '@/lib/otel/trace';
-import { getPartnerToken, type RouteStackFetch } from './auth';
+import { getPartnerToken, invalidatePartnerToken, type RouteStackFetch } from './auth';
 import { buildRoomsOccupancy } from './party';
 import { mapRoomRateOptions } from './rates';
 import type { IdCache } from './id-cache';
@@ -108,6 +108,13 @@ function asEnvelope(res: unknown): Envelope {
   return { success: true, message: null, result: res, raw: res };
 }
 
+/** RouteStack signalled the partner JWT itself is bad (401-ish envelope) — distinct from the
+ * search-session expiring, but both mean the cached auth state must not be reused. */
+function isAuthRejection(env: Envelope): boolean {
+  if (env.code === 401) return true;
+  return !!env.message && /unauthori[sz]ed|forbidden|invalid token|token (is )?(invalid|expired)|member token/i.test(env.message);
+}
+
 /** Map a failed envelope to the right warm BookingError kind. */
 function envelopeError(env: Envelope, step: string): BookingError {
   const code = env.code;
@@ -161,6 +168,9 @@ async function tracedCall(
       if (env.code !== undefined) span.setAttribute(HZ.code, env.code);
       if (!env.success) {
         const err = attachTrace(envelopeError(env, step), span);
+        // A rejected token/session must not poison the 1h JWT cache: the 'session-expired'
+        // guidance is "search again", which only works if the retry re-authenticates.
+        if (err.kind === 'session-expired' || isAuthRejection(env)) invalidatePartnerToken();
         logError = err.message;
         span.recordException(err);
         span.setStatus({ code: SpanStatusCode.ERROR });
@@ -370,18 +380,15 @@ export async function searchHotelsInDestination(
   dates: { checkIn: string; checkOut: string },
   deps: BookingDeps,
   currencyArg?: string,
-): Promise<{ searchResult: unknown; dest: DestinationHit }> {
+): Promise<{ searchResult: unknown; dest: DestinationHit; nextPage: (nextResultsKey: string) => Promise<unknown> }> {
   const dateAttrs = { check_in: dates.checkIn, check_out: dates.checkOut };
-  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce });
+  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce, mock: deps.mock });
   const currency = currencyArg ?? DEFAULT_CURRENCY;
   const rooms = buildRoomsOccupancy(party);
 
-  // resolve destination → id + coords (cached handle skips the paid search-destinations call).
-  const cachedDest = await cacheGet(deps.cache?.loadDestination(destination));
-  let dest: DestinationHit;
-  if (cachedDest) {
-    dest = { id: cachedDest.rsDestinationId, type: cachedDest.rsDestinationType ?? 'City', lat: cachedDest.lat, long: cachedDest.long };
-  } else {
+  // Live destination resolution: search-destinations → Google-Places anchor disambiguation →
+  // cache write. Also re-run by the self-heal path below when a cached id proves stale.
+  const resolveLive = async (): Promise<DestinationHit> => {
     const destEnv = await tracedCall(deps, 'search_destinations', '/mcp/hotel/search-destinations', jwt, {
       query: destination,
       type: 'DESTINATION',
@@ -391,25 +398,66 @@ export async function searchHotelsInDestination(
     const anchor = await geocodeAnchor(deps, destination);
     const resolved = pickDestination(destEnv.result, anchor);
     if (!resolved) throw new BookingError('not-found', `Could not resolve destination "${destination}"`);
-    dest = resolved;
     await cacheRun(deps.cache?.saveDestination(destination, {
-      rsDestinationId: dest.id, rsDestinationType: dest.type, lat: dest.lat, long: dest.long,
+      rsDestinationId: resolved.id, rsDestinationType: resolved.type, lat: resolved.lat, long: resolved.long,
     }));
+    return resolved;
+  };
+
+  // resolve destination → id + coords (cached handle skips the paid search-destinations call).
+  const cachedDest = await cacheGet(deps.cache?.loadDestination(destination));
+  let dest: DestinationHit = cachedDest
+    ? { id: cachedDest.rsDestinationId, type: cachedDest.rsDestinationType ?? 'City', lat: cachedDest.lat, long: cachedDest.long }
+    : await resolveLive();
+
+  // search hotels in that destination (mints the session token + carries availability). `nextKey`
+  // fetches a follow-up page (openapi HotelSearchResult.nextResultsKey) within the same session.
+  const searchPage = (d: DestinationHit, nextKey?: string) =>
+    tracedCall(deps, 'search_hotels', '/mcp/hotel/search-hotels', jwt, {
+      destinationId: d.id,
+      destinationType: d.type,
+      lat: d.lat,
+      long: d.long,
+      checkIn: dates.checkIn,
+      checkOut: dates.checkOut,
+      rooms,
+      currency,
+      ...(nextKey ? { nextResultsKey: nextKey } : {}),
+    }, dateAttrs);
+
+  let searchEnv: Envelope | null = null;
+  let searchErr: unknown = null;
+  try {
+    searchEnv = await searchPage(dest);
+  } catch (e) {
+    searchErr = e;
   }
 
-  // search hotels in that destination (mints the session token + carries availability).
-  const searchEnv = await tracedCall(deps, 'search_hotels', '/mcp/hotel/search-hotels', jwt, {
-    destinationId: dest.id,
-    destinationType: dest.type,
-    lat: dest.lat,
-    long: dest.long,
-    checkIn: dates.checkIn,
-    checkOut: dates.checkOut,
-    rooms,
-    currency,
-  }, dateAttrs);
+  // SELF-HEAL a stale destination cache row: a cached hit short-circuits resolution, so a
+  // pre-anchor mis-resolution (live-probe 2026-06-16: "Bali" → a Fiji islet → 0 hotels) would
+  // otherwise be served warm forever (the cache has no TTL). When the CACHED id yields zero
+  // hotels (empty list or a 204 no-availability envelope), invalidate that row and re-resolve
+  // ONCE; re-search only if resolution actually changed (a same-id re-search would just repeat
+  // the paid call — that's genuine no-availability, not a stale id).
+  const zeroHotels = searchEnv
+    ? extractHotelList(searchEnv.result).length === 0
+    : searchErr instanceof BookingError && searchErr.kind === 'no-availability';
+  if (cachedDest && zeroHotels) {
+    await cacheRun(deps.cache?.invalidateDestination?.(destination));
+    const fresh = await resolveLive();
+    if (fresh.id !== dest.id) {
+      dest = fresh;
+      searchEnv = await searchPage(dest); // a genuine failure here propagates normally
+      searchErr = null;
+    }
+  }
+  if (searchErr) throw searchErr;
 
-  return { searchResult: searchEnv.result, dest };
+  return {
+    searchResult: searchEnv!.result,
+    dest,
+    nextPage: async (nextResultsKey: string) => (await searchPage(dest, nextResultsKey)).result,
+  };
 }
 
 /** Hotel list (with starRating/ourprice) from a search-hotels result — public for preview
@@ -475,7 +523,7 @@ export async function listPreviewHotelsFromRouteStack(
   const limit = opts.limit ?? 8;
   const party = opts.party ?? { adults: 2, children: 0, childAges: [], rooms: 1 };
   const dates = opts.dates ?? defaultPreviewDates();
-  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce });
+  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce, mock: deps.mock });
   const rooms = buildRoomsOccupancy(party);
 
   const { searchResult } = await searchHotelsInDestination(destination, party, dates, deps);
@@ -514,28 +562,55 @@ function defaultPreviewDates(): { checkIn: string; checkOut: string } {
   return { checkIn: d(30), checkOut: d(33) };
 }
 
+/** Bound on how many search-hotels result pages we scan for the chosen hotel (page 1 + follow-ups).
+ * RouteStack pages large destinations (openapi HotelSearchResult.count + nextResultsKey); a hotel
+ * beyond page 1 must not surface as "not found", but following an endless key chain is a cost/DoS
+ * hazard — 5 pages covers several hundred properties. */
+const MAX_SEARCH_PAGES = 5;
+
+function nextResultsKey(searchResult: unknown): string | null {
+  if (searchResult && typeof searchResult === 'object') {
+    const k = (searchResult as Record<string, unknown>).nextResultsKey;
+    if (typeof k === 'string' && k) return k;
+  }
+  return null;
+}
+
 export async function searchAndRates(
   input: SearchAndRatesInput,
   deps: BookingDeps,
 ): Promise<RoomsAndRates> {
   const dateAttrs = { hotel_id: input.hotelId, check_in: input.dates.checkIn, check_out: input.dates.checkOut };
-  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce });
+  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce, mock: deps.mock });
   const currency = input.currency ?? DEFAULT_CURRENCY;
   const rooms = buildRoomsOccupancy(input.party);
 
   // 1+2. resolve destination + search hotels (shared helper — carries the destination-disambiguation).
-  const { searchResult } = await searchHotelsInDestination(input.destination, input.party, input.dates, deps, currency);
-  const searchEnv = { result: searchResult };
+  const { searchResult, nextPage } = await searchHotelsInDestination(input.destination, input.party, input.dates, deps, currency);
 
   const cachedRsId = await cacheGet(deps.cache?.loadHotelRsId(input.hotelId));
-  const match = (cachedRsId && matchHotelById(searchEnv.result, cachedRsId)) ||
-    matchHotelByName(searchEnv.result, input.hotelName);
+  const findMatch = (result: unknown) =>
+    (cachedRsId && matchHotelById(result, cachedRsId)) || matchHotelByName(result, input.hotelName);
+
+  // Scan the first page, then FOLLOW pagination (bounded) — search-hotels pages its inventory, so
+  // the chosen hotel may live beyond page 1. Session handles come from whichever page carries them
+  // (they belong to the search session, so page 1's normally do).
+  let pageResult = searchResult;
+  let match = findMatch(pageResult);
+  let handles = sessionHandles(pageResult);
+  let key = nextResultsKey(pageResult);
+  for (let scanned = 1; !match && key && scanned < MAX_SEARCH_PAGES; scanned++) {
+    pageResult = await nextPage(key);
+    match = findMatch(pageResult);
+    handles = sessionHandles(pageResult) ?? handles;
+    key = nextResultsKey(pageResult);
+  }
+
   if (!match) throw new BookingError('not-found', `"${input.hotelName}" not found in ${input.destination} availability`);
   // Lazy-populate the id↔hotel mapping on a fresh resolve (no-op if already cached the same id).
   if (match.id !== cachedRsId) {
     await cacheRun(deps.cache?.saveHotelRsId(input.hotelId, match.id, match.name));
   }
-  const handles = sessionHandles(searchEnv.result);
   if (!handles) throw new BookingError('session-expired', 'search-hotels returned no session handles');
 
   // 3. details + rates (combined endpoint)
@@ -556,6 +631,20 @@ export async function searchAndRates(
   // The live rate node carries no per-option currency code (only a `currencyrate` multiplier), so
   // stamp the REQUEST currency onto any option the mapper couldn't resolve one for — the picker
   // needs a currency to render the price.
+  //
+  // OPEN QUESTION (10c decision 6): every captured payload has currencyrate:1, so the conversion
+  // DIRECTION (supplier→request or request→supplier) is unverified. We deliberately do NOT apply
+  // the multiplier — but if RouteStack ever sends currencyrate ≠ 1, stamping the request currency
+  // unconverted would mislabel every price, so make it LOUD and observable rather than silent.
+  const currencyRate = mapped.find((o) => typeof o.currencyRate === 'number')?.currencyRate;
+  if (currencyRate !== undefined && currencyRate !== 1) {
+    console.warn(
+      `[booking] RouteStack returned currencyrate=${currencyRate} (≠ 1) for "${match.name}" — ` +
+        `totalRate may be in supplier currency; prices are stamped ${currency} UNCONVERTED. ` +
+        'Verify the conversion direction with RouteStack before trusting these prices (10c decision 6).',
+    );
+    trace.getActiveSpan()?.setAttribute('hz.currency_rate', currencyRate);
+  }
   const options = mapped.map((o) => (o.currency ? o : { ...o, currency }));
 
   return {
@@ -589,7 +678,7 @@ export async function selectAndPaymentUrl(
   deps: BookingDeps,
 ): Promise<BookingHandoff> {
   const attrs = { hotel_id: sel.hotelId, check_in: sel.dates.checkIn, check_out: sel.dates.checkOut };
-  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce });
+  const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce, mock: deps.mock });
 
   // revalidate the selected rate before payment (recommended immediately before payment-url)
   await tracedCall(deps, 'revalidate', '/mcp/hotel/revalidate', jwt, {

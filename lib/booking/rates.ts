@@ -62,10 +62,14 @@ function pickBool(node: Record<string, unknown>, keys: string[]): boolean | unde
 
 /** A node is a rate option iff it carries both ids (under any of the known aliases). The live
  * RouteStack room node (availability.groups[].rooms[]) uses `recommendationId` + `id` (the room id)
- * with the rate plan under `rateid` (lowercase) — verified against the captured fixture. */
+ * with the rate plan under `rateid` (lowercase) — verified against the captured fixture. The literal
+ * roomId/room_id aliases stay FIRST (synthetic/legacy payloads name it explicitly), then `id` for the
+ * live node. `rateid`/`rateId`/`rate_id` are deliberately NOT roomId aliases: that's the rate-PLAN id,
+ * and resolving it as roomId would hand get-payment-url the wrong identifier (10c decision 6); a node
+ * carrying only a rate-plan id has no usable room id and is rightly dropped. */
 function extractIds(node: Record<string, unknown>): { recommendationId: string; roomId: string } | null {
   const recommendationId = pickString(node, ['recommendationId', 'recommendation_id', 'recommendationID', 'recoId']);
-  const roomId = pickString(node, ['roomId', 'room_id', 'roomID', 'rateid', 'rateId', 'rate_id', 'id']);
+  const roomId = pickString(node, ['roomId', 'room_id', 'roomID', 'id']);
   if (recommendationId && roomId) return { recommendationId, roomId };
   return null;
 }
@@ -136,12 +140,25 @@ function mapOption(node: Record<string, unknown>, ids: { recommendationId: strin
   return option;
 }
 
+/** The availability-level `currencyrate` multiplier (the live payload's only currency signal —
+ * there is no per-option currency code). Every captured payload has it as 1; the conversion
+ * DIRECTION if it ever differs is an open question (10c decision 6), so callers propagate it and
+ * warn loudly rather than guessing a conversion. Read from the first node that carries it. */
+function pickCurrencyRate(nodes: Record<string, unknown>[]): number | undefined {
+  for (const node of nodes) {
+    const v = pickNumber(node, ['currencyrate', 'currencyRate', 'currency_rate']);
+    if (v !== undefined) return v;
+  }
+  return undefined;
+}
+
 /** Map a get-hotel-details-and-rates result payload → the picker's room/rate options.
  * Tolerant of unknown nesting; drops nodes without both ids; de-dups by recommendationId +
  * roomId (the same ids can appear on nested mirror nodes). Returns [] for an unusable
  * payload — the caller treats empty options as "no rooms available" (warm fallback). */
 export function mapRoomRateOptions(payload: unknown): RoomRateOption[] {
   const nodes = collectNodes(payload);
+  const currencyRate = pickCurrencyRate(nodes);
   const seen = new Set<string>();
   const options: RoomRateOption[] = [];
   for (const node of nodes) {
@@ -150,7 +167,9 @@ export function mapRoomRateOptions(payload: unknown): RoomRateOption[] {
     const key = `${ids.recommendationId}::${ids.roomId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    options.push(mapOption(node, ids));
+    const option = mapOption(node, ids);
+    if (currencyRate !== undefined) option.currencyRate = currencyRate;
+    options.push(option);
   }
   return options;
 }

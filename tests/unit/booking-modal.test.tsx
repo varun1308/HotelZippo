@@ -17,6 +17,16 @@ const OPTION: RoomRateOption = {
   freeCancellation: true,
 };
 
+/** Future dates relative to "now" (LOCAL, matching the component) so the date-sanity gate
+ * (checkIn >= today, checkOut > checkIn) always sees valid defaults — fixed dates would rot. */
+function isoDaysFromNow(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+const FUTURE_DATES = { checkIn: isoDaysFromNow(30), checkOut: isoDaysFromNow(34) };
+
 function props(over: Partial<RoomPickerModalProps> = {}): RoomPickerModalProps {
   return {
     open: true,
@@ -24,7 +34,7 @@ function props(over: Partial<RoomPickerModalProps> = {}): RoomPickerModalProps {
     hotelName: 'The Family Beach Resort',
     party: { adults: 2, childAges: [2, 7], rooms: 2 },
     grandparentHint: false,
-    dates: { checkIn: '2026-07-01', checkOut: '2026-07-05' },
+    dates: FUTURE_DATES,
     onPartyChange: jest.fn(),
     onDatesChange: jest.fn(),
     onConfirm: jest.fn(),
@@ -64,6 +74,30 @@ describe('RoomPickerModal', () => {
     // Date inputs are shown to collect them.
     expect(screen.getByLabelText('Check-in date')).toBeInTheDocument();
     expect(screen.getByLabelText('Check-out date')).toBeInTheDocument();
+  });
+
+  it('confirm: a PAST check-in blocks Continue with inline error copy (L33a)', () => {
+    // Past dates must never reach the paid live call — they'd surface as a generic failure.
+    render(<RoomPickerModal {...props({ dates: { checkIn: isoDaysFromNow(-2), checkOut: isoDaysFromNow(2) } })} />);
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByText(/check-in can’t be in the past/i)).toBeInTheDocument();
+    // The inputs open for correction instead of the collapsed summary row.
+    expect(screen.getByLabelText('Check-in date')).toBeInTheDocument();
+  });
+
+  it('confirm: check-out on/before check-in blocks Continue with inline error copy (L33a)', () => {
+    render(<RoomPickerModal {...props({ dates: { checkIn: isoDaysFromNow(30), checkOut: isoDaysFromNow(30) } })} />);
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByText(/check-out needs to be after check-in/i)).toBeInTheDocument();
+
+    // …and an inverted range too.
+    render(<RoomPickerModal {...props({ dates: { checkIn: isoDaysFromNow(30), checkOut: isoDaysFromNow(28) } })} />);
+    expect(screen.getAllByText(/check-out needs to be after check-in/i).length).toBeGreaterThan(0);
+  });
+
+  it('confirm: today as check-in is VALID (boundary)', () => {
+    render(<RoomPickerModal {...props({ dates: { checkIn: isoDaysFromNow(0), checkOut: isoDaysFromNow(1) } })} />);
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
   it('confirm: grandparent hint nudge shows only when hinted', () => {

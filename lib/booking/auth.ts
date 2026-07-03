@@ -67,29 +67,47 @@ interface CachedToken {
   expiresAt: number;
 }
 
-/** Module-level cache — one process-wide JWT, reused across requests within its TTL.
- * Conservative default TTL (1h) well under RouteStack's 24h so we never present a stale
- * token; cleared if a call ever rejects it. */
-let cached: CachedToken | null = null;
+/** Module-level cache — one JWT per credential identity, reused across requests within its
+ * TTL. KEYED by transport identity (mock vs api-url+key) so a mock demo token and a live JWT
+ * can never cross-contaminate: a mock booking must not hand a later live call (e.g. admin
+ * preview seed) its fake token for the rest of the TTL, and vice versa. Conservative default
+ * TTL (1h) well under RouteStack's 24h; cleared via invalidatePartnerToken() when RouteStack
+ * rejects a token, so the next call re-authenticates. */
+const cached = new Map<string, CachedToken>();
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1h safety margin under the 24h JWT
 
 export function _clearTokenCache(): void {
-  cached = null;
+  cached.clear();
 }
+
+/** Drop every cached partner JWT. Called by the orchestrator when RouteStack rejects a token
+ * (auth/401/session-expired envelope) — a server-side-invalidated JWT must not keep failing
+ * every call within the TTL; the "search again" guidance only works if the retry re-mints. */
+export function invalidatePartnerToken(): void {
+  cached.clear();
+}
+
+/** Placeholder creds for mock mode (10e): the mock transport ignores the auth body and returns
+ * an opaque token, so no live creds are read — mock demo deploys need only ROUTESTACK_MOCK=1. */
+const MOCK_ENV: RouteStackEnv = { apiKey: 'mock', apiSecret: 'mock', baseUrl: 'mock' };
 
 /** Mint (or reuse) a partner JWT. Injectable `deps` keep it testable + deterministic:
  *  - fetchImpl: the transport (mock in tests).
  *  - now / nonce: pinned in tests; default to real clock + random uuid.
+ *  - mock: the 10e demo transport — skips readEnv() (no live creds required) and caches
+ *    under the 'mock' key so mock/live entries never share.
  * Caches the result; subsequent calls within TTL skip the network. */
 export async function getPartnerToken(
   fetchImpl: RouteStackFetch,
-  deps: { now?: () => number; nonce?: () => string; ttlMs?: number } = {},
+  deps: { now?: () => number; nonce?: () => string; ttlMs?: number; mock?: boolean } = {},
 ): Promise<string> {
   const now = deps.now ?? Date.now;
   const current = now();
-  if (cached && cached.expiresAt > current) return cached.token;
+  const { apiKey, apiSecret, baseUrl } = deps.mock ? MOCK_ENV : readEnv();
+  const cacheKey = deps.mock ? 'mock' : `${baseUrl}::${apiKey}`;
+  const hit = cached.get(cacheKey);
+  if (hit && hit.expiresAt > current) return hit.token;
 
-  const { apiKey, apiSecret } = readEnv();
   const nonce = (deps.nonce ?? (() => crypto.randomUUID()))();
   const body = signPartnerToken(apiKey, apiSecret, current, nonce);
 
@@ -104,7 +122,7 @@ export async function getPartnerToken(
   if (!token) {
     throw new BookingError('transport', 'partner-token response did not include a token');
   }
-  cached = { token, expiresAt: current + (deps.ttlMs ?? DEFAULT_TTL_MS) };
+  cached.set(cacheKey, { token, expiresAt: current + (deps.ttlMs ?? DEFAULT_TTL_MS) });
   return token;
 }
 

@@ -32,6 +32,10 @@ export interface PaymentUrlRequest {
   recommendationId: string;
   roomId: string;
   dates: BookingDates;
+  /** Booking context for the pending booking_orders row (10d's pending-write contract) — not
+   * sent to RouteStack. Optional so an older client omitting them still gets its deep link. */
+  destination?: string;
+  currency?: string;
 }
 
 export interface PaymentUrlResponse {

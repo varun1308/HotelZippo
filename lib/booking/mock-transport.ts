@@ -18,6 +18,7 @@
  *
  * NOT 'use client': server-side (reached only by the booking API routes + tests), like
  * ./transport and ./routestack. */
+import crypto from 'node:crypto';
 import { DESTINATIONS } from '@/lib/db/schemas';
 import type { RouteStackFetch } from './auth';
 
@@ -174,8 +175,14 @@ export function createMockRouteStackFetch(appOrigin: string, targetHotelName?: s
           return { success: false, code: 204, message: 'No availability for those dates', result: null };
         }
         const seedName = targetHotelName ?? 'Mock Resort';
-        const corr = `mock-corr-${hash(seedName) % 100000}`;
-        const token = `mock-session-${hash(seedName) % 100000}`;
+        // Session handles are UNIQUE per search (random suffix), NOT hash-only: the demo webhook's
+        // orderid derives from the correlationId, and booking_orders.rs_order_id is UNIQUE (10d) —
+        // a hash-only id would make two users demo-booking the same hotel share one rs_order_id
+        // (user B's event overwrites user A's row and B can never link). Only the session is
+        // random; hotel ids and PRICING stay hash-deterministic (what the tests rely on).
+        const uniq = crypto.randomUUID().slice(0, 8);
+        const corr = `mock-corr-${hash(seedName) % 100000}-${uniq}`;
+        const token = `mock-session-${hash(seedName) % 100000}-${uniq}`;
         // A few extra named hotels alongside the target → the result reads like a real inventory.
         const inventory = (targetHotelName ? [targetHotelName] : []).concat(['Mock Bayview Resort', 'Mock Garden Hotel']);
         return {

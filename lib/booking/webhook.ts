@@ -61,23 +61,29 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /** Verify the inbound request carries the configured shared secret. RouteStack's exact delivery
- * mechanism (header name vs query) must be confirmed against a live ping — we accept the secret from
- * any of the likely carriers and compare timing-safe. When NO secret is configured (local/dev), this
- * returns true (verification skipped) so sandbox pings work; the route logs a warn in that case. */
+ * mechanism must be confirmed against a live ping — we accept the secret from any of the likely
+ * HEADER carriers and compare timing-safe. Query-param carriers (?key= / ?access_key=) are
+ * deliberately NOT accepted: a secret in the URL gets persisted by request/proxy/CDN logs.
+ *
+ * When NO secret is configured this FAILS CLOSED in production (anyone could otherwise forge
+ * lifecycle events — spec 10d step 1's skip-when-unset allowance is dev/sandbox only); outside
+ * production it returns true (verification skipped) so sandbox pings and local tunnels work —
+ * the route logs a warn in that case. */
 export function verifyWebhookSecret(req: {
   headers: { get(name: string): string | null };
   url: string;
 }): boolean {
   const expected = process.env.ROUTESTACK_WEBHOOK_SECRET;
-  if (!expected) return true; // not configured → skip (dev/sandbox); route warns
+  if (!expected) {
+    // Unset secret: dev/sandbox convenience only — production rejects (fail closed).
+    return process.env.NODE_ENV !== 'production';
+  }
 
   const presented =
     req.headers.get('x-webhook-key') ??
     req.headers.get('x-webhook-secret') ??
     req.headers.get('x-routestack-webhook-key') ??
-    stripBearer(req.headers.get('authorization')) ??
-    new URL(req.url).searchParams.get('key') ??
-    new URL(req.url).searchParams.get('access_key');
+    stripBearer(req.headers.get('authorization'));
 
   return !!presented && safeEqual(presented, expected);
 }
@@ -85,6 +91,12 @@ export function verifyWebhookSecret(req: {
 function stripBearer(v: string | null): string | null {
   if (!v) return null;
   return v.toLowerCase().startsWith('bearer ') ? v.slice(7) : v;
+}
+
+/** Escape LIKE/ILIKE metacharacters (\, %, _) so a value is matched LITERALLY — ilike then behaves
+ * as case-insensitive equality, never a pattern match. */
+function escapeLikePattern(s: string): string {
+  return s.replace(/[\\%_]/g, (m) => `\\${m}`);
 }
 
 /* ---- correlation -------------------------------------------------------- */
@@ -106,8 +118,12 @@ interface OrderRow {
  * Order of resolution:
  *  1. If the event has an `orderid` and a row already carries that `rs_order_id` → UPDATE it (idempotent
  *     redelivery / later lifecycle event).
- *  2. Else match the most-recent `linked=false` row whose `user_email` == `billing_email` (24h window)
- *     → set its rs_order_id + statuses + linked=true.
+ *  2. Else — only when the event CARRIES an `orderid` — match the most-recent `linked=false` row whose
+ *     `user_email` == `billing_email` (24h window) → set its rs_order_id + statuses + linked=true.
+ *     A null-orderid failure event (ORDER_CREATION_FAILED, 10d) must NOT consume the pending row: it
+ *     would leave linked=true with rs_order_id=null, so the user's successful retry could never link
+ *     (step 1 finds no rs_order_id row; step 2 finds no linked=false row). Such events are recorded
+ *     (webhook_events) without touching booking_orders.
  *  3. No match → return { matched:false } (the event is still recorded by the caller).
  *
  * Best-effort: any DB error resolves to a no-match rather than throwing — a webhook must always 200. */
@@ -140,14 +156,18 @@ export async function correlateOrder(
       }
     }
 
-    // 2. match a pending row by billing_email (most-recent unlinked, within 24h)
-    if (event.billing_email) {
+    // 2. match a pending row by billing_email (most-recent unlinked, within 24h). Only an event
+    //    that carries an orderid may CONSUME (link) the pending row — see the doc comment above.
+    //    The email is escaped so ilike matches it LITERALLY (case-insensitive equality per 10d
+    //    step 4) — unescaped, `%`/`_` in billing_email act as SQL wildcards and a crafted '%'
+    //    payload would link anyone's most recent pending order.
+    if (event.billing_email && event.orderid) {
       const since = new Date(now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: pending } = await client
         .from('booking_orders')
         .select('id, rs_order_id')
         .eq('linked', false)
-        .ilike('user_email', event.billing_email)
+        .ilike('user_email', escapeLikePattern(event.billing_email))
         .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -156,7 +176,7 @@ export async function correlateOrder(
         const row = pending as OrderRow;
         await client
           .from('booking_orders')
-          .update({ ...statusPatch, rs_order_id: event.orderid ?? null, linked: true })
+          .update({ ...statusPatch, rs_order_id: event.orderid, linked: true })
           .eq('id', row.id);
         return { bookingOrderId: row.id, matched: true };
       }

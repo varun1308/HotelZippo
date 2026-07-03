@@ -92,9 +92,11 @@ async function handlePaymentUrl(req: Request, span: import('@opentelemetry/api')
         userEmail: user.email ?? null,
         hotelId: body.hotelId,
         hotelName: body.hotelName,
+        destination: body.destination ?? null,
         checkIn: body.dates.checkIn,
         checkOut: body.dates.checkOut,
         correlationId: body.correlationId,
+        currency: body.currency ?? null,
       });
     } catch {
       /* swallow — pending-order recording is best-effort */

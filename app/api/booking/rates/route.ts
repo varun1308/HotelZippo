@@ -16,6 +16,7 @@ import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
 import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { resolveCityLocation } from '@/lib/curation/google-places';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
+import { validateParty } from '@/lib/booking/party';
 import { startDebugTimer } from '@/lib/observability/debug-timing';
 import { withSpan, HZ } from '@/lib/otel/trace';
 import { BookingError } from '@/lib/booking/types';
@@ -40,6 +41,12 @@ async function handleRates(req: Request, span: import('@opentelemetry/api').Span
   if (!body?.hotelName || !body?.destination || !body?.dates?.checkIn || !body?.dates?.checkOut || !body?.party) {
     return errJson('transport', 'Missing booking details', 400);
   }
+  // Party is CLIENT-CONTROLLED: validate integers + bounds before it reaches buildRoomsOccupancy
+  // (unbounded rooms/adults would allocate/loop that many times — a DoS vector). Rejections use
+  // the route's standard 400 error shape; the validated (cleaned) party replaces the raw one.
+  const partyCheck = validateParty(body.party);
+  if (!partyCheck.ok) return errJson('transport', partyCheck.message, 400);
+  body = { ...body, party: partyCheck.party };
   span.setAttribute(HZ.destination, body.destination);
   if (body.hotelId) span.setAttribute(HZ.hotelId, body.hotelId);
 

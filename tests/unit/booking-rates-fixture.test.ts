@@ -45,4 +45,22 @@ describe('rooms/rates mapper against the canonical fixture', () => {
     const keys = new Set(options.map((o) => `${o.recommendationId}::${o.roomId}`));
     expect(keys.size).toBe(options.length);
   });
+
+  it('resolves roomId from the room node `id`, NEVER the rate-plan `rateid` (10c decision 6)', () => {
+    // REGRESSION (H5): every live room node carries a distinct `id` (room id) and `rateid`
+    // (rate-plan id) and NO `roomId` key. The mapper must resolve `id` as the roomId — resolving
+    // `rateid` would hand get-payment-url the wrong identifier on every live booking.
+    const groups = (raw as { result?: { availability?: { groups?: Array<{ rooms?: Array<Record<string, unknown>> }> } } })
+      .result?.availability?.groups ?? [];
+    const roomNodes = groups.flatMap((g) => g.rooms ?? []);
+    const byReco = new Map(roomNodes.map((r) => [r.recommendationId as string, r]));
+    expect(roomNodes.length).toBeGreaterThan(0);
+    expect(options.length).toBeGreaterThan(0);
+    for (const o of options) {
+      const node = byReco.get(o.recommendationId);
+      expect(node).toBeDefined();
+      expect(o.roomId).toBe(node!.id);
+      expect(o.roomId).not.toBe(node!.rateid);
+    }
+  });
 });

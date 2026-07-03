@@ -116,8 +116,9 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
     });
   }, []);
 
-  // Session handles from phase 1, needed by phase 2 (kept off render state).
-  const handlesRef = useRef<{ correlationId: string; token: string; hotelId: string; hotelName: string } | null>(null);
+  // Session handles from phase 1, needed by phase 2 (kept off render state). `destination` rides
+  // along so the payment-url route can record it on the pending booking_orders row (10d).
+  const handlesRef = useRef<{ correlationId: string; token: string; hotelId: string; hotelName: string; destination: string } | null>(null);
 
   const proceed = useCallback(
     (hotel: BookingHotel) => {
@@ -159,7 +160,7 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
         setState((s) => ({ ...s, step: 'error', error: { kind: json.error, message: json.message } }));
         return;
       }
-      handlesRef.current = { correlationId: json.correlationId, token: json.token, hotelId: json.hotelId, hotelName: json.hotelName };
+      handlesRef.current = { correlationId: json.correlationId, token: json.token, hotelId: json.hotelId, hotelName: json.hotelName, destination: hotel.destination };
       setState((s) => ({ ...s, step: 'picking', options: json.options }));
     } catch {
       setState((s) => ({ ...s, step: 'error', error: { kind: 'transport', message: 'I couldn’t reach the booking service.' } }));
@@ -183,6 +184,10 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
         recommendationId: option.recommendationId,
         roomId: option.roomId,
         dates,
+        // Pending-order context (10d): destination from the chosen hotel; currency mirrors what
+        // phase 1 searched with (the server defaults an omitted currency to USD — v1 is USD-only).
+        destination: handles.destination,
+        currency: deps.currency ?? 'USD',
       };
       try {
         const res = await doFetch('/api/booking/payment-url', {

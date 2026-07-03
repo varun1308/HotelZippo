@@ -99,10 +99,18 @@ describe('useBookingFlow', () => {
     expect(openUrl).toHaveBeenCalledWith(PAYMENT.bookingUrl);
     expect(result.current.state.step).toBe('idle'); // handed off → modal closed
 
-    // payment-url request threaded the session handles + chosen room.
+    // payment-url request threaded the session handles + chosen room, plus the pending-order
+    // context (10d): destination from the chosen hotel, currency defaulting to USD (v1).
     const payCall = fetchImpl.mock.calls.find((c) => (c[0] as string).includes('/payment-url'))!;
     const body = JSON.parse((payCall[1] as RequestInit).body as string);
-    expect(body).toMatchObject({ correlationId: 'corr-1', token: 'tok-1', recommendationId: 'reco-A', roomId: 'room-A' });
+    expect(body).toMatchObject({
+      correlationId: 'corr-1',
+      token: 'tok-1',
+      recommendationId: 'reco-A',
+      roomId: 'room-A',
+      destination: 'Phuket',
+      currency: 'USD',
+    });
   });
 
   it('maps a warm API error envelope to the error step', async () => {

@@ -134,4 +134,65 @@ describe('searchAndRates — RouteStack id cache', () => {
     expect(paths(calls)).toContain('/mcp/hotel/search-destinations');
     expect(out.hotelId).toBe('H-1001');
   });
+
+  it('SELF-HEALS a stale cached destination that yields zero hotels (L30)', async () => {
+    // A pre-anchor mis-resolution (e.g. "Bali" → a Fiji islet id) cached with no TTL would be
+    // served warm forever. When the cached id yields ZERO hotels, the orchestrator must
+    // invalidate that row, re-resolve once, and retry the search with the fresh id.
+    const base = makeMockFetch();
+    const invalidated: string[] = [];
+    const saved: CachedDestination[] = [];
+    const cache: IdCache = {
+      loadDestination: async () => ({ rsDestinationId: 'stale-fiji-islet', rsDestinationType: 'City', lat: -17.5, long: 179.0 }),
+      saveDestination: async (_d, hit) => {
+        saved.push(hit);
+      },
+      invalidateDestination: async (d) => {
+        invalidated.push(d);
+      },
+      loadHotelRsId: async () => null,
+      saveHotelRsId: async () => {},
+    };
+    const searchBodies: Array<Record<string, unknown>> = [];
+    const fetchImpl: typeof base.fetchImpl = async (path, body, headers) => {
+      if (path === '/mcp/hotel/search-hotels') {
+        searchBodies.push(body as Record<string, unknown>);
+        if ((body as Record<string, unknown>).destinationId === 'stale-fiji-islet') {
+          // the mis-resolved destination: a successful envelope with an EMPTY hotel list
+          return { success: true, result: { correlationId: 'corr-x', token: 'tok-x', result: [] } };
+        }
+      }
+      return base.fetchImpl(path, body, headers); // fresh id ('900100') → normal inventory
+    };
+
+    const out = await searchAndRates(INPUT, deps(cache, fetchImpl));
+    expect(invalidated).toEqual(['Phuket']); // the stale row was dropped
+    expect(saved).toHaveLength(1); // …and the fresh resolution re-cached
+    expect(saved[0]).toMatchObject({ rsDestinationId: '900100' });
+    expect(searchBodies.map((b) => b.destinationId)).toEqual(['stale-fiji-islet', '900100']); // retried ONCE
+    expect(out.hotelId).toBe('H-1001'); // the booking succeeded on the healed id
+  });
+
+  it('does NOT retry the search when re-resolution returns the SAME id (genuine empty inventory)', async () => {
+    const base = makeMockFetch();
+    const cache: IdCache = {
+      loadDestination: async () => ({ rsDestinationId: '900100', rsDestinationType: 'City', lat: 7.88, long: 98.39 }),
+      saveDestination: async () => {},
+      invalidateDestination: async () => {},
+      loadHotelRsId: async () => null,
+      saveHotelRsId: async () => {},
+    };
+    let searches = 0;
+    const fetchImpl: typeof base.fetchImpl = async (path, body, headers) => {
+      if (path === '/mcp/hotel/search-hotels') {
+        searches++;
+        return { success: true, result: { correlationId: 'corr-x', token: 'tok-x', result: [] } };
+      }
+      return base.fetchImpl(path, body, headers); // search-destinations resolves the SAME 900100
+    };
+    // Fresh resolution matches the cached id → no second paid search; the empty inventory
+    // propagates as the normal not-found outcome.
+    await expect(searchAndRates(INPUT, deps(cache, fetchImpl))).rejects.toMatchObject({ kind: 'not-found' });
+    expect(searches).toBe(1);
+  });
 });

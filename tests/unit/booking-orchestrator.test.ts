@@ -114,6 +114,66 @@ describe('searchAndRates (phase 1)', () => {
       expect((e as { traceId?: string }).traceId).toBeDefined();
     }
   });
+
+  it('clears the cached JWT when RouteStack rejects the session, so the retry re-authenticates (L28)', async () => {
+    const expired = { success: false, message: 'Your session has expired', code: 401, result: null };
+    const bad = makeMockFetch({ '/mcp/hotel/search-hotels': expired });
+    await expect(searchAndRates(INPUT, { fetchImpl: bad.fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE })).rejects.toMatchObject({
+      kind: 'session-expired',
+    });
+    // The 'session-expired' guidance is "search again" — the retry must MINT A FRESH TOKEN, not
+    // re-present the (server-side-invalidated) cached one for the rest of the 1h TTL.
+    const good = makeMockFetch();
+    await searchAndRates(INPUT, { fetchImpl: good.fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE });
+    expect(good.calls.filter((c) => c.path === '/mcp/auth/partner-token')).toHaveLength(1);
+  });
+
+  it('follows nextResultsKey pagination when the hotel is beyond page 1 (M32)', async () => {
+    const session = { correlationId: 'corr-fixture-123', token: 'listing-token-abc' };
+    const page1 = { success: true, result: { ...session, count: 250, nextResultsKey: 'page-2', result: [{ id: 'H-9', name: 'Some Other Hotel' }] } };
+    const page2 = { success: true, result: { ...session, count: 250, result: [{ id: 'H-1001', name: 'The Family Beach Resort' }] } };
+    const base = makeMockFetch();
+    let searchCalls = 0;
+    const keysSent: Array<unknown> = [];
+    const fetchImpl: typeof base.fetchImpl = async (path, body, headers) => {
+      if (path === '/mcp/hotel/search-hotels') {
+        searchCalls++;
+        const key = (body as Record<string, unknown>).nextResultsKey;
+        keysSent.push(key);
+        return key === 'page-2' ? page2 : page1;
+      }
+      return base.fetchImpl(path, body, headers);
+    };
+    const res = await searchAndRates(INPUT, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE });
+    expect(res.hotelId).toBe('H-1001');
+    expect(res.correlationId).toBe('corr-fixture-123');
+    expect(searchCalls).toBe(2);
+    expect(keysSent).toEqual([undefined, 'page-2']);
+  });
+
+  it('bounds pagination: an endless nextResultsKey chain stops at 5 pages → not-found (M32)', async () => {
+    const base = makeMockFetch();
+    let searchCalls = 0;
+    const fetchImpl: typeof base.fetchImpl = async (path, body, headers) => {
+      if (path === '/mcp/hotel/search-hotels') {
+        searchCalls++;
+        return {
+          success: true,
+          result: {
+            correlationId: 'corr-fixture-123',
+            token: 'listing-token-abc',
+            nextResultsKey: `page-${searchCalls + 1}`, // always another page, never the target
+            result: [{ id: `H-${searchCalls}`, name: `Filler Hotel ${searchCalls}` }],
+          },
+        };
+      }
+      return base.fetchImpl(path, body, headers);
+    };
+    await expect(searchAndRates(INPUT, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE })).rejects.toMatchObject({
+      kind: 'not-found',
+    });
+    expect(searchCalls).toBe(5); // page 1 + 4 bounded follow-ups
+  });
 });
 
 describe('selectAndPaymentUrl (phase 2)', () => {
