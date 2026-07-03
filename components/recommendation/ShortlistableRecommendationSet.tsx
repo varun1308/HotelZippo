@@ -11,10 +11,10 @@
 import { RecommendationSet } from './RecommendationSet';
 import type { RecommendationSetProps, StandardCardProps, TopPickCardProps } from './types';
 import { useShortlistActions } from '@/lib/shortlist/context';
-import type { SavedHotel } from '@/lib/shortlist/types';
+import type { SavedHotelWithFlags } from '@/components/shortlist';
 import { useBookingActions, type BookingHotel } from '@/lib/booking/context';
 
-function toSavedHotel(card: TopPickCardProps | StandardCardProps): SavedHotel | null {
+function toSavedHotel(card: TopPickCardProps | StandardCardProps): SavedHotelWithFlags | null {
   if (!card.hotelId) return null;
   return {
     hotelId: card.hotelId,
@@ -23,6 +23,9 @@ function toSavedHotel(card: TopPickCardProps | StandardCardProps): SavedHotel | 
     area: card.area,
     priceTierLabel: card.priceTierLabel,
     heroImageUrl: card.heroImageUrl,
+    // Carry the hard flags (minimal severity list) so a severely-flagged hotel stays
+    // distinguishable in the shortlist (spec 05 §6 flag dots; flags are never hidden).
+    hardFlags: card.hardFlags.map((f) => ({ severity: f.severity })),
   };
 }
 

@@ -16,30 +16,48 @@ import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
 import { makeSupabasePayloadLog, payloadLoggingEnabled } from '@/lib/booking/payload-log';
 import { resolveCityLocation } from '@/lib/curation/google-places';
 import { e2eEnabled } from '@/lib/booking/e2e-stub';
+import { validateParty } from '@/lib/booking/party';
 import { startDebugTimer } from '@/lib/observability/debug-timing';
-import { withSpan, HZ } from '@/lib/otel/trace';
+import { withSpan, withCorrelation, isValidConversationId, HZ } from '@/lib/otel/trace';
 import { BookingError } from '@/lib/booking/types';
 import type { RatesRequest, RatesResponse, BookingApiError } from '@/lib/booking/api-contract';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export function POST(req: Request): Promise<Response> {
-  // booking.rates root span (specs/14): a named parent so the RouteStack child spans nest under
-  // the request instead of floating as orphan routestack.* spans.
-  return withSpan('booking.rates', {}, (span) => handleRates(req, span));
-}
-
-async function handleRates(req: Request, span: import('@opentelemetry/api').Span): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
+  // Parse ONCE here so the client-minted conversationId (specs/14 "Conversation correlation")
+  // is in baggage BEFORE the root span starts — the chat→booking handoff stays one Dash0 view.
   let body: RatesRequest;
   try {
     body = (await req.json()) as RatesRequest;
   } catch {
     return errJson('transport', 'Invalid request', 400);
   }
+  // Validated so a hostile client value can't poison the trace attribute; undefined when absent.
+  const conversationId = isValidConversationId(body?.conversationId) ? body.conversationId : undefined;
+  // booking.rates root span (specs/14): a named parent so the RouteStack child spans nest under
+  // the request instead of floating as orphan routestack.* spans. withCorrelation binds
+  // hz.conversation_id into baggage; the span (and every child) inherits it.
+  return withCorrelation({ conversationId }, () =>
+    withSpan('booking.rates', {}, (span) => handleRates(req, body, span)),
+  );
+}
+
+async function handleRates(
+  req: Request,
+  body: RatesRequest,
+  span: import('@opentelemetry/api').Span,
+): Promise<Response> {
   if (!body?.hotelName || !body?.destination || !body?.dates?.checkIn || !body?.dates?.checkOut || !body?.party) {
     return errJson('transport', 'Missing booking details', 400);
   }
+  // Party is CLIENT-CONTROLLED: validate integers + bounds before it reaches buildRoomsOccupancy
+  // (unbounded rooms/adults would allocate/loop that many times — a DoS vector). Rejections use
+  // the route's standard 400 error shape; the validated (cleaned) party replaces the raw one.
+  const partyCheck = validateParty(body.party);
+  if (!partyCheck.ok) return errJson('transport', partyCheck.message, 400);
+  body = { ...body, party: partyCheck.party };
   span.setAttribute(HZ.destination, body.destination);
   if (body.hotelId) span.setAttribute(HZ.hotelId, body.hotelId);
 
@@ -50,6 +68,13 @@ async function handleRates(req: Request, span: import('@opentelemetry/api').Span
   } = await supabase.auth.getUser();
   if (!user) return errJson('config', 'Please sign in to book.', 401);
 
+  // Stamp the user on the root span (it started before auth resolved) and bind it into baggage
+  // so every routestack.* child span carries hz.user_id alongside hz.conversation_id (specs/14).
+  span.setAttribute(HZ.userId, user.id);
+  return withCorrelation({ userId: user.id }, () => ratesForUser(req, body));
+}
+
+async function ratesForUser(req: Request, body: RatesRequest): Promise<Response> {
   // E2E stub seam (specs/15a §1.1): after the REAL auth gate, swap the RouteStack provider
   // for a deterministic stub when the harness sets NEXT_PUBLIC_E2E=1. Lazy-imported so the
   // live bundle is untouched; absent the flag this is byte-for-byte today's behaviour.

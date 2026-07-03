@@ -5,16 +5,18 @@
  *   npm run dev:preseed-cache -- --destination Phuket --hotel "Splash Beach Resort"
  *
  * The route cache keys on (label, scope, input). We reconstruct the EXACT inputs the routes send via
- * the real input builders + cacheKeyFor (the same fn the live wrapper uses → no drift). `max` must
- * match what the UI sends, i.e. the route defaults below (keep .env.local's APIFY_*_MAX_RESULTS in
- * sync, or pass --max / --reviews-max). No network. Idempotent. Run via tsx. */
+ * the SAME live builders + env defaults the routes use — buildLiveSearchInput (pool-size default)
+ * and reviewsMaxResults — plus cacheKeyFor (the same fn the live wrapper uses), so the keys can't
+ * drift and a preseeded bank can't be a guaranteed miss. --max / --reviews-max override only for
+ * non-standard banks. No network. Idempotent. Run via tsx. */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { cacheKeyFor } from '@/lib/dev/actor-cache';
-import { buildSearchInput, mapSearchItem } from '@/lib/curation/apify-mapper';
+import { buildSearchInput, buildLiveSearchInput, mapSearchItem } from '@/lib/curation/apify-mapper';
 import {
   buildTripadvisorReviewsInput,
   buildGoogleReviewsInput,
+  reviewsMaxResults,
 } from '@/lib/review-intelligence/apify-mapper';
 import { buildTextSearchBody, type PlaceQuery } from '@/lib/curation/google-places-mapper';
 import { mapTextSearchResponse } from '@/lib/curation/google-places-mapper';
@@ -50,21 +52,26 @@ async function writeRoute(file: string, value: unknown): Promise<void> {
 async function main() {
   const dest = (arg('destination') ?? 'Phuket') as Destination;
   if (!(DESTINATIONS as readonly string[]).includes(dest)) throw new Error(`unknown destination ${dest}`);
-  const searchMax = Number(arg('max') ?? process.env.APIFY_SEARCH_MAX_RESULTS ?? 10);
-  const reviewsMax = Number(arg('reviews-max') ?? process.env.APIFY_REVIEWS_MAX_RESULTS ?? 30);
+  // Inputs MUST key exactly like the live paths: search keys on the POOL size (fetch.ts + the
+  // ledger start route build with buildLiveSearchInput), reviews on reviewsMaxResults — NOT the
+  // old APIFY_SEARCH_MAX_RESULTS top-N / a private 30-default, which guaranteed cache misses.
+  const searchInput = arg('max')
+    ? buildSearchInput(dest, Number(arg('max')))
+    : buildLiveSearchInput(dest);
+  const reviewsMax = arg('reviews-max') ? Number(arg('reviews-max')) : reviewsMaxResults();
   const since = new Date(Date.now() - TWELVE_MONTHS_MS); // volatile keys are stripped from the cache key anyway
 
   const searchActor = process.env.APIFY_TRIPADVISOR_SEARCH_ACTOR_ID ?? 'maxcopell~tripadvisor';
   const taReviewsActor = process.env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID ?? 'maxcopell~tripadvisor-reviews';
   const googleReviewsActor = process.env.APIFY_GOOGLE_REVIEWS_ACTOR_ID ?? 'compass~google-maps-reviews-scraper';
 
-  console.log(`[preseed] ${dest} — searchMax=${searchMax} reviewsMax=${reviewsMax}\n`);
+  console.log(`[preseed] ${dest} — searchMax=${searchInput.maxItemsPerQuery} reviewsMax=${reviewsMax}\n`);
 
-  // 1) Curation search: apify / <searchActor> / buildSearchInput(dest, searchMax)
+  // 1) Curation search: apify / <searchActor> / the live search input (pool-size default)
   const search = await readJson<unknown[]>(path.join(SCRIPT, 'apify', `curation-${slug(dest)}.json`));
   let mapped: FetchedHotel[] = [];
   if (search) {
-    await writeRoute(cacheKeyFor('apify', searchActor, buildSearchInput(dest, searchMax)), search);
+    await writeRoute(cacheKeyFor('apify', searchActor, searchInput), search);
     mapped = search.map((it) => mapSearchItem(it, dest)).filter((h): h is FetchedHotel => h !== null);
   } else {
     console.log('  (no curation search cache — run: npm run dev:curation -- --destination ' + dest + ' --live)');

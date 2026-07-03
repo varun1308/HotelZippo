@@ -14,7 +14,7 @@
  * run in the standalone tsx worker chain where that guard throws (same reasoning as
  * lib/review-intelligence/apify.ts and synthesis.ts). Never imported by a client component. */
 import { trace, SpanStatusCode } from '@opentelemetry/api';
-import { withActorCache } from '@/lib/dev/actor-cache';
+import { withActorCache, cacheEnabled, cacheKeyFor } from '@/lib/dev/actor-cache';
 
 export type ApifyErrorKind = 'no_token' | 'http_error' | 'timeout' | 'bad_response';
 
@@ -197,12 +197,55 @@ export interface StartRunResult {
   apifyDatasetId: string;
 }
 
+// ── Dev actor-cache seam for the ASYNC ledger path (CURATION_USE_CACHE=1) ──────────────────────
+// The sync runActorGetItems is already wrapped in withActorCache, but the ledger UI path goes
+// startRun → getRunStatus → pullDatasetItems, which would otherwise ALWAYS hit live Apify (paid)
+// even in supposedly-free cache mode. Seam: when the exact (actorId, input) is banked, startRun
+// returns a SYNTHETIC already-succeeded run whose ids carry the cache key ("cache:<file>");
+// getRunStatus reports it succeeded with no live call; and ingest pulls the items through
+// withActorCache on the run's own (actorId, input) — a guaranteed HIT for a synthetic run.
+// A cache MISS falls through to the live start (same write-through-on-first-use semantics as
+// withActorCache; the pull is then banked by the ingest route's wrapper).
+const CACHE_RUN_PREFIX = 'cache:';
+
+/** True for the synthetic run/dataset ids minted by a cache-mode startRun. */
+export function isCacheRunId(id: string): boolean {
+  return id.startsWith(CACHE_RUN_PREFIX);
+}
+
+/** Sentinel thrown by the probe `live()` to detect a MISS without making (or banking) any call. */
+const CACHE_PROBE_MISS = new Error('actor-cache probe miss');
+
+/** Cache-mode READ without write-through: HIT → banked items; MISS (or cache off) → null. */
+async function readBankedItems(actorId: string, input: Record<string, unknown>): Promise<unknown[] | null> {
+  if (!cacheEnabled()) return null;
+  try {
+    const banked = await withActorCache('apify', actorId, input, async () => {
+      throw CACHE_PROBE_MISS;
+    });
+    return Array.isArray(banked) ? banked : null;
+  } catch (e) {
+    if (e === CACHE_PROBE_MISS) return null;
+    throw e;
+  }
+}
+
 /** Start an actor run asynchronously. Returns the Apify run id + its default dataset id IMMEDIATELY
- * (the actor keeps running on Apify's side). Persist these in the ledger so the run is recoverable. */
+ * (the actor keeps running on Apify's side). Persist these in the ledger so the run is recoverable.
+ * In dev cache mode a banked (actorId, input) short-circuits to a synthetic succeeded run — no
+ * live call, no spend (see the seam note above). */
 export async function startRun(
   opts: { actorId: string; input: Record<string, unknown>; runTimeoutSecs?: number },
   fetchImpl?: typeof fetch,
 ): Promise<StartRunResult> {
+  const banked = await readBankedItems(opts.actorId, opts.input);
+  if (banked) {
+    const syntheticId = `${CACHE_RUN_PREFIX}${cacheKeyFor('apify', opts.actorId, opts.input)}`;
+    // eslint-disable-next-line no-console
+    console.log(`[actor-cache] startRun HIT → synthetic run ${syntheticId} (no live call)`);
+    return { apifyRunId: syntheticId, apifyDatasetId: syntheticId };
+  }
+
   const doFetch = fetchImpl ?? fetch;
   const params = new URLSearchParams();
   if (opts.runTimeoutSecs != null) params.set('timeout', String(opts.runTimeoutSecs));
@@ -227,9 +270,18 @@ export interface RunStatusResult {
   costEstimate?: number;
 }
 
+/** Apify's EXPLICIT terminal-failure run statuses. Anything unrecognized/missing is treated as
+ * still-running (keep polling) — mapping an unknown status to 'failed' is terminal in our ledger
+ * and would strand PAID data behind a vocabulary drift. */
+const APIFY_FAILED_STATUSES = new Set(['FAILED', 'TIMED-OUT', 'TIMING-OUT', 'ABORTED', 'ABORTING']);
+
 /** Poll one run's status. Maps Apify's run statuses onto our 3-state vocabulary:
- *   READY|RUNNING → running ; SUCCEEDED → succeeded ; FAILED|TIMED-OUT|ABORTED → failed. */
+ *   SUCCEEDED → succeeded ; FAILED|TIMED-OUT|ABORTED(+ing) → failed ; everything else → running.
+ * On success, best-effort parses the dataset's itemCount (one extra free GET) so the admin UI
+ * can show "N items" instead of "?". A synthetic cache run is always succeeded (no live call). */
 export async function getRunStatus(apifyRunId: string, fetchImpl?: typeof fetch): Promise<RunStatusResult> {
+  if (isCacheRunId(apifyRunId)) return { status: 'succeeded' };
+
   const doFetch = fetchImpl ?? fetch;
   const url = `${APIFY_API}/actor-runs/${encodeURIComponent(apifyRunId)}`;
   const body = (await apifyJson(url, { method: 'GET' }, doFetch, 30_000)) as {
@@ -237,9 +289,22 @@ export async function getRunStatus(apifyRunId: string, fetchImpl?: typeof fetch)
   };
   const raw = body?.data?.status ?? '';
   const status: ApifyRunStatus =
-    raw === 'SUCCEEDED' ? 'succeeded' : raw === 'READY' || raw === 'RUNNING' ? 'running' : 'failed';
+    raw === 'SUCCEEDED' ? 'succeeded' : APIFY_FAILED_STATUSES.has(raw) ? 'failed' : 'running';
   const result: RunStatusResult = { status };
   if (typeof body?.data?.usageTotalUsd === 'number') result.costEstimate = body.data.usageTotalUsd;
+  if (status === 'succeeded' && body?.data?.defaultDatasetId) {
+    try {
+      const ds = (await apifyJson(
+        `${APIFY_API}/datasets/${encodeURIComponent(body.data.defaultDatasetId)}`,
+        { method: 'GET' },
+        doFetch,
+        30_000,
+      )) as { data?: { itemCount?: number } };
+      if (typeof ds?.data?.itemCount === 'number') result.itemCount = ds.data.itemCount;
+    } catch {
+      /* best-effort — a missing itemCount only means the UI shows "?" */
+    }
+  }
   return result;
 }
 
@@ -250,6 +315,14 @@ export async function pullDatasetItems(
   opts: { limit?: number; timeoutMs?: number } = {},
   fetchImpl?: typeof fetch,
 ): Promise<unknown[]> {
+  if (isCacheRunId(apifyDatasetId)) {
+    // A synthetic cache run's items are served by the caller's withActorCache wrapper (keyed on
+    // the run's actorId+input) — reaching here means the bank entry is gone or the flag is off.
+    throw new ApifyError(
+      'synthetic cache dataset id — its banked payload is missing or CURATION_USE_CACHE is off; re-seed the cache (npm run dev:preseed-cache) or start a fresh live run',
+      'bad_response',
+    );
+  }
   const doFetch = fetchImpl ?? fetch;
   const params = new URLSearchParams({ format: 'json', clean: 'true' });
   if (opts.limit != null) params.set('limit', String(opts.limit));

@@ -32,7 +32,12 @@ export async function POST(req: Request) {
   }
 
   const supabase = createServiceClient();
-  const { staged } = await stageHotels(supabase, result.hotels, result.source);
+  const { staged, failed, errors } = await stageHotels(supabase, result.hotels, result.source);
 
-  return NextResponse.json({ source: result.source, staged });
+  // Surface a total staging failure as an error (nothing landed); partial failures ride along
+  // in the 200 body so the admin UI can show them.
+  if (staged === 0 && failed > 0) {
+    return NextResponse.json({ error: 'stage_failed', source: result.source, staged, failed, errors }, { status: 502 });
+  }
+  return NextResponse.json({ source: result.source, staged, failed, errors });
 }

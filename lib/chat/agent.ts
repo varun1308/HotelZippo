@@ -19,8 +19,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/db/server';
 import { withSpan, HZ } from '@/lib/otel/trace';
 import { runAssembly, resolveEligibility, type AssemblyOrPreview, type RuntimeSeedDeps } from '@/lib/recommendations/run-assembly';
-import { createJob, findReusable } from '@/lib/recommendations/job-ledger';
-import { computeInputHash } from '@/lib/recommendations/input-hash';
+import { createJob, findReusable, findInflight, isUniqueViolation } from '@/lib/recommendations/job-ledger';
+import { computeInputHash, hashPartsFromAssemblyInput } from '@/lib/recommendations/input-hash';
+import { workerAuthHeaders } from '@/lib/recommendations/worker-auth';
 import { createRouteStackFetch } from '@/lib/booking/transport';
 import { createMockRouteStackFetch, routeStackMockEnabled } from '@/lib/booking/mock-transport';
 import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
@@ -75,7 +76,7 @@ const assembleToolInput = z.object({
 /** Input the model fills when the user CONFIRMS a change/addition to a known profile.
  * Every field optional — the agent sends only what changed. Enums are validated against the
  * canonical sets so an out-of-range value can never be written. */
-const FOOD_VALUES = ['vegetarian', 'vegan', 'none'] as const;
+const FOOD_VALUES = ['vegetarian', 'vegan', 'none', 'other'] as const;
 const childSchema = z.object({ name: z.string(), age: z.number().int().min(0).max(17) });
 const updateProfileInput = z.object({
   name: z.string().min(1).optional(),
@@ -114,6 +115,11 @@ export interface RunConversationArgs {
   profileClient?: SupabaseClient;
   /** Request origin (for the async-assembly worker kick). The route passes req.url's origin. */
   appOrigin?: string;
+  /** Fires when the assemble tool's best-effort profile reconcile actually PERSISTED fields
+   *  (the Haiku-skips-update_profile safety net). The route uses it to emit the same
+   *  `profile-update` chunk the update_profile tool produces, so the client's profileRef
+   *  refreshes and the concierge never re-asks a just-saved fact (08b-1). */
+  onProfileSaved?: (updated: string[]) => void;
 }
 
 /** Async-assembly flag (03c). When ASYNC_ASSEMBLY=1, the assemble_recommendations tool dispatches the
@@ -145,7 +151,10 @@ export async function runConversation(args: RunConversationArgs) {
     // OTEL (specs/14): let the AI SDK emit its own model spans (token usage, stop reason, tool
     // calls) instead of the opaque `fetch POST api.anthropic.com` span. recordInputs/Outputs OFF
     // so conversation content + the injected family profile never land in a span (warm-error /
-    // no-PII principle). conversationId rides in metadata so these spans join the same Dash0 view.
+    // no-PII principle). conversationId rides in metadata — the SDK prefixes it as
+    // `ai.telemetry.metadata.hz.conversation_id`, and the AiMetadataSpanProcessor
+    // (lib/otel/ai-metadata.ts) copies it back to bare `hz.conversation_id` on export so these
+    // spans still join the spec-14 Dash0 conversation view.
     experimental_telemetry: {
       isEnabled: true,
       recordInputs: false,
@@ -186,7 +195,11 @@ export async function runConversation(args: RunConversationArgs) {
                   input.family_profile as Record<string, unknown>,
                   args.userId,
                   args.profileClient,
-                );
+                ).then((updated) => {
+                  // Something genuinely new was persisted → let the route surface the same
+                  // profile-update chunk the update_profile tool emits (client refresh, 08b-1).
+                  if (updated.length > 0) args.onProfileSaved?.(updated);
+                });
               }
 
               // 12i-C: provide the runtime-seed seam (RouteStack transport + cache + warm-failing geocode)
@@ -226,6 +239,25 @@ export async function runConversation(args: RunConversationArgs) {
             },
           ),
       }),
+      // Offer the structured profile form (spec 05 §4). The tool itself does nothing server-side —
+      // its RESULT is the signal the route translates into the `offer-form` stream chunk, which the
+      // client renders as the dashed "switch to form" card. Without this tool the live agent had no
+      // way to emit that chunk (only the e2e stub / mock stream could), so FormOfferCard was
+      // unreachable in real onboarding.
+      offer_profile_form: tool({
+        description:
+          'Offer the structured family-profile form as an alternative to Q&A onboarding. A ' +
+          '"switch to form" card renders beneath your message. Call it exactly ONCE per ' +
+          'conversation — right after you ask the SECOND onboarding question — or immediately ' +
+          'if the user asks for a form. Do not describe the form in prose; the card is the offer.',
+        inputSchema: z.object({}),
+        execute: () =>
+          withSpan(
+            'chat.tool',
+            { attrs: { [HZ.toolName]: 'offer_profile_form', [HZ.outcome]: 'form_offered' } },
+            async () => ({ offered: true }),
+          ),
+      }),
       // Only offered to a signed-in user with an RLS-scoped client (env-free build + key-free
       // CI never register it). Creates the profile row if none exists, else merges — so it is
       // the save path for BOTH first-time onboarding capture AND later edits.
@@ -248,7 +280,7 @@ export async function runConversation(args: RunConversationArgs) {
                   async (span) => {
                     const res = await runUpdateProfile(input, args.userId!, args.profileClient!);
                     // How many profile fields this confirmed change actually persisted (0 ⇒ no-op).
-                    span.setAttribute('hz.profile.updated_count', res.updated.length);
+                    span.setAttribute(HZ.profileUpdatedCount, res.updated.length);
                     span.setAttribute(HZ.outcome, res.updated.length > 0 ? 'profile_updated' : 'profile_noop');
                     if (res.updated.length > 0) span.addEvent('profile_persisted');
                     return res;
@@ -323,18 +355,22 @@ export function profilePatchFromAssembleInput(
 /** Best-effort reconcile: persist any profile facts the model USED to run a search but never saved
  *  (Haiku sometimes narrates "noted your kids" without emitting `update_profile`). Reuses the
  *  create-or-merge path, so it only writes genuinely-new fields and never fires the visible chip on
- *  a non-change. Never throws — a reconcile failure must not break the recommendation turn. */
+ *  a non-change. Returns the human labels of the fields actually persisted ([] for a no-op), so the
+ *  caller can surface the save to the client. Never throws — a reconcile failure must not break the
+ *  recommendation turn. */
 export async function reconcileProfileFromAssembleInput(
   familyProfile: Record<string, unknown> | null | undefined,
   userId: string,
   client: SupabaseClient,
-): Promise<void> {
+): Promise<string[]> {
   try {
     const patch = profilePatchFromAssembleInput(familyProfile);
-    if (Object.keys(patch).length === 0) return;
-    await runUpdateProfile(patch, userId, client);
+    if (Object.keys(patch).length === 0) return [];
+    const { updated } = await runUpdateProfile(patch, userId, client);
+    return updated;
   } catch {
     /* reconcile is a safety net — swallow any error so the recommendation still renders */
+    return [];
   }
 }
 
@@ -372,36 +408,51 @@ async function dispatchAssemblyJob(
   try {
     const destination = String(input.trip_brief.destination);
 
+    // No signed-in user → NO job. A user_id-NULL job row is unreadable under the poll route's
+    // owner-read RLS (migration 0018), so the client would 404-spin on it forever. Anonymous /
+    // env-free-dev turns fall back to the synchronous inline path instead (null return below).
+    if (!args.userId) return null;
+
     // Eligibility FIRST (cheap: queryCandidates + preview, no model call). A terminal result here
     // (preview cards / still-seeding / no_eligible_hotels) is returned directly — we only create a
     // background job when there are real candidates for the slow model call to assemble.
     const eligibility = await resolveEligibility(supabase, input, seedDeps);
     if (!('assemble' in eligibility)) return eligibility;
 
-    const inputHash = computeInputHash({
-      destination,
-      tripType: (input.trip_brief.trip_type as string | undefined) ?? null,
-      budgetTier: (input.family_profile?.budget_tier as string | undefined) ?? null,
-      food: (input.family_profile?.food_preference as string | undefined) ?? null,
-    });
+    // The FULL reuse key (spec 03c): destination + trip type + budget + food (the real
+    // food_preferences array) + the candidate-set key (evaluate_only + pre-shortlisted hotels) —
+    // so an evaluate-only turn never re-attaches to an open turn's job, and vice versa.
+    const inputHash = computeInputHash(hashPartsFromAssemblyInput(input));
 
-    // Reuse guard: a recent non-failed job for the same input → re-attach (one model call, not two).
-    const reusable = await findReusable(supabase, inputHash).catch(() => null);
-    const job =
-      reusable ??
-      (await createJob(supabase, {
-        userId: args.userId ?? null,
-        destination,
-        inputHash,
-        input,
-      }));
+    // Reuse guard: THIS USER's recent non-failed job for the same input → re-attach (one model
+    // call, not two). Never another user's — their jobId would be unreadable under owner-read RLS.
+    const reusable = await findReusable(supabase, inputHash, args.userId).catch(() => null);
+    let job = reusable;
+    if (!job) {
+      try {
+        job = await createJob(supabase, {
+          userId: args.userId,
+          conversationId: args.conversationId ?? null, // specs/14: the worker stamps hz.conversation_id from this
+          destination,
+          inputHash,
+          input,
+        });
+      } catch (e) {
+        // The in-flight unique index (0019, 03c AC5) says a concurrent identical turn beat us to
+        // the insert → re-attach to THAT job instead of double-spending on the model.
+        if (!isUniqueViolation(e)) throw e;
+        job = await findInflight(supabase, args.userId, inputHash);
+        if (!job) throw e; // the winner finished/failed in between — fall back to sync
+      }
+    }
 
     // Best-effort worker kick (fire-and-forget; the poll route re-kicks if this is lost). No origin
-    // (standalone/test) → skip the kick; the first client poll's re-kick still runs it.
+    // (standalone/test) → skip the kick; the first client poll's re-kick still runs it. Carries the
+    // internal worker-auth header when ASSEMBLY_WORKER_SECRET is configured.
     if (args.appOrigin && !reusable) {
       void fetch(`${args.appOrigin}/api/assembly/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...workerAuthHeaders() },
         body: JSON.stringify({ jobId: job.id }),
         cache: 'no-store',
       }).catch(() => {});

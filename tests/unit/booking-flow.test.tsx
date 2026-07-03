@@ -99,10 +99,53 @@ describe('useBookingFlow', () => {
     expect(openUrl).toHaveBeenCalledWith(PAYMENT.bookingUrl);
     expect(result.current.state.step).toBe('idle'); // handed off → modal closed
 
-    // payment-url request threaded the session handles + chosen room.
+    // payment-url request threaded the session handles + chosen room, plus the pending-order
+    // context (10d): destination from the chosen hotel, currency defaulting to USD (v1).
     const payCall = fetchImpl.mock.calls.find((c) => (c[0] as string).includes('/payment-url'))!;
     const body = JSON.parse((payCall[1] as RequestInit).body as string);
-    expect(body).toMatchObject({ correlationId: 'corr-1', token: 'tok-1', recommendationId: 'reco-A', roomId: 'room-A' });
+    expect(body).toMatchObject({
+      correlationId: 'corr-1',
+      token: 'tok-1',
+      recommendationId: 'reco-A',
+      roomId: 'room-A',
+      destination: 'Phuket',
+      currency: 'USD',
+    });
+  });
+
+  it('threads the chat conversationId onto BOTH booking requests (specs/14 correlation)', async () => {
+    const conversationId = '3744958a-29ac-41ff-958a-dee431a77b48';
+    const fetchImpl = mockFetch({ '/api/booking/rates': RATES, '/api/booking/payment-url': PAYMENT });
+    const { result } = renderHook(() =>
+      useBookingFlow({ profile: PROFILE, dates: null, conversationId, fetchImpl: fetchImpl as unknown as typeof fetch, openUrl: jest.fn() }),
+    );
+    act(() => result.current.proceed(HOTEL));
+    act(() => result.current.setDates({ checkIn: '2026-07-01', checkOut: '2026-07-05' }));
+    await act(async () => {
+      await result.current.confirm();
+    });
+    await act(async () => {
+      await result.current.selectRoom(RATES.options[0]);
+    });
+    for (const path of ['/api/booking/rates', '/payment-url']) {
+      const call = fetchImpl.mock.calls.find((c) => (c[0] as string).includes(path))!;
+      const body = JSON.parse((call[1] as RequestInit).body as string);
+      expect(body.conversationId).toBe(conversationId);
+    }
+  });
+
+  it('omits conversationId when booking outside a chat session (older-client shape)', async () => {
+    const fetchImpl = mockFetch({ '/api/booking/rates': RATES });
+    const { result } = renderHook(() =>
+      useBookingFlow({ profile: PROFILE, dates: null, fetchImpl: fetchImpl as unknown as typeof fetch, openUrl: jest.fn() }),
+    );
+    act(() => result.current.proceed(HOTEL));
+    act(() => result.current.setDates({ checkIn: '2026-07-01', checkOut: '2026-07-05' }));
+    await act(async () => {
+      await result.current.confirm();
+    });
+    const body = JSON.parse((fetchImpl.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.conversationId).toBeUndefined();
   });
 
   it('maps a warm API error envelope to the error step', async () => {

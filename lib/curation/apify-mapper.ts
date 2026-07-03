@@ -34,6 +34,19 @@ export function buildSearchInput(destination: string, maxResults: number): Recor
   };
 }
 
+/** The LIVE search-pool size: the actor input is built with the ~500 POOL cap (fetch.ts / the
+ * ledger start route), not the final top-N. Exported so every producer of this input — live
+ * fetch, ledger start, dev preseed — shares ONE default and their cache/reuse keys match. */
+export function searchPoolSize(): number {
+  return Number(process.env.APIFY_SEARCH_POOL_SIZE ?? 500);
+}
+
+/** Build the search input exactly as the live paths do (destination + the live pool size).
+ * Dev tooling (scripts/dev/preseed-route-cache.ts) MUST use this so its cache keys align. */
+export function buildLiveSearchInput(destination: string): Record<string, unknown> {
+  return buildSearchInput(destination, searchPoolSize());
+}
+
 function asString(v: unknown): string | null {
   if (typeof v !== 'string') return null;
   // Some actor builds wrap URLs in angle brackets ("<https://…>"); strip them defensively.
@@ -60,7 +73,9 @@ function asInt(v: unknown): number | null {
   return null;
 }
 
-/** Coerce a raw rating/stars value to the canonical 3 | 4 | 5, else null. */
+/** Coerce a raw hotel-CLASS value (hotelClass/stars) to the canonical 3 | 4 | 5, else null.
+ * Never fed the TripAdvisor bubble score (`rating`) — a 4.5-bubble 3-star hotel is NOT 4-star,
+ * and a wrong class skews selectTopHotels. No class in the row → null (founder can set it). */
 function asStarRating(v: unknown): 3 | 4 | 5 | null {
   const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
   if (n >= 5) return 5;
@@ -124,7 +139,7 @@ export function mapSearchItem(item: unknown, destination: Destination): FetchedH
     google_place_id: null, // a TA search actor does not return a Google place id (see plan: Option A)
     brand: asString(row.brand) ?? asString(row.chain),
     price_tier: asPriceTier(row.priceTier ?? row.priceLevel),
-    star_rating: asStarRating(row.hotelClass ?? row.stars ?? row.rating),
+    star_rating: asStarRating(row.hotelClass ?? row.stars), // never the bubble `rating` (L24)
     images: asImages(row),
     // Geo — matching inputs for the Google Place-ID resolver (lat/long bias is the strongest key).
     latitude: asNumber(row.latitude),

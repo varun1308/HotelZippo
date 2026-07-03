@@ -114,4 +114,34 @@ describe('ShortlistPanel', () => {
     await user.click(screen.getByRole('button', { name: /close shortlist/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  /* M14 — hard-flag dots (spec 05 §6): a flagged hotel must stay distinguishable in the
+   * panel. moderate → amber, severe → red (reserved hues); accessible group label. */
+  it('renders amber/red flag dots with an accessible label for a flagged hotel', () => {
+    const flagged = {
+      ...HOTEL_A,
+      hardFlags: [{ severity: 'severe' as const }, { severity: 'moderate' as const }],
+    };
+    render(<ShortlistPanel open items={[flagged]} onRemove={() => {}} onClose={() => {}} />);
+    const dots = screen.getByRole('img', { name: /anantara mai khao: 2 hard flags \(1 severe, 1 moderate\)/i });
+    const swatches = Array.from(dots.querySelectorAll('[data-severity]'));
+    expect(swatches).toHaveLength(2);
+    expect(swatches[0]).toHaveAttribute('data-severity', 'severe');
+    expect(swatches[0]).toHaveStyle({ background: 'var(--red)' });
+    expect(swatches[1]).toHaveAttribute('data-severity', 'moderate');
+    expect(swatches[1]).toHaveStyle({ background: 'var(--amber)' });
+  });
+
+  it('legacy rows without hardFlags render no dots (backward compat)', () => {
+    // HOTEL_A/HOTEL_B predate the flags field entirely — missing field ⇒ no dots.
+    render(<ShortlistPanel open items={[HOTEL_A, HOTEL_B]} onRemove={() => {}} onClose={() => {}} />);
+    expect(screen.queryByRole('img', { name: /hard flag/i })).not.toBeInTheDocument();
+  });
+
+  it('an empty hardFlags array also renders no dots', () => {
+    render(
+      <ShortlistPanel open items={[{ ...HOTEL_B, hardFlags: [] }]} onRemove={() => {}} onClose={() => {}} />,
+    );
+    expect(screen.queryByRole('img', { name: /hard flag/i })).not.toBeInTheDocument();
+  });
 });

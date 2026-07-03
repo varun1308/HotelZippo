@@ -31,7 +31,7 @@
 The full pipeline schema is already in `supabase/migrations/0002_pipeline_tables.sql` (created Phase 1 so the data model is complete + Zod-validatable). **08a-5 Action Item #1 (migration) is DONE** — Phase 6 must **verify the indexes match** rather than write a new migration. `hotel_intelligence.low_confidence boolean default false` also already exists.
 
 Three canonical indexes are present and match 08a-5:
-- `raw_reviews_dedup` — `unique (hotel_id, source, reviewer_name, review_date)` (dedup-append).
+- `raw_reviews_dedup` — `unique (hotel_id, source, reviewer_name, review_date, anon_text_hash) NULLS NOT DISTINCT` (dedup-append). *(Updated 2026-07-03, post-review sweep — migration `0020`: the original 4-column NULLS-DISTINCT index re-inserted anonymous/undated reviews on every re-run; `anon_text_hash` is a stored generated column — `md5(review_text)` only when BOTH reviewer_name and review_date are null, else `''` — kept in lockstep with `lib/review-intelligence/store.ts::rawReviewDedupKey`.)*
 - `one_active_run` — `unique ((status = 'running')) where status = 'running'` (single active run, DB-enforced).
 - `pipeline_run_hotels_run_id_idx`, `raw_reviews_hotel_id_idx` — performance indexes (additive; not in 08a-5).
 
@@ -52,7 +52,8 @@ Canonical data model: 07. The schema is documented there too.
 **Mode A — Full destination run:**
 - Destination dropdown: Phuket / Singapore / Tokyo / Orlando / Bali.
 - Shows processed-vs-unprocessed hotel count for that destination.
-- "Run full destination" inserts a `pipeline_runs` row and processes all hotels **sequentially**.
+- "Run full destination" inserts a `pipeline_runs` row and processes the run's hotels **sequentially**.
+- **Cost guard (updated 2026-07-03, post-review sweep):** by default a destination run processes **only hotels that don't yet have a `hotel_intelligence` row** (never-done + previously-failed — `lib/review-intelligence/worker.ts::resolveHotels`), so re-running to finish a partial destination never re-scrapes (and re-bills Apify for) hotels that already completed. Set `PIPELINE_REFRESH=1` to force a full re-synthesis of every hotel (e.g. a deliberate monthly refresh; → 13 · Environment). Single-hotel (Mode B) runs are always processed regardless of the guard.
 - Blocked if any run is already `running`.
 
 **Mode B — Single hotel run:**
@@ -101,7 +102,7 @@ Reuse the curation pattern: **Apify primary → Playwright fallback → mock fix
 ## Stage 3 — Raw review storage
 
 **Table:** `raw_reviews`. Insert each scraped review with its `pipeline_run_id`.
-- **Deduplication:** the `raw_reviews_dedup` unique index on `(hotel_id, source, reviewer_name, review_date)` means re-runs insert only genuinely new reviews — **insert … on conflict do nothing**.
+- **Deduplication:** the `raw_reviews_dedup` unique index on `(hotel_id, source, reviewer_name, review_date, anon_text_hash)` (`NULLS NOT DISTINCT`, migration `0020`) means re-runs insert only genuinely new reviews — **insert … on conflict do nothing** — including anonymous/undated reviews, which dedup via the generated `anon_text_hash` column.
 - **Retention: permanent** — raw reviews are **never deleted**. They accumulate across runs as a growing data asset (trend analysis, re-synthesis without re-scraping, future personalised lens).
 - The **12-month recency filter applies only at synthesis (Stage 5), not at storage** — every scraped review is stored regardless of age.
 

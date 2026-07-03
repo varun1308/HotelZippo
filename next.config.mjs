@@ -1,3 +1,5 @@
+import { ALLOWED_IMAGE_HOSTS } from './components/recommendation/allowed-image-hosts.mjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -7,18 +9,14 @@ const nextConfig = {
     instrumentationHook: true,
   },
   images: {
-    // Supabase Storage hero images (12g / specs/01b-image-sourcing.md). The Storage
-    // host comes from NEXT_PUBLIC_SUPABASE_URL; allow-list it for next/image. Local
-    // dev (127.0.0.1:54321) is included so curated heroes render during development.
-    remotePatterns: [
-      { protocol: 'https', hostname: '*.supabase.co' },
-      { protocol: 'http', hostname: '127.0.0.1', port: '54321' },
-      { protocol: 'http', hostname: 'localhost', port: '54321' },
-      // Placeholder hero host used by the local demo seed fixtures (npm run dev:db).
-      // Harmless dummy-image service; production heroes still come from Supabase Storage.
-      { protocol: 'https', hostname: 'picsum.photos' },
-      { protocol: 'https', hostname: 'fastly.picsum.photos' }, // picsum redirects here
-    ],
+    // The allowlist lives in ONE place (allowed-image-hosts.mjs) — the card <Hero>
+    // validates hero URLs against the same list so next/image can never throw on an
+    // unconfigured host (H7 / spec 05 hard constraint 3).
+    remotePatterns: ALLOWED_IMAGE_HOSTS.map(({ protocol, hostname, port }) => ({
+      protocol,
+      hostname,
+      ...(port ? { port } : {}),
+    })),
   },
 };
 

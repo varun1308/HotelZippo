@@ -110,4 +110,32 @@ describe('TripBrief', () => {
     render(<TripBrief brief={makeBrief()} />);
     expect(screen.queryByText('Personal preferences')).not.toBeInTheDocument();
   });
+
+  /* M11 — sheet mode (spec 05 §5: tablet toggle / mobile slide-in). The chat page wires
+   * open/onClose so the topbar "Brief" button opens this below lg. */
+  describe('sheet mode (open/onClose wired)', () => {
+    it('slides in when open: visible sheet and a working close button', async () => {
+      const user = userEvent.setup();
+      const onClose = jest.fn();
+      render(<TripBrief brief={makeBrief()} open onClose={onClose} />);
+
+      const aside = screen.getByRole('complementary', { name: /trip brief/i });
+      expect(aside.className).toContain('translate-x-0');
+      expect(aside.className).not.toContain('translate-x-full');
+
+      await user.click(screen.getByRole('button', { name: /close trip brief/i }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('is translated off-screen (below lg) when closed', () => {
+      render(<TripBrief brief={makeBrief()} open={false} onClose={() => {}} />);
+      const aside = screen.getByRole('complementary', { name: /trip brief/i });
+      expect(aside.className).toContain('translate-x-full');
+    });
+
+    it('desktop rail usage (no open/onClose) renders no close button', () => {
+      render(<TripBrief brief={makeBrief()} />);
+      expect(screen.queryByRole('button', { name: /close trip brief/i })).not.toBeInTheDocument();
+    });
+  });
 });

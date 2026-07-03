@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 export type AssemblyJobStage = 'queued' | 'finding_hotels' | 'checking_intelligence' | 'writing' | 'done';
 export type AssemblyJobStatus = 'pending' | 'running' | 'succeeded' | 'failed';
-export type AssemblyJobErrorKind = 'no_eligible_hotels' | 'model_failed' | 'timeout' | 'unknown';
+export type AssemblyJobErrorKind = 'no_eligible_hotels' | 'budget_mismatch' | 'model_failed' | 'timeout' | 'unknown';
 
 export interface AssemblyJobState {
   status: AssemblyJobStatus | 'unknown';
@@ -50,6 +50,8 @@ export function useAssemblyJob(
   jobId: string,
   poll?: AssemblyPoll,
   conversationId?: string,
+  /** Poll budget override (tests). Defaults to the 5-min MAX_MS. */
+  maxMs: number = MAX_MS,
 ): AssemblyJobState {
   // An injected poll (tests) wins; otherwise build the live one bound to this conversation id.
   // Memoized so the effect doesn't re-fire on every render (a fresh closure each render would).
@@ -83,8 +85,15 @@ export function useAssemblyJob(
       }));
 
       const terminal = r.status === 'succeeded' || r.status === 'failed';
-      const expired = Date.now() - startedRef.current > MAX_MS;
-      if (!terminal && !expired) timer = setTimeout(tick, POLL_MS);
+      const expired = Date.now() - startedRef.current > maxMs;
+      if (!terminal && expired) {
+        // Poll budget exhausted on a NON-terminal job: never leave the spinner up forever —
+        // surface a warm timed-out failure so the block renders the spec-14 fallback copy
+        // (with its conversational retry) instead of an eternal "Writing your…" line (03c AC4).
+        setState((prev) => ({ ...prev, status: 'failed', errorKind: prev.errorKind ?? 'timeout' }));
+        return;
+      }
+      if (!terminal) timer = setTimeout(tick, POLL_MS);
     };
 
     // Kick immediately, then poll on the interval.
@@ -93,7 +102,7 @@ export function useAssemblyJob(
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [jobId, activePoll]);
+  }, [jobId, activePoll, maxMs]);
 
   return state;
 }

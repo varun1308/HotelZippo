@@ -8,6 +8,7 @@
  * (even unmatched) so RouteStack doesn't retry endlessly; only auth/parse failures are non-200.
  *
  * Server-side (service client + webhook secret never reach the client). */
+import { SpanStatusCode } from '@opentelemetry/api';
 import { createServiceClient } from '@/lib/db/server';
 import { withSpan, HZ } from '@/lib/otel/trace';
 import {
@@ -48,9 +49,9 @@ async function handleWebhook(req: Request, span: import('@opentelemetry/api').Sp
   if (!event) {
     return Response.json({ ok: false, error: 'invalid_event' }, { status: 400 });
   }
-  span.setAttribute('hz.webhook.event', event.event);
-  if (event.module) span.setAttribute('hz.webhook.module', event.module);
-  if (event.orderstatus) span.setAttribute('hz.webhook.order_status', event.orderstatus);
+  span.setAttribute(HZ.webhookEvent, event.event);
+  if (event.module) span.setAttribute(HZ.webhookModule, event.module);
+  if (event.orderstatus) span.setAttribute(HZ.webhookOrderStatus, event.orderstatus);
 
   // Non-HOTEL modules are acked + skipped (v1 tracks hotels only).
   if (event.module && event.module.toUpperCase() !== 'HOTEL') {
@@ -63,10 +64,15 @@ async function handleWebhook(req: Request, span: import('@opentelemetry/api').Sp
     const client = createServiceClient();
     const link = await correlateOrder(client, event);
     await recordWebhookEvent(client, event, link);
-    span.setAttribute('hz.webhook.matched', link.matched);
+    span.setAttribute(HZ.webhookMatched, link.matched);
     span.setAttribute(HZ.outcome, link.matched ? 'matched' : 'unmatched');
     return Response.json({ ok: true, matched: link.matched }, { status: 200 });
-  } catch {
+  } catch (e) {
+    // A dropped confirmed-booking record must be VISIBLE in Dash0 (spec 14 "never lose data
+    // silently"): record the exception + mark the span ERROR — withSpan honours a call-site
+    // status, so the normal return below no longer clobbers it with OK.
+    span.recordException(e as Error);
+    span.setStatus({ code: SpanStatusCode.ERROR, message: 'persist_failed' });
     span.setAttribute(HZ.outcome, 'persist_failed');
     // Service client couldn't be built / unexpected error: still 200 so RouteStack doesn't retry
     // forever, but signal we didn't persist. (Authentic event; our side failed, not theirs.)

@@ -18,7 +18,41 @@ import {
   listPreviewHotelsFromRouteStack,
   type BookingDeps,
 } from '@/lib/booking/routestack';
+import { routeStackMockEnabled } from '@/lib/booking/mock-transport';
 import type { ProposedHotel } from './propose';
+
+/** 10e AC5 guard: when the RouteStack transport is the demo MOCK, its canned inventory ("Mock
+ * Bayview Resort"…) must never reach the REAL hotels table or the routestack_hotels id-cache —
+ * rows would persist after the flag is unset. Checked via the explicit deps.mock marker OR the
+ * ROUTESTACK_MOCK env flag (the routes wire the mock transport off that flag). */
+export function previewSeedBlockedByMock(deps: BookingDeps): boolean {
+  return deps.mock === true || routeStackMockEnabled();
+}
+
+/** 12i-B guard: a destination is either curated OR preview — NEVER mixed. Loads the destination's
+ * existing hotels once; used both to refuse the whole seed when any non-preview hotel exists and
+ * to filter individual upsert rows (belt-and-braces: the (name,destination) upsert would otherwise
+ * flip a curated row to source='preview', replace its Storage hero, and orphan its intelligence). */
+async function loadExistingHotels(
+  client: SupabaseClient,
+  destination: string,
+): Promise<Array<{ name: string; source: string }>> {
+  const { data, error } = await client
+    .from('hotels')
+    .select('name, source')
+    .eq('destination', destination);
+  if (error) throw new Error(`preview seed guard query failed: ${error.message}`);
+  return (data ?? []) as Array<{ name: string; source: string }>;
+}
+
+function assertNoCuratedHotels(destination: string, existing: Array<{ name: string; source: string }>): void {
+  const nonPreview = existing.filter((h) => h.source !== 'preview');
+  if (nonPreview.length > 0) {
+    throw new Error(
+      `refusing to preview-seed ${destination}: ${nonPreview.length} curated/non-preview hotel(s) already exist (12i-B: a destination is either curated OR preview)`,
+    );
+  }
+}
 
 /** Default party/dates for a verification search — sensible near-future window (availability is
  * date-volatile, so we just need a window that returns inventory). Dates are injectable for tests. */
@@ -75,6 +109,15 @@ export async function verifyAndStage(
   deps: BookingDeps,
   opts: VerifyOptions = {},
 ): Promise<VerifyResult> {
+  if (previewSeedBlockedByMock(deps)) {
+    // eslint-disable-next-line no-console
+    console.warn(`[preview] ROUTESTACK_MOCK active — refusing to seed ${destination} with mock inventory (10e AC5); no-op`);
+    return { proposed: proposals.length, verified: [], staged: 0, dropped: proposals.map((p) => p.name) };
+  }
+  // 12i-B: never seed preview rows into a curated destination.
+  const existingHotels = await loadExistingHotels(client, destination);
+  assertNoCuratedHotels(destination, existingHotels);
+
   const party = opts.party ?? { adults: 2, children: 0, childAges: [], rooms: 1 };
   const dates = opts.dates ?? defaultDates();
 
@@ -103,9 +146,14 @@ export async function verifyAndStage(
 
   // Upsert survivors as preview hotels (on the hotels (name,destination) unique key). NO
   // hotel_intelligence row is written — preview is honestly review-intelligence-free.
+  // Belt-and-braces (the guard above already refused a curated destination): never let the
+  // (name,destination) upsert overwrite a row whose source ≠ 'preview'.
+  const protectedNames = new Set(existingHotels.filter((h) => h.source !== 'preview').map((h) => h.name));
   let staged = 0;
   if (verified.length > 0) {
-    const rows = verified.map((v) => ({
+    const rows = verified
+      .filter((v) => !protectedNames.has(v.name))
+      .map((v) => ({
       name: v.name,
       destination,
       star_rating: v.starRating === 3 || v.starRating === 4 || v.starRating === 5 ? v.starRating : null,
@@ -142,12 +190,27 @@ export async function seedPreviewFromRouteStack(
   deps: BookingDeps,
   opts: VerifyOptions & { limit?: number; fast?: boolean } = {},
 ): Promise<SeedFromRouteStackResult> {
-  const hotels = await listPreviewHotelsFromRouteStack(destination, deps, {
+  if (previewSeedBlockedByMock(deps)) {
+    // 10e AC5: never stage the mock transport's canned inventory into the real hotels table
+    // (or poison the routestack_hotels id-cache) — no-op with a loud log.
+    // eslint-disable-next-line no-console
+    console.warn(`[preview] ROUTESTACK_MOCK active — refusing to seed ${destination} with mock inventory (10e AC5); no-op`);
+    return { found: 0, staged: 0, hotels: [] };
+  }
+  // 12i-B: never seed preview rows into a curated destination.
+  const existingHotels = await loadExistingHotels(client, destination);
+  assertNoCuratedHotels(destination, existingHotels);
+
+  const found = await listPreviewHotelsFromRouteStack(destination, deps, {
     limit: opts.limit,
     dates: opts.dates,
     party: opts.party,
     fast: opts.fast, // 12i-C: runtime seed skips the slow image loop to fit the chat turn
   });
+  // Belt-and-braces (the guard above already refused a curated destination): never let the
+  // (name,destination) upsert overwrite a row whose source ≠ 'preview'.
+  const protectedNames = new Set(existingHotels.filter((h) => h.source !== 'preview').map((h) => h.name));
+  const hotels = found.filter((h) => !protectedNames.has(h.name));
   if (hotels.length === 0) return { found: 0, staged: 0, hotels: [] };
 
   const rows = hotels.map((h) => ({

@@ -4,6 +4,7 @@ jest.mock('server-only', () => ({}));
 
 import crypto from 'node:crypto';
 import { signPartnerToken, getPartnerToken, readEnv, _clearTokenCache, BookingError } from '@/lib/booking';
+import { invalidatePartnerToken } from '@/lib/booking/auth';
 import { makeMockFetch, FIXED_NOW, FIXED_NONCE, TOKEN_RESPONSE } from '@/tests/fixtures/routestack';
 
 const ENV = { ROUTESTACK_API_KEY: 'rs_test_key', ROUTESTACK_API_SECRET: 'shhh-secret', ROUTESTACK_API_URL: 'https://evolvemcp.routestack.ai' };
@@ -75,5 +76,40 @@ describe('getPartnerToken caching', () => {
     await expect(getPartnerToken(fetchImpl, { now: FIXED_NOW, nonce: FIXED_NONCE })).rejects.toMatchObject({
       kind: 'transport',
     });
+  });
+
+  it('mock and live tokens never share a cache entry (M27)', async () => {
+    // A mock demo booking must not hand a later LIVE call its fake token (or vice versa) for the
+    // rest of the 1h TTL — the cache is keyed by transport identity.
+    const mockFetch = async () => ({ success: true, token: 'mock-jwt.partner.token' });
+    const mockToken = await getPartnerToken(mockFetch, { now: FIXED_NOW, nonce: FIXED_NONCE, mock: true });
+    expect(mockToken).toBe('mock-jwt.partner.token');
+
+    const { fetchImpl, calls } = makeMockFetch();
+    const liveToken = await getPartnerToken(fetchImpl, { now: FIXED_NOW, nonce: FIXED_NONCE });
+    expect(liveToken).toBe(TOKEN_RESPONSE.token); // NOT the cached mock token
+    expect(calls.filter((c) => c.path === '/mcp/auth/partner-token')).toHaveLength(1); // live re-minted
+
+    // …and the mock entry is still cached independently.
+    const mockAgain = await getPartnerToken(async () => ({ token: 'freshly-minted' }), { now: FIXED_NOW, nonce: FIXED_NONCE, mock: true });
+    expect(mockAgain).toBe('mock-jwt.partner.token');
+  });
+
+  it('mock mode requires NO live creds (M28 / 10e AC1)', async () => {
+    delete process.env.ROUTESTACK_API_KEY;
+    delete process.env.ROUTESTACK_API_SECRET;
+    delete process.env.ROUTESTACK_API_URL;
+    const mockFetch = async () => ({ success: true, token: 'mock-jwt.partner.token' });
+    await expect(getPartnerToken(mockFetch, { now: FIXED_NOW, nonce: FIXED_NONCE, mock: true })).resolves.toBe(
+      'mock-jwt.partner.token',
+    );
+  });
+
+  it('invalidatePartnerToken clears the cache so the next call re-mints (L28)', async () => {
+    const { fetchImpl, calls } = makeMockFetch();
+    await getPartnerToken(fetchImpl, { now: FIXED_NOW, nonce: FIXED_NONCE });
+    invalidatePartnerToken();
+    await getPartnerToken(fetchImpl, { now: FIXED_NOW, nonce: FIXED_NONCE });
+    expect(calls.filter((c) => c.path === '/mcp/auth/partner-token')).toHaveLength(2);
   });
 });

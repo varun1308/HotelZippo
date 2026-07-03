@@ -1,10 +1,13 @@
 /* Raw review storage (Phase 6 · specs/02 Stage 3 / 08a-6 TC-P5..P7). Inserts scraped +
  * tagged reviews into public.raw_reviews, each carrying its pipeline_run_id.
  *
- * - DEDUP (TC-P5): the raw_reviews_dedup unique index on (hotel_id, source, reviewer_name,
- *   review_date) means re-runs insert only genuinely new rows. We use upsert with
- *   ignoreDuplicates (= INSERT … ON CONFLICT DO NOTHING) so re-running a hotel never
- *   duplicates and never errors.
+ * - DEDUP (TC-P5): the raw_reviews_dedup unique index (migration 0020) is NULLS NOT DISTINCT
+ *   on (hotel_id, source, reviewer_name, review_date, anon_text_hash), where anon_text_hash is
+ *   a GENERATED column = md5(review_text) ONLY when both name and date are null (else '').
+ *   Null-key reviews therefore dedup across runs (no more re-inserting undated reviews every
+ *   run), while genuinely distinct anonymous+undated reviews are kept apart by their text
+ *   hash. We upsert with ignoreDuplicates on that 5-column target (= INSERT … ON CONFLICT DO
+ *   NOTHING) so re-running a hotel never duplicates and never errors.
  * - PERMANENT retention (TC-P6): we never delete. Old reviews accumulate as a data asset;
  *   the 12-month filter lives at synthesis (format.ts), not here.
  * - RUN linkage (TC-P7): every inserted row carries the run's pipeline_run_id.
@@ -12,6 +15,7 @@
  * Server-side; service client (raw_reviews is service-role only — no client policy). */
 // No `import 'server-only'`: part of the worker chain (run by the standalone Node worker via
 // tsx). Server-side by construction (service client); never imported by a client component.
+import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TaggedReview } from './tagging';
 import type { RawPayloadItem, ReviewSource } from './apify';
@@ -21,10 +25,24 @@ export interface StoreResult {
   attempted: number;
 }
 
-/** Insert tagged reviews for a hotel under a run. ON CONFLICT DO NOTHING via ignoreDuplicates.
- * Rows missing the dedup key parts (reviewer_name / review_date) still insert — the unique
- * index treats NULLs as distinct, which is acceptable (anonymous/undated reviews aren't the
- * dedup target). */
+/** The in-batch dedup key for one review. MUST mirror the raw_reviews_dedup unique index
+ * (migration 0020: NULLS NOT DISTINCT + the generated anon_text_hash column) exactly, or
+ * in-batch and cross-run dedup semantics diverge and re-runs dupe: nulls collapse to fixed
+ * sentinels (≡ NULLS NOT DISTINCT), and the review text's md5 disambiguates ONLY when both
+ * reviewer_name and review_date are null (so distinct anonymous+undated reviews are not
+ * collapsed into one, but a re-scrape of the same one still dedups). */
+export function rawReviewDedupKey(
+  r: Pick<TaggedReview, 'source' | 'reviewer_name' | 'review_date' | 'review_text'>,
+): string {
+  const anonHash =
+    r.reviewer_name == null && r.review_date == null
+      ? crypto.createHash('md5').update(r.review_text ?? '').digest('hex')
+      : '';
+  return `${r.source}|${r.reviewer_name ?? ''}|${r.review_date ?? ''}|${anonHash}`;
+}
+
+/** Insert tagged reviews for a hotel under a run. ON CONFLICT DO NOTHING via ignoreDuplicates
+ * on the 0020 dedup index's 5-column target (anon_text_hash is generated — never inserted). */
 export async function storeRawReviews(
   client: SupabaseClient,
   hotelId: string,
@@ -38,7 +56,7 @@ export async function storeRawReviews(
   const seen = new Set<string>();
   const rows = reviews
     .filter((r) => {
-      const key = `${r.source}|${r.reviewer_name ?? ''}|${r.review_date ?? ''}`;
+      const key = rawReviewDedupKey(r);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -55,9 +73,14 @@ export async function storeRawReviews(
       is_indian: r.is_indian,
     }));
 
+  // Conflict target = the 0020 NULLS-NOT-DISTINCT index's columns (incl. the generated
+  // anon_text_hash) so PostgREST's ON CONFLICT (…) DO NOTHING infers the right arbiter.
   const { error } = await client
     .from('raw_reviews')
-    .upsert(rows, { onConflict: 'hotel_id,source,reviewer_name,review_date', ignoreDuplicates: true });
+    .upsert(rows, {
+      onConflict: 'hotel_id,source,reviewer_name,review_date,anon_text_hash',
+      ignoreDuplicates: true,
+    });
   if (error) throw new Error(`raw_reviews insert failed: ${error.message}`);
 
   return { attempted: rows.length };

@@ -163,13 +163,13 @@ export async function assembleRecommendations(
       {
         attrs: {
           [HZ.model]: ASSEMBLY_MODEL,
-          'hz.assemble.candidates': input.candidates.length,
-          'hz.assemble.prompt_bytes': userJson.length,
+          [HZ.assembleCandidates]: input.candidates.length,
+          [HZ.assemblePromptBytes]: userJson.length,
         },
       },
       async (span) => {
         const out = await callModel({ system, userJson, model: ASSEMBLY_MODEL });
-        span.setAttribute('hz.assemble.output_bytes', out.length);
+        span.setAttribute(HZ.assembleOutputBytes, out.length);
         return out;
       },
     );

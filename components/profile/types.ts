@@ -4,10 +4,11 @@
  * the fixture in tests/fixtures/family-profile.ts (camelCase field names here vs.
  * the snake_case persistence shape; the server adapter bridges the two).
  *
- * The UI exposes three independent food TOGGLES (vegetarian / vegan / Indian-food-
- * matters), but `food` collapses them into one enum on submit:
+ * The UI exposes independent food TOGGLES (vegetarian / vegan / other dietary needs /
+ * Indian-food-matters), but `food` collapses them into one enum on submit:
  *   vegan ON            → 'vegan'
  *   else vegetarian ON  → 'vegetarian'
+ *   else other ON       → 'other'   (unlisted diets — Jain, halal, allergies… — per 08b-1)
  *   else                → 'none'
  * `indianFoodMatters` stays its own boolean.
  */
@@ -23,7 +24,7 @@ export interface FamilyProfile {
   hometown: string | null;
   spouse: boolean;
   children: Child[];
-  food: 'vegetarian' | 'vegan' | 'none';
+  food: 'vegetarian' | 'vegan' | 'none' | 'other';
   indianFoodMatters: boolean;
   /** Required, but always pre-selected to 'comfort' so the form is always valid. */
   budgetTier: 'value' | 'comfort' | 'luxury';

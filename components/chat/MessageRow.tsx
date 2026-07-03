@@ -19,12 +19,19 @@ import type { ChatMessage, ComponentPart } from '@/lib/chat/types';
 import { ChatStreamText } from './ChatStreamText';
 import { ProfileUpdatedChip, type ProfileUpdatedChipProps } from './ProfileUpdatedChip';
 import { AssemblyProgress } from './AssemblyProgress';
+import { ChatErrorBoundary } from './ChatErrorBoundary';
 import type { AssemblyProgressProps } from '@/lib/chat/types';
 
 /* ---- inline component registry ------------------------------------------- */
 /* Maps a component part name → renderer. `props` is narrowed here (the only
  * place the transport-level `unknown` is cast), keeping the boundary explicit. */
-function InlineComponent({ part }: { part: ComponentPart }) {
+function InlineComponent({
+  part,
+  onAssemblyComplete,
+}: {
+  part: ComponentPart;
+  onAssemblyComplete?: (result: unknown) => void;
+}) {
   switch (part.component) {
     case 'recommendation-set':
       return (
@@ -41,7 +48,12 @@ function InlineComponent({ part }: { part: ComponentPart }) {
     case 'profile-update':
       return <ProfileUpdatedChip {...(part.props as ProfileUpdatedChipProps)} />;
     case 'assembly-progress':
-      return <AssemblyProgress {...(part.props as AssemblyProgressProps)} />;
+      return (
+        <AssemblyProgress
+          {...(part.props as AssemblyProgressProps)}
+          onComplete={onAssemblyComplete}
+        />
+      );
     default:
       return null;
   }
@@ -51,9 +63,12 @@ export interface MessageRowProps {
   message: ChatMessage;
   /** True while THIS message is the live streaming turn (drives the caret). */
   streaming?: boolean;
+  /** Fired when an inline async assembly job lands its cards (L17) — the page uses it
+   *  to lock the trip-brief gates and surface the post-recommendation action bar. */
+  onAssemblyComplete?: (result: unknown) => void;
 }
 
-export function MessageRow({ message, streaming = false }: MessageRowProps) {
+export function MessageRow({ message, streaming = false, onAssemblyComplete }: MessageRowProps) {
   if (message.role === 'user') {
     const text = message.parts
       .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
@@ -91,7 +106,13 @@ export function MessageRow({ message, streaming = false }: MessageRowProps) {
               />
             );
           }
-          return <InlineComponent key={i} part={part} />;
+          // Error boundary per inline block (H7): one bad card (e.g. an image loader
+          // throwing) degrades to a warm line — it can never take down the chat.
+          return (
+            <ChatErrorBoundary key={i}>
+              <InlineComponent part={part} onAssemblyComplete={onAssemblyComplete} />
+            </ChatErrorBoundary>
+          );
         })}
       </div>
     </div>

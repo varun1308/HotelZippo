@@ -8,7 +8,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const ENV = { ROUTESTACK_API_KEY: 'rs_test_key', ROUTESTACK_API_SECRET: 'shhh', ROUTESTACK_API_URL: 'https://evolvemcp.routestack.ai' };
 const savedEnv = { ...process.env };
-beforeEach(() => Object.assign(process.env, ENV));
+beforeEach(() => {
+  Object.assign(process.env, ENV);
+  // next/jest loads .env.local, where a dev machine may have ROUTESTACK_MOCK=1 — the M26 guard
+  // would then (correctly) no-op every stage. Tests control the flag explicitly.
+  delete process.env.ROUTESTACK_MOCK;
+});
 afterEach(() => {
   process.env = { ...savedEnv };
 });
@@ -32,12 +37,16 @@ const SEARCH = {
 
 const DATES = { checkIn: '2026-08-01', checkOut: '2026-08-04' };
 
-/** Minimal Supabase fake capturing the hotels upsert. */
-function fakeClient() {
+/** Minimal Supabase fake capturing the hotels upsert. `existing` seeds the 12i-B guard query
+ * (select name+source for the destination's current hotels). */
+function fakeClient(existing: Array<{ name: string; source: string }> = []) {
   const upserts: { rows: unknown[]; onConflict?: string }[] = [];
   const client = {
     from(_t: string) {
       return {
+        select() {
+          return { eq: () => Promise.resolve({ data: existing, error: null }) };
+        },
         upsert(rows: unknown[], optsArg: { onConflict?: string }) {
           upserts.push({ rows, onConflict: optsArg?.onConflict });
           return Promise.resolve({ error: null, count: (rows as unknown[]).length });
@@ -96,5 +105,40 @@ describe('verifyAndStage', () => {
     const res = await verifyAndStage(client, 'Bali', [{ name: 'Nope', oneLineWhy: 'x' }], deps(fetchImpl), { dates: DATES });
     expect(res.staged).toBe(0);
     expect(upserts).toHaveLength(0); // no upsert call when nothing verified
+  });
+
+  // M24 (12i-B): a destination is either curated OR preview — never mixed.
+  it('refuses to seed a destination that already has curated hotels', async () => {
+    const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': SEARCH });
+    const { client, upserts } = fakeClient([{ name: 'Mulia Resort', source: 'curated' }]);
+    await expect(
+      verifyAndStage(client, 'Bali', [{ name: 'Mulia Resort', oneLineWhy: 'a' }], deps(fetchImpl), { dates: DATES }),
+    ).rejects.toThrow(/either curated OR preview/);
+    expect(upserts).toHaveLength(0); // nothing overwritten
+  });
+
+  // M26 (10e AC5): mock transport → no-op, nothing written.
+  it('no-ops (stages nothing) when the RouteStack transport is the demo mock', async () => {
+    const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': SEARCH });
+    const { client, upserts } = fakeClient();
+    const res = await verifyAndStage(
+      client,
+      'Bali',
+      [{ name: 'Mulia Resort', oneLineWhy: 'a' }],
+      { ...deps(fetchImpl), mock: true },
+      { dates: DATES },
+    );
+    expect(res.staged).toBe(0);
+    expect(res.verified).toEqual([]);
+    expect(upserts).toHaveLength(0);
+  });
+
+  it('no-ops when ROUTESTACK_MOCK=1 even without the deps.mock marker', async () => {
+    process.env.ROUTESTACK_MOCK = '1';
+    const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': SEARCH });
+    const { client, upserts } = fakeClient();
+    const res = await verifyAndStage(client, 'Bali', [{ name: 'Mulia Resort', oneLineWhy: 'a' }], deps(fetchImpl), { dates: DATES });
+    expect(res.staged).toBe(0);
+    expect(upserts).toHaveLength(0);
   });
 });

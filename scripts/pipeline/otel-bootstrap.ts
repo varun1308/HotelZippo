@@ -19,6 +19,7 @@ import {
   SEMRESATTRS_DEPLOYMENT_ENVIRONMENT,
 } from '@opentelemetry/semantic-conventions';
 import { applyDash0Headers } from '@/lib/otel/dash0-headers';
+import { AiMetadataSpanProcessor } from '@/lib/otel/ai-metadata';
 
 // Map DASH0_API_KEY → OTEL_EXPORTER_OTLP_HEADERS before the exporter reads env (same as the web app).
 applyDash0Headers();
@@ -30,7 +31,9 @@ const provider = new NodeTracerProvider({
   }),
   // OTLPTraceExporter reads OTEL_EXPORTER_OTLP_ENDPOINT / _HEADERS / _PROTOCOL from env, exactly like
   // the web app's @vercel/otel exporter — so one set of env vars configures both processes.
-  spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
+  // AiMetadataSpanProcessor FIRST (parity with lib/otel/register.ts): copies the AI SDK's
+  // `ai.telemetry.metadata.hz.*` attributes onto bare `hz.*` before the batch export.
+  spanProcessors: [new AiMetadataSpanProcessor(), new BatchSpanProcessor(new OTLPTraceExporter())],
 });
 
 provider.register();

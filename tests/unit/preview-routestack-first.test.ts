@@ -7,7 +7,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const ENV = { ROUTESTACK_API_KEY: 'rs_test_key', ROUTESTACK_API_SECRET: 'shhh', ROUTESTACK_API_URL: 'https://evolvemcp.routestack.ai' };
 const savedEnv = { ...process.env };
-beforeEach(() => Object.assign(process.env, ENV));
+beforeEach(() => {
+  Object.assign(process.env, ENV);
+  // next/jest loads .env.local, where a dev machine may have ROUTESTACK_MOCK=1 — the M26 guard
+  // would then (correctly) no-op every seed. Tests control the flag explicitly.
+  delete process.env.ROUTESTACK_MOCK;
+});
 afterEach(() => {
   process.env = { ...savedEnv };
 });
@@ -29,11 +34,15 @@ const DETAILS = {
 };
 const DATES = { checkIn: '2026-08-01', checkOut: '2026-08-04' };
 
-function fakeClient() {
+function fakeClient(existing: Array<{ name: string; source: string }> = []) {
   const upserts: { rows: Array<Record<string, unknown>> }[] = [];
   const client = {
     from() {
       return {
+        // The 12i-B guard reads the destination's current hotels (select name+source → eq).
+        select() {
+          return { eq: () => Promise.resolve({ data: existing, error: null }) };
+        },
         upsert(rows: Array<Record<string, unknown>>) {
           upserts.push({ rows });
           // The seed now reads ids back via .select('id, name') to cache the RS-id mapping.
@@ -117,6 +126,36 @@ describe('seedPreviewFromRouteStack', () => {
   it('returns found:0 staged:0 when RouteStack has no inventory', async () => {
     const empty = { success: true, message: null, code: 200, result: { correlationId: 'c', token: 't', result: [] } };
     const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': empty });
+    const { client, upserts } = fakeClient();
+    const res = await seedPreviewFromRouteStack(client, 'Bali', deps(fetchImpl), { dates: DATES });
+    expect(res).toEqual({ found: 0, staged: 0, hotels: [] });
+    expect(upserts).toHaveLength(0);
+  });
+
+  // M24 (12i-B): never overwrite a curated destination with preview rows.
+  it('refuses to seed a destination that already has curated hotels', async () => {
+    const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': SEARCH, '/mcp/hotel/get-hotel-details-and-rates': DETAILS });
+    const { client, upserts } = fakeClient([{ name: 'Alassari Plantation', source: 'curated' }]);
+    await expect(seedPreviewFromRouteStack(client, 'Bali', deps(fetchImpl), { dates: DATES })).rejects.toThrow(
+      /either curated OR preview/,
+    );
+    expect(upserts).toHaveLength(0);
+  });
+
+  // M26 (10e AC5): mock transport → no-op; no hotels rows, no id-cache writes.
+  it('no-ops with deps.mock (nothing staged, id-cache untouched)', async () => {
+    const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': SEARCH, '/mcp/hotel/get-hotel-details-and-rates': DETAILS });
+    const { client, upserts } = fakeClient();
+    const { cache, saved } = fakeCache();
+    const res = await seedPreviewFromRouteStack(client, 'Bali', { ...deps(fetchImpl, cache), mock: true }, { dates: DATES });
+    expect(res).toEqual({ found: 0, staged: 0, hotels: [] });
+    expect(upserts).toHaveLength(0);
+    expect(saved).toHaveLength(0);
+  });
+
+  it('no-ops when ROUTESTACK_MOCK=1 even without the deps.mock marker', async () => {
+    process.env.ROUTESTACK_MOCK = '1';
+    const { fetchImpl } = makeMockFetch({ '/mcp/hotel/search-hotels': SEARCH, '/mcp/hotel/get-hotel-details-and-rates': DETAILS });
     const { client, upserts } = fakeClient();
     const res = await seedPreviewFromRouteStack(client, 'Bali', deps(fetchImpl), { dates: DATES });
     expect(res).toEqual({ found: 0, staged: 0, hotels: [] });

@@ -39,18 +39,25 @@ describe('session snapshot persistence', () => {
     expect(snap).toBe('second');
   });
 
-  it('loadLatestSnapshot returns the most recent by last_active', async () => {
-    // The rolling-session design keeps one row, but loadLatest must still order by
-    // last_active so "most recent" is well-defined even if extra rows ever exist.
+  it('one rolling row per user is DB-enforced — a later save wins', async () => {
+    // Migration 0019 added unique(user_id): the single-row invariant is now a constraint,
+    // not a convention. A bare second insert must 23505; the upsert path replaces in place.
     const admin = serviceClient();
     await admin.from('sessions').delete().eq('user_id', user.id);
     await admin
       .from('sessions')
       .insert({ user_id: user.id, session_summary: 'older', last_active: '2026-01-01T00:00:00Z' });
-    await admin
+    const { error } = await admin
       .from('sessions')
       .insert({ user_id: user.id, session_summary: 'newer', last_active: '2026-06-05T00:00:00Z' });
+    expect(error?.code).toBe('23505');
 
+    await admin
+      .from('sessions')
+      .upsert(
+        { user_id: user.id, session_summary: 'newer', last_active: '2026-06-05T00:00:00Z' },
+        { onConflict: 'user_id' },
+      );
     const snap = await loadLatestSnapshot(user.client);
     expect(snap).toBe('newer');
   });

@@ -218,7 +218,18 @@ function ConfirmScreen({
     onPartyChange({ ...party, childAges });
   }
 
-  const datesValid = Boolean(dates && dates.checkIn && dates.checkOut);
+  // Date sanity BEFORE the paid live call: past check-ins and non-positive stays would
+  // otherwise surface as generic RouteStack failures. ISO yyyy-mm-dd compares lexically.
+  const today = todayLocalIso();
+  const hasBothDates = Boolean(dates?.checkIn && dates?.checkOut);
+  const checkInPast = Boolean(dates?.checkIn && dates.checkIn < today);
+  const checkOutNotAfter = Boolean(dates?.checkIn && dates?.checkOut && dates.checkOut <= dates.checkIn);
+  const dateError = checkInPast
+    ? 'Check-in can’t be in the past — pick a date from today onwards.'
+    : checkOutNotAfter
+      ? 'Check-out needs to be after check-in.'
+      : null;
+  const datesValid = hasBothDates && !dateError;
   const canContinue = datesValid && party.adults >= 1;
 
   return (
@@ -270,7 +281,13 @@ function ConfirmScreen({
       </Section>
 
       <Section icon={CalendarDays} title="Dates">
-        <DateFields dates={dates} onDatesChange={onDatesChange} />
+        <DateFields dates={dates} onDatesChange={onDatesChange} minCheckIn={today} invalid={Boolean(dateError)} />
+        {dateError && (
+          // Neutral palette (amber/red are RESERVED for hard flags) — mirrors the grandparent nudge.
+          <p role="alert" className="mt-1 rounded-input bg-surface-2 px-3 py-2 text-[13px] leading-[1.5] text-text-secondary">
+            {dateError}
+          </p>
+        )}
       </Section>
 
       <button
@@ -288,14 +305,18 @@ function ConfirmScreen({
 function DateFields({
   dates,
   onDatesChange,
+  minCheckIn,
+  invalid = false,
 }: {
   dates: BookingDates | null;
   onDatesChange: (dates: BookingDates) => void;
+  minCheckIn?: string;
+  invalid?: boolean;
 }) {
   const hasDates = Boolean(dates?.checkIn && dates?.checkOut);
-  // Collapsed-to-text only when we arrive with both dates resolved; otherwise
-  // (month-only trip) we open straight into the inputs to collect them.
-  const [editing, setEditing] = useState(!hasDates);
+  // Collapsed-to-text only when we arrive with both dates resolved AND valid; otherwise
+  // (month-only trip, or a stale/past brief date) we open straight into the inputs.
+  const [editing, setEditing] = useState(!hasDates || invalid);
 
   const checkIn = dates?.checkIn ?? '';
   const checkOut = dates?.checkOut ?? '';
@@ -304,7 +325,7 @@ function DateFields({
     onDatesChange({ checkIn, checkOut, ...next });
   }
 
-  if (hasDates && !editing) {
+  if (hasDates && !editing && !invalid) {
     return (
       <div className="flex items-center justify-between gap-3 rounded-input border border-border bg-surface px-3 py-[10px]">
         <span className="text-[14.5px] text-text">
@@ -329,6 +350,7 @@ function DateFields({
         <input
           type="date"
           value={checkIn}
+          min={minCheckIn}
           aria-label="Check-in date"
           onChange={(e) => update({ checkIn: e.target.value })}
           className="h-[42px] rounded-input border border-border bg-surface px-3 text-[14px] text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -612,6 +634,13 @@ function StepButton({
 function clamp(n: number, lo: number, hi: number) {
   if (Number.isNaN(n)) return lo;
   return Math.min(hi, Math.max(lo, n));
+}
+
+/** Today as LOCAL yyyy-mm-dd (not toISOString — that's UTC and drifts across midnight). */
+function todayLocalIso(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function formatDateRange(checkIn: string, checkOut: string) {

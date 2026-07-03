@@ -137,12 +137,12 @@ export async function generateSnapshot(
       }
 
       const tokens = estimateTokens(summary);
-      span.setAttribute('hz.snapshot.estimated_tokens', tokens);
-      span.setAttribute('hz.snapshot.token_ceiling', SNAPSHOT_TOKEN_CEILING);
+      span.setAttribute(HZ.snapshotEstimatedTokens, tokens);
+      span.setAttribute(HZ.snapshotTokenCeiling, SNAPSHOT_TOKEN_CEILING);
       if (tokens > SNAPSHOT_TOKEN_CEILING) {
         // Over the hard ceiling: record it for Dash0 but STILL return the summary
         // (prompt-enforced budget; truncating mid-sentence is worse). Spec 08b-3 + 14.
-        span.setAttribute('hz.snapshot.over_ceiling', true);
+        span.setAttribute(HZ.snapshotOverCeiling, true);
         span.addEvent('snapshot_over_token_ceiling', { estimated_tokens: tokens });
       }
       return summary;

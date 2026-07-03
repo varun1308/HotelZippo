@@ -11,32 +11,26 @@
  * snapshot API route uses a request-scoped server client (saveSnapshot at trigger points). */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Upsert the user's rolling session snapshot and bump last_active. Reuses the existing
- * working row (so "most recent" stays a single row) or inserts the first one. The caller
- * supplies a client already authenticated as the user (browser anon client or a
- * request-scoped server client) — RLS WITH CHECK enforces ownership. */
+/** Upsert the user's rolling session snapshot and bump last_active. ONE row per user is
+ * enforced by unique(user_id) (migration 0019), so this is a plain race-safe upsert on
+ * user_id — the old select-then-insert could double-insert under concurrency, and a
+ * duplicate row made "the most recent session" ambiguous. The caller supplies a client
+ * already authenticated as the user (browser anon client or a request-scoped server
+ * client) — RLS WITH CHECK enforces ownership. */
 export async function saveSnapshot(
   client: SupabaseClient,
   userId: string,
   summary: string,
   opts: { tripBriefId?: string | null } = {},
 ): Promise<void> {
-  const { data: existing } = await client
-    .from('sessions')
-    .select('id')
-    .order('last_active', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
   const row = {
-    ...(existing?.id ? { id: existing.id } : {}),
     user_id: userId,
     session_summary: summary,
     last_active: new Date().toISOString(),
     ...(opts.tripBriefId !== undefined ? { trip_brief_id: opts.tripBriefId } : {}),
   };
 
-  const { error } = await client.from('sessions').upsert(row);
+  const { error } = await client.from('sessions').upsert(row, { onConflict: 'user_id' });
   if (error) throw error;
 }
 

@@ -1,7 +1,7 @@
 /* useChatStream: reduces injected chunks into messages + status transitions. */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useChatStream } from '@/lib/chat/useChatStream';
-import type { StreamChunk, StreamSource } from '@/lib/chat/types';
+import type { ChatMessage, StreamChunk, StreamSource } from '@/lib/chat/types';
 
 /** A deterministic source that yields a fixed list of chunks. */
 function sourceFrom(chunks: StreamChunk[]): StreamSource {
@@ -117,5 +117,58 @@ describe('useChatStream', () => {
       await result.current.sendMessage('   ');
     });
     expect(result.current.messages).toHaveLength(0);
+  });
+
+  it('hands the source the PRIOR history on each turn (L18 — read from the ref, not an updater side effect)', async () => {
+    const histories: number[] = [];
+    const source: StreamSource = async function* (_input, history) {
+      histories.push(history.length);
+      yield { type: 'text-delta', delta: 'ok' };
+      yield { type: 'done' };
+    };
+    const { result } = renderHook(() => useChatStream({ source }));
+
+    await act(async () => {
+      await result.current.sendMessage('first');
+    });
+    await act(async () => {
+      await result.current.sendMessage('second');
+    });
+
+    // Turn 1: empty prior history. Turn 2: user 'first' + the assistant reply.
+    expect(histories).toEqual([0, 2]);
+  });
+
+  it('appends a LATE initialMessages seed without dropping in-flight conversation (M10)', async () => {
+    const source = sourceFrom([{ type: 'text-delta', delta: 'hi Raj' }, { type: 'done' }]);
+    const { result, rerender } = renderHook(
+      ({ initialMessages }) => useChatStream({ source, initialMessages }),
+      { initialProps: { initialMessages: [] as ChatMessage[] } },
+    );
+
+    // The user types BEFORE the async re-attach load settles…
+    await act(async () => {
+      await result.current.sendMessage('hello there');
+    });
+    expect(result.current.messages).toHaveLength(2);
+
+    // …then the load settles and the seed arrives as a prop change (no remount).
+    const seed = [
+      {
+        id: 'reattach-job-1',
+        role: 'assistant' as const,
+        parts: [{ type: 'text' as const, text: 'Picking your recommendations back up…' }],
+      },
+    ];
+    act(() => rerender({ initialMessages: seed }));
+
+    // Everything the user typed survives; the seed is appended once.
+    expect(result.current.messages).toHaveLength(3);
+    expect(result.current.messages[0].parts[0]).toEqual({ type: 'text', text: 'hello there' });
+    expect(result.current.messages[2].id).toBe('reattach-job-1');
+
+    // A re-render with the same seed does NOT duplicate it.
+    act(() => rerender({ initialMessages: seed }));
+    expect(result.current.messages).toHaveLength(3);
   });
 });

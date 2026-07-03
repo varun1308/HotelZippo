@@ -7,6 +7,8 @@ import {
   buildRoomsOccupancy,
   resolveDates,
   isIsoDate,
+  validateParty,
+  PARTY_LIMITS,
 } from '@/lib/booking/party';
 import type { FamilyProfile } from '@/components/profile';
 
@@ -62,6 +64,43 @@ describe('defaultRoomCount', () => {
   it('adds a room when grandparents are hinted', () => {
     expect(defaultRoomCount(2, true)).toBe(2);
     expect(defaultRoomCount(4, true)).toBe(3);
+  });
+});
+
+describe('validateParty (route-boundary guard — untrusted client input)', () => {
+  const VALID = { adults: 2, childAges: [2, 7], rooms: 2 };
+
+  it('accepts a sane party and returns a CLEAN copy (extra keys dropped)', () => {
+    const r = validateParty({ ...VALID, children: 2, extra: 'ignored' });
+    expect(r).toEqual({ ok: true, party: { adults: 2, childAges: [2, 7], rooms: 2 } });
+  });
+
+  it('rejects the DoS shapes: huge/absent/non-integer rooms and adults', () => {
+    expect(validateParty({ ...VALID, rooms: 1e9 }).ok).toBe(false); // would OOM buildRoomsOccupancy
+    expect(validateParty({ ...VALID, adults: 1e9 }).ok).toBe(false);
+    expect(validateParty({ ...VALID, rooms: 0 }).ok).toBe(false);
+    expect(validateParty({ ...VALID, rooms: 1.5 }).ok).toBe(false);
+    expect(validateParty({ ...VALID, adults: '2' }).ok).toBe(false);
+    expect(validateParty({ ...VALID, adults: 0 }).ok).toBe(false);
+    expect(validateParty(null).ok).toBe(false);
+    expect(validateParty('party').ok).toBe(false);
+    expect(validateParty([1, 2]).ok).toBe(false);
+  });
+
+  it('enforces the caps (adults/rooms/children ≤ 8; ages 0-17 integers)', () => {
+    expect(validateParty({ adults: PARTY_LIMITS.maxAdults, childAges: [], rooms: 1 }).ok).toBe(true);
+    expect(validateParty({ adults: PARTY_LIMITS.maxAdults + 1, childAges: [], rooms: 1 }).ok).toBe(false);
+    expect(validateParty({ adults: 2, childAges: Array(PARTY_LIMITS.maxChildren + 1).fill(5), rooms: 1 }).ok).toBe(false);
+    expect(validateParty({ adults: 2, childAges: [18], rooms: 1 }).ok).toBe(false);
+    expect(validateParty({ adults: 2, childAges: [-1], rooms: 1 }).ok).toBe(false);
+    expect(validateParty({ adults: 2, childAges: [2.5], rooms: 1 }).ok).toBe(false);
+    expect(validateParty({ adults: 2, childAges: 'none', rooms: 1 }).ok).toBe(false);
+  });
+
+  it('rejects rooms > adults with a clear message (every room needs an adult — never silently collapsed)', () => {
+    const r = validateParty({ adults: 2, childAges: [], rooms: 3 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toMatch(/room needs at least one adult/i);
   });
 });
 

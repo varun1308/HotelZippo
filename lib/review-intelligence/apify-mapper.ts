@@ -18,6 +18,13 @@ export interface ReviewFetchOpts {
   since: Date;
 }
 
+/** The LIVE per-source review cap (apify.ts). Exported so every producer of a reviews-actor
+ * input — the live scraper AND the dev preseed (scripts/dev/preseed-route-cache.ts) — shares
+ * ONE env default and their actor-cache keys match (a diverging default = guaranteed miss). */
+export function reviewsMaxResults(): number {
+  return Number(process.env.APIFY_REVIEWS_MAX_RESULTS ?? 600);
+}
+
 /** TripAdvisor-reviews actor input for one hotel page URL. */
 export function buildTripadvisorReviewsInput(url: string, opts: ReviewFetchOpts): Record<string, unknown> {
   return {

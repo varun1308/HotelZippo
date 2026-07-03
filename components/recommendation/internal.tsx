@@ -4,6 +4,7 @@
  * arbitrary [var(--token)] is used only where no utility exists (amber/red are NOT
  * themed by design — see specs/05 — so flag colours always read from CSS vars). */
 import Image from 'next/image';
+import { isAllowedImageSrc } from './allowed-image-hosts.mjs';
 import {
   BedDouble,
   Waves,
@@ -37,7 +38,20 @@ export function PhotoSlot({ label }: { label?: string }) {
   );
 }
 
-/** Hero image — real photo when a url exists, else the placeholder. */
+/** True for an absolute http(s) URL — the only thing a plain <img> can safely load. */
+function isHttpUrl(src: string): boolean {
+  return /^https?:\/\//i.test(src);
+}
+
+/** Hero image — real photo when a url exists, else the placeholder.
+ *
+ *  next/image THROWS at render for hostnames missing from remotePatterns, so a hero
+ *  URL is validated against the SAME allowlist (allowed-image-hosts.mjs) first:
+ *    • allowlisted → optimized <Image> (the normal path);
+ *    • non-allowlisted http(s) (e.g. a new RouteStack CDN host on a preview hotel)
+ *      → plain <img> (the established ShortlistPanel Thumb pattern) — unoptimized
+ *      but rendered, never a crash;
+ *    • not a URL at all → the elegant placeholder (spec 05: never broken). */
 export function Hero({
   src,
   alt,
@@ -48,6 +62,13 @@ export function Hero({
   label?: string;
 }) {
   if (!src) return <PhotoSlot label={label} />;
+  if (!isAllowedImageSrc(src)) {
+    if (!isHttpUrl(src)) return <PhotoSlot label={label} />;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover" />
+    );
+  }
   return (
     <Image
       src={src}

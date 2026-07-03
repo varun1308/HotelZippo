@@ -4,7 +4,11 @@
 jest.mock('server-only', () => ({}));
 
 const mockSeed = jest.fn();
-jest.mock('@/lib/preview/verify', () => ({ seedPreviewFromRouteStack: (...a: unknown[]) => mockSeed(...a) }));
+const mockBlocked = jest.fn().mockReturnValue(false);
+jest.mock('@/lib/preview/verify', () => ({
+  seedPreviewFromRouteStack: (...a: unknown[]) => mockSeed(...a),
+  previewSeedBlockedByMock: (...a: unknown[]) => mockBlocked(...a),
+}));
 
 import { ensurePreviewSeed, runtimeSeedEnabled } from '@/lib/preview/runtime-seed';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -88,11 +92,24 @@ describe('ensurePreviewSeed', () => {
     expect(mockSeed).not.toHaveBeenCalled();
   });
 
-  it('seed returns 0 → empty', async () => {
+  it('seed returns 0 → empty, latched RETRYABLE failed (12i-C: done means seeded), never done', async () => {
     mockSeed.mockResolvedValue({ found: 0, staged: 0, hotels: [] });
-    const { client } = fakeClient(null);
+    const { client, calls } = fakeClient(null);
     const out = await ensurePreviewSeed(client, 'Bali', deps);
     expect(out).toEqual({ state: 'empty' });
+    // A 0-hotel seed (e.g. a RouteStack empty-inventory blip) must not latch 'done' forever.
+    expect(calls.updates.some((u) => u.status === 'done')).toBe(false);
+    expect(calls.updates.some((u) => u.status === 'failed' && u.hotel_count === 0)).toBe(true);
+  });
+
+  it('mock RouteStack transport → no-op failed outcome; latch untouched (10e AC5)', async () => {
+    mockBlocked.mockReturnValueOnce(true);
+    const { client, calls } = fakeClient(null);
+    const out = await ensurePreviewSeed(client, 'Bali', deps);
+    expect(out).toMatchObject({ state: 'failed', reason: expect.stringMatching(/mock/) });
+    expect(mockSeed).not.toHaveBeenCalled();
+    expect(calls.insert).toBe(0); // the seed-once latch is not burned by a demo session
+    expect(calls.updates).toHaveLength(0);
   });
 
   it('seed throws → failed (latch marked failed)', async () => {

@@ -22,9 +22,11 @@ import { ArrowUp } from 'lucide-react';
 const MAX_HEIGHT = 160;
 
 /** Imperative handle so suggestion chips can prefill + focus the composer
- *  (matching the prototype, where a chip readies the input rather than sending). */
+ *  (matching the prototype, where a chip readies the input rather than sending),
+ *  and the action bar's escape hatch can focus it (spec 05 §7). */
 export interface ComposerHandle {
   prefill: (text: string) => void;
+  focus: () => void;
 }
 
 export interface ComposerProps {
@@ -58,6 +60,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [disabled]);
 
   useImperativeHandle(handleRef, () => ({
+    focus() {
+      ref.current?.focus();
+    },
     prefill(text: string) {
       setValue(text);
       requestAnimationFrame(() => {

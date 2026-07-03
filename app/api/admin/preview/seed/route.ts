@@ -13,6 +13,7 @@ import { createServiceClient } from '@/lib/db/server';
 import { DESTINATIONS } from '@/lib/db/schemas';
 import { seedPreviewFromRouteStack } from '@/lib/preview/verify';
 import { createRouteStackFetch } from '@/lib/booking/transport';
+import { routeStackMockEnabled } from '@/lib/booking/mock-transport';
 import { makeSupabaseIdCache } from '@/lib/booking/id-cache';
 import { resolveCityLocation } from '@/lib/curation/google-places';
 
@@ -34,9 +35,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid_destination' }, { status: 400 });
   }
 
+  // 10e AC5: refuse to seed while the mock RouteStack transport is active — canned "Mock …"
+  // hotels must never land in the real hotels table (they persist after the flag is unset).
+  if (routeStackMockEnabled()) {
+    return NextResponse.json({ error: 'routestack_mock_active' }, { status: 409 });
+  }
+
   try {
     // RouteStack-first: take the real bookable inventory + grounded hero images, stage as preview.
     const supabase = createServiceClient();
+
+    // 12i-B: a destination is either curated OR preview — refuse to seed over curated hotels.
+    // (seedPreviewFromRouteStack re-checks and hard-fails too; this gives the UI a clean 409.)
+    const { data: nonPreview } = await supabase
+      .from('hotels')
+      .select('id')
+      .eq('destination', destination!)
+      .neq('source', 'preview')
+      .limit(1);
+    if ((nonPreview ?? []).length > 0) {
+      return NextResponse.json({ error: 'destination_curated' }, { status: 409 });
+    }
     let cache;
     try {
       cache = makeSupabaseIdCache(supabase);

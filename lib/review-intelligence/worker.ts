@@ -19,8 +19,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { scrapeHotelReviews, type ScrapeDeps, type ScrapeTarget } from './apify';
 import { tagReviews } from './tagging';
 import { storeRawReviews, storeRawPayloads, loadHotelReviews } from './store';
-import { prepareForSynthesis, buildSynthesisInput } from './format';
-import { synthesise, type SynthesiseDeps, type SynthesisOutput } from './synthesis';
+import { prepareForSynthesis, buildSynthesisInput, filterToSynthesisWindow } from './format';
+import { synthesise, type GateResult, type SynthesiseDeps, type SynthesisOutput } from './synthesis';
 
 /** Per-hotel status enum (mirrors the pipeline_run_hotels.status comment). */
 export type HotelStatus = 'pending' | 'scraping' | 'processing' | 'synthesising' | 'complete' | 'failed';
@@ -48,20 +48,22 @@ interface HotelRow {
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Map a synthesis output → a hotel_intelligence row payload (drops `confidence`, which the
- * gate already consumed; adds DB-managed last_refreshed + low_confidence). */
+/** Map a synthesis output → a hotel_intelligence row payload (drops the `confidence` BLOCK
+ * but persists its `overall` level + the gate's low_confidence, so the gate outcome of a
+ * published record is inspectable after the run — TC-P12; adds DB-managed last_refreshed). */
 export function toIntelligenceRow(
   hotelId: string,
   output: SynthesisOutput,
-  lowConfidence: boolean,
+  gate: GateResult,
   now: Date,
 ): Record<string, unknown> {
-  const { confidence: _confidence, ...intel } = output;
+  const { confidence, ...intel } = output;
   return {
     hotel_id: hotelId,
     ...intel,
+    confidence: confidence.overall,
     last_refreshed: now.toISOString(),
-    low_confidence: lowConfidence,
+    low_confidence: gate.lowConfidence,
   };
 }
 
@@ -94,8 +96,15 @@ export async function processHotel(
   };
 
   try {
-    await setStatus('scraping', { started_at: now.toISOString(), error_reason: null });
+    await setStatus('scraping', { started_at: now.toISOString(), error_reason: null, scrape_gaps: null });
     const scraped = await scrapeHotelReviews(target, deps.scrape);
+
+    // TC-P3: RECORD the per-source gap — a whole-source outage on an otherwise-complete hotel
+    // must be visible in run details, not silently dropped.
+    const scrapeGaps = scraped.sources
+      .filter((s) => !s.ok)
+      .map((s) => ({ source: s.source, error: s.error ?? 'unknown scrape failure' }));
+    const gapPatch = { scrape_gaps: scrapeGaps.length > 0 ? scrapeGaps : null };
 
     // TC-P1: zero reviews → skip synthesis, mark failed, continue.
     if (scraped.reviews.length === 0) {
@@ -103,11 +112,12 @@ export async function processHotel(
         reviews_scraped: 0,
         error_reason: 'zero reviews returned',
         finished_at: new Date().toISOString(),
+        ...gapPatch,
       });
       return 'failed';
     }
 
-    await setStatus('processing', { reviews_scraped: scraped.reviews.length });
+    await setStatus('processing', { reviews_scraped: scraped.reviews.length, ...gapPatch });
 
     // Best-effort: bank the untouched actor payloads so the mapper can be re-run later WITHOUT a
     // paid re-scrape (npm run pipeline:remap). A payload-store failure must NOT fail an otherwise
@@ -125,14 +135,18 @@ export async function processHotel(
     await storeRawReviews(client, hotel.id, runId, tagged);
 
     // Synthesise from ALL stored reviews (permanent accumulation), filtered to 12mo + capped.
+    // review_count_* are computed over the SAME 12-month window the synthesis lines use (spec 02
+    // Stage 5 step 1) — the full permanent store would misstate the corpus and mis-feed the
+    // "<10 reviews → low confidence" rule.
     const allReviews = await loadHotelReviews(client, hotel.id);
+    const windowed = filterToSynthesisWindow(allReviews, now);
     const segments = prepareForSynthesis(allReviews, now);
-    const reviewCountFamily = allReviews.filter((r) => r.is_family).length;
-    const reviewCountIndian = allReviews.filter((r) => r.is_indian).length;
+    const reviewCountFamily = windowed.filter((r) => r.is_family).length;
+    const reviewCountIndian = windowed.filter((r) => r.is_indian).length;
     const input = buildSynthesisInput({
       hotelName: hotel.name,
       destination: hotel.destination,
-      reviewCountTotal: allReviews.length,
+      reviewCountTotal: windowed.length,
       reviewCountFamily,
       reviewCountIndian,
       segments,
@@ -144,10 +158,16 @@ export async function processHotel(
     // Upsert hotel_intelligence (replaces prior on hotel_id), apply the confidence gate.
     const { error } = await client
       .from('hotel_intelligence')
-      .upsert(toIntelligenceRow(hotel.id, output, gate.lowConfidence, new Date()), { onConflict: 'hotel_id' });
+      .upsert(toIntelligenceRow(hotel.id, output, gate, new Date()), { onConflict: 'hotel_id' });
     if (error) throw new Error(`hotel_intelligence upsert failed: ${error.message}`);
 
-    await setStatus('complete', { finished_at: new Date().toISOString(), error_reason: null });
+    // TC-P12: persist the gate outcome — medium-confidence hotels land in the human review
+    // queue (surfaced by /api/admin/pipeline/status), instead of publishing indistinguishably.
+    await setStatus('complete', {
+      finished_at: new Date().toISOString(),
+      error_reason: null,
+      review_queue: gate.reviewQueue,
+    });
     return 'complete';
   } catch (e) {
     // Any failure (scrape/store/synthesis/upsert) → mark failed, continue the run (TC-P2/P14).

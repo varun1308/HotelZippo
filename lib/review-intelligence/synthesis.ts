@@ -11,6 +11,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import type { Span } from '@opentelemetry/api';
 import { withSpan, HZ } from '@/lib/otel/trace';
 import { SIGNAL_STRENGTHS, hardFlagSchema } from '@/lib/db/schemas';
 
@@ -104,6 +105,23 @@ function stripFence(text: string): string {
   return (fenced ? fenced[1] : text).trim();
 }
 
+/** Cap on the raw model response recorded to OTEL/console on a malformed output. */
+const RAW_LOG_MAX_CHARS = 20_000;
+
+/** TC-P14 (spec 02 / 14): the paid, non-deterministic model response must be RECORDED when it
+ * fails validation — a span event (→ Dash0) AND a structured console.error (→ Vercel/worker
+ * logs) — otherwise it is unrecoverable and the failure is undebuggable. Bounded to 20k chars. */
+function recordMalformedRaw(span: Span, reason: string, raw: string): void {
+  const bounded = raw.length > RAW_LOG_MAX_CHARS ? `${raw.slice(0, RAW_LOG_MAX_CHARS)}…[truncated ${raw.length} chars total]` : raw;
+  span.addEvent('synthesis.malformed_output', {
+    [HZ.reason]: reason,
+    [HZ.rawResponse]: bounded,
+    [HZ.rawLength]: raw.length,
+  });
+  // eslint-disable-next-line no-console
+  console.error(`[synthesis] malformed model output (${reason}; TC-P14) — raw response follows:\n${bounded}`);
+}
+
 const defaultCallModel: SynthesisCallModel = async ({ system, input, model }) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -176,10 +194,12 @@ export async function synthesise(
       try {
         parsed = JSON.parse(stripFence(raw));
       } catch (e) {
+        recordMalformedRaw(span, 'invalid JSON', raw);
         throw new SynthesisError('synthesis output was not valid JSON', 'malformed_output', raw, e);
       }
       const result = synthesisOutputSchema.safeParse(parsed);
       if (!result.success) {
+        recordMalformedRaw(span, 'schema validation failed', raw);
         throw new SynthesisError(
           `synthesis output failed schema validation: ${result.error.message}`,
           'malformed_output',
@@ -188,9 +208,22 @@ export async function synthesise(
       }
 
       const gate = confidenceGate(result.data.confidence.overall);
-      span.setAttribute('hz.confidence', result.data.confidence.overall);
-      span.setAttribute('hz.hard_flag_count', result.data.hard_flags.length);
-      span.setAttribute('hz.low_confidence', gate.lowConfidence);
+      span.setAttribute(HZ.confidence, result.data.confidence.overall);
+      span.setAttribute(HZ.hardFlagCount, result.data.hard_flags.length);
+      span.setAttribute(HZ.lowConfidence, gate.lowConfidence);
+      span.setAttribute(HZ.reviewQueue, gate.reviewQueue);
+      span.setAttribute(HZ.confidenceAlert, gate.alert);
+      if (gate.alert) {
+        // TC-P12 low-confidence ALERT: loud + queryable. The span event feeds the Dash0 alert
+        // rule; the console.error lands in worker/Vercel logs.
+        span.addEvent('synthesis.low_confidence_alert', {
+          [HZ.confidence]: result.data.confidence.overall,
+        });
+        // eslint-disable-next-line no-console
+        console.error(
+          '[synthesis] LOW-CONFIDENCE gate (TC-P12): publishing with low_confidence=true — suppressed downstream until reviewed/re-run',
+        );
+      }
       return { output: result.data, gate };
     },
   );

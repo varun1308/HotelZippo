@@ -176,13 +176,30 @@ curation_hotels (
 )
 ```
 
+## Later-phase tables (added after the core 10)
+
+Column-level detail for these lives in [`/specs/07-data-model.md`](../specs/07-data-model.md) (the maintained list) and their migrations — this doc keeps only the roster to avoid drift:
+
+| Table | Migration | Purpose | RLS |
+|---|---|---|---|
+| `routestack_destinations`, `routestack_hotels` | 0011/0012 | Cache RouteStack ids to avoid paid re-searches | service-role only |
+| `apify_runs` | 0013 | Apify run ledger (12h) | service-role only |
+| `preview_seeds` | 0014 | Runtime preview-seed latch (12i-C) | service-role only |
+| `raw_routestack_payloads` | 0015 | Raw RouteStack payload storage (flag-gated) | service-role only |
+| `booking_orders` | 0016 | Pending/linked booking ledger (10d) | owner-read |
+| `webhook_events` | 0016 | Raw webhook event audit (10d) | service-role only |
+| `recommendation_jobs` | 0018/0019 | Async assembly jobs (03c); `conversation_id`, in-flight `(user_id, input_hash)` unique index | owner-read |
+
+Notable invariants from 0019–0021 (2026-07-03 review sweep): `sessions`/`shortlists` gained `unique(user_id)`; auth email changes propagate to `public.users`; `raw_reviews` dedup index is 5-column `NULLS NOT DISTINCT` (incl. `anon_text_hash`); `pipeline_run_hotels` records `scrape_gaps`/`review_queue`; `hotel_intelligence.confidence` persists the gate outcome.
+
 ## Row-Level Security plan
 
 | Table | Policy |
 |---|---|
 | `family_profiles`, `trip_briefs`, `sessions`, `shortlists` | Owner-only: `auth.uid() = user_id`. Each user reads/writes only their own rows. |
 | `hotels`, `hotel_intelligence` | Read-only reference data for **authenticated** users. No client writes. |
-| `raw_reviews`, `raw_review_payloads`, `pipeline_runs`, `pipeline_run_hotels`, `curation_hotels` | **Service-role / admin only** — never client-readable. |
+| `booking_orders`, `recommendation_jobs` | Owner-read (`auth.uid() = user_id`); writes via service role only. |
+| `raw_reviews`, `raw_review_payloads`, `pipeline_runs`, `pipeline_run_hotels`, `curation_hotels`, `routestack_*`, `apify_runs`, `preview_seeds`, `raw_routestack_payloads`, `webhook_events` | **Service-role / admin only** — never client-readable. |
 
 RLS verification (Phase 1 acceptance, 15): **user A cannot read user B's data** in any owner-scoped table — tested in `db-migrator`'s isolation test.
 

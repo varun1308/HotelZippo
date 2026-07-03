@@ -3,7 +3,11 @@
  * transitions running → done, that a second call short-circuits to already_seeded, and a concurrent
  * claim yields in_progress. Cleans its own latch row. */
 const mockSeed = jest.fn();
-jest.mock('@/lib/preview/verify', () => ({ seedPreviewFromRouteStack: (...a: unknown[]) => mockSeed(...a) }));
+jest.mock('@/lib/preview/verify', () => ({
+  seedPreviewFromRouteStack: (...a: unknown[]) => mockSeed(...a),
+  // Real impl gates on ROUTESTACK_MOCK / deps.mock (10e AC5); these latch tests run "live".
+  previewSeedBlockedByMock: () => false,
+}));
 
 import { serviceClient } from './helpers';
 import { ensurePreviewSeed } from '@/lib/preview/runtime-seed';

@@ -39,6 +39,12 @@ export interface ChatShellRailApi {
   isBusy: boolean;
 }
 
+/** API handed to a render-prop action bar (spec 05 §7) so its escape hatch can
+ *  focus the composer ("Tell me what you want to do" — never a dead end). */
+export interface ChatShellActionBarApi {
+  focusComposer: () => void;
+}
+
 export interface ChatShellProps {
   /** The injected stream source (mock for 3b, real agent for 3c). */
   source: StreamSource;
@@ -57,9 +63,17 @@ export interface ChatShellProps {
   /** Phase 5: notified whenever the conversation changes, so the page can snapshot it
    *  at the session-memory trigger points. */
   onMessages?: (messages: ChatMessage[]) => void;
-  /** Seed the thread on mount — e.g. a re-attached in-flight assembly-progress block (03c) so a
-   *  reload resumes a recommendation that was still assembling. Read once at init. */
+  /** Seed the thread — e.g. a re-attached in-flight assembly-progress block (03c) so a
+   *  reload resumes a recommendation that was still assembling. May settle AFTER mount
+   *  (async load): late seeds are appended without remounting, so anything the user
+   *  typed in the meantime survives (M10). */
   initialMessages?: ChatMessage[];
+  /** Post-recommendation action bar (spec 05 §7), rendered between the stream and the
+   *  composer. A render function receives `focusComposer` for the escape hatch. */
+  actionBar?: ReactNode | ((api: ChatShellActionBarApi) => ReactNode);
+  /** Fired when an inline async assembly job lands its cards (L17) — same moment the
+   *  sync path streams a `recommendation-set` chunk. */
+  onAssemblyComplete?: (result: unknown) => void;
 }
 
 function GhostButton({
@@ -102,6 +116,8 @@ export function ChatShell({
   accountMenu,
   onMessages,
   initialMessages,
+  actionBar,
+  onAssemblyComplete,
 }: ChatShellProps) {
   const { messages, status, researching, streamingMessageId, sendMessage, isBusy } =
     useChatStream({ source, initialMessages });
@@ -134,6 +150,13 @@ export function ChatShell({
   // a plain node renders as-is; absent → the placeholder.
   const railNode =
     typeof rail === 'function' ? rail({ sendMessage, isBusy }) : (rail ?? <RailPlaceholder />);
+
+  // Resolve the action bar (spec 05 §7): a render function gets `focusComposer` so the
+  // escape hatch can hand control back to the conversation. Absent → nothing renders.
+  const actionBarNode =
+    typeof actionBar === 'function'
+      ? actionBar({ focusComposer: () => composerRef.current?.focus() })
+      : actionBar;
 
   return (
     <div className="flex h-[100dvh] flex-col">
@@ -185,6 +208,7 @@ export function ChatShell({
                       <MessageRow
                         message={message}
                         streaming={message.id === streamingMessageId}
+                        onAssemblyComplete={onAssemblyComplete}
                       />
                       {message.offerForm && (
                         <FormOfferCard onSwitchToForm={onSwitchToForm} />
@@ -197,6 +221,10 @@ export function ChatShell({
               )}
             </div>
           </main>
+
+          {/* post-recommendation action bar (spec 05 §7) — between stream and composer,
+              stays visible while the stream scrolls */}
+          {actionBarNode}
 
           {/* composer */}
           <div className="relative z-[4] flex-none bg-gradient-to-t from-bg from-[64%] to-transparent px-6 pb-[18px] pt-3 max-[600px]:px-[14px] max-[600px]:pb-[14px] max-[600px]:pt-2">

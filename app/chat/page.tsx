@@ -22,7 +22,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChatShell, type ChatShellRailApi } from '@/components/chat';
+import { ActionBar, ChatShell, type ChatShellActionBarApi, type ChatShellRailApi } from '@/components/chat';
 import { chatHttpStream } from '@/lib/chat/httpStream';
 import type { StreamChunk, StreamSource } from '@/lib/chat/types';
 import { TripBrief } from '@/components/brief';
@@ -33,22 +33,39 @@ import { AccountMenu } from '@/components/account';
 import { useTripBrief } from '@/lib/brief/useTripBrief';
 import { useShortlist } from '@/lib/shortlist/useShortlist';
 import { ShortlistProvider } from '@/lib/shortlist/context';
-import { BookingProvider } from '@/lib/booking/context';
+import { BookingProvider, type BookingHotel } from '@/lib/booking/context';
 import { useBookingFlow } from '@/lib/booking/useBookingFlow';
+// Import from party directly, NOT the barrel: the barrel re-exports the server-only
+// auth module (node:crypto), which webpack refuses in a client bundle.
+import { resolveDates } from '@/lib/booking/party';
 import { RoomPickerModal } from '@/components/booking/RoomPickerModal';
 import { useUser } from '@/lib/auth/useUser';
 import { signOut } from '@/lib/auth/signIn';
 import { loadFamilyProfile, saveFamilyProfile, emptyProfile } from '@/lib/db/persistence/family-profiles';
-import { saveShortlist, loadShortlistHotels } from '@/lib/db/persistence/shortlists';
+import { saveShortlist, loadShortlistHotels, shortlistShareUrl } from '@/lib/db/persistence/shortlists';
 import { loadLatestSnapshot } from '@/lib/db/persistence/sessions';
 import { loadInflightJob } from '@/lib/recommendations/job-ledger';
 import { createSupabaseBrowserClient } from '@/lib/db/ssr';
 import { useSessionSnapshot } from '@/lib/chat/useSessionSnapshot';
+import { detectTravelDates, type DetectedTravelDates } from '@/lib/chat/detect-travel-dates';
+import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
 import type { ChatMessage } from '@/lib/chat/types';
 
 /** What the agent tool's recommendation component carries (per map-recommendation). */
 interface RecoProps {
-  topPick?: { destination?: string; priceTierLabel?: string | null };
+  topPick?: {
+    hotelId?: string;
+    hotelName?: string;
+    destination?: string;
+    priceTierLabel?: string | null;
+  };
+}
+
+/** The booking-hotel identity off a recommendation set's top pick (action bar target). */
+function topPickBookingHotel(props: RecoProps): BookingHotel | null {
+  const tp = props.topPick;
+  if (!tp?.hotelId || !tp.hotelName) return null;
+  return { hotelId: tp.hotelId, hotelName: tp.hotelName, destination: tp.destination ?? '' };
 }
 
 /** A minimal profile used only to carry the auth name to the agent for a user who hasn't
@@ -62,6 +79,17 @@ export default function ChatPage() {
   const { user } = useUser();
   const [formOpen, setFormOpen] = useState(false);
   const [shortlistOpen, setShortlistOpen] = useState(false);
+  // Trip Brief sheet below lg (spec 05 §5: tablet toggle / mobile slide-in). Desktop
+  // ignores this — the rail is always visible there.
+  const [briefOpen, setBriefOpen] = useState(false);
+  // The latest recommendation set's top pick (sync chunk OR async job completion).
+  // Non-null ⇒ recommendations have rendered ⇒ show the action bar (spec 05 §7);
+  // it is also the "Proceed to book" target.
+  const [latestTopPick, setLatestTopPick] = useState<BookingHotel | null>(null);
+  // Explicit travel dates detected from the user's own messages (L33b) — the loose
+  // {start,end} shape resolveDates accepts. null ⇒ month-only/vague ⇒ the booking
+  // confirm screen collects exact dates (the spec 10c month-only path).
+  const [travelDates, setTravelDates] = useState<DetectedTravelDates | null>(null);
   // The saved family profile (Phase 4) — loaded once on mount, used to prefill the
   // Edit-profile form. null until loaded or if the user has none yet.
   const [savedProfile, setSavedProfile] = useState<FamilyProfile | null>(null);
@@ -76,11 +104,10 @@ export default function ChatPage() {
   // together under one hz.conversation_id in Dash0. A ref so it's stable across re-renders.
   const conversationIdRef = useRef<string>(crypto.randomUUID());
   // 03c durability: a recommendation that was still ASSEMBLING when the page closed. Loaded on mount
-  // from the user's in-flight recommendation_jobs row (owner-read RLS) and seeded as an
-  // assembly-progress block so the chat resumes the progress + lands the cards. `reattachReady` keys
-  // ChatShell so it re-inits with the seed once the (async) load settles.
+  // from the user's in-flight recommendation_jobs row (owner-read RLS) and handed to ChatShell as a
+  // LATE seed — useChatStream appends unseen seed messages by id when the async load settles (M10),
+  // so ChatShell never remounts and anything the user typed while loading survives.
   const [reattachMessages, setReattachMessages] = useState<ChatMessage[] | null>(null);
-  const [reattachReady, setReattachReady] = useState(false);
   // The family profile to hand the agent each turn (so it greets by name + never re-asks
   // known fields). A ref because it's only read when a turn is sent. Holds the saved profile
   // when there is one; otherwise a minimal profile seeded with the user's auth name (Google
@@ -108,13 +135,10 @@ export default function ChatPage() {
 
   // 03c: on mount, re-attach an in-flight assembly job (page closed mid-assembly) so the user resumes
   // the progress and still gets their cards. Owner-read RLS scopes it to their own job. Best-effort:
-  // any failure → no seed (fresh chat), never blocks the page. `reattachReady` always flips so ChatShell
-  // mounts whether or not a job was found.
+  // any failure → no seed (fresh chat), never blocks the page. ChatShell is mounted the whole time —
+  // the seed is appended when it settles (M10), never delivered via a remount.
   useEffect(() => {
-    if (!user) {
-      setReattachReady(true);
-      return;
-    }
+    if (!user) return;
     let active = true;
     loadInflightJob(createSupabaseBrowserClient())
       .then((job) => {
@@ -134,9 +158,6 @@ export default function ChatPage() {
       })
       .catch(() => {
         /* no job / no env → fresh chat */
-      })
-      .finally(() => {
-        if (active) setReattachReady(true);
       });
     return () => {
       active = false;
@@ -198,6 +219,10 @@ export default function ChatPage() {
   const source: StreamSource = useCallback(
     (input, history) => {
       applyUserText(input);
+      // L33b: capture explicit start+end dates the user types (e.g. "12–19 July") so the
+      // booking confirm screen prefills them instead of re-asking. Month-only stays null.
+      const detected = detectTravelDates(input);
+      if (detected) setTravelDates(detected);
       // Resume context (Phase 5): pass the loaded snapshot so the agent injects
       // <session_snapshot> and continues without repetition. Empty ⇒ fresh onboarding.
       // Also pass the signed-in user's profile (Phase 4) so the agent greets by name and
@@ -219,6 +244,10 @@ export default function ChatPage() {
               // can't read trip type off the card, so just ensure the gate shows met.
               type: brief.brief.type ?? 'Confirmed',
             });
+            // Recommendations rendered → surface the action bar (spec 05 §7) with this
+            // set's top pick as the booking target.
+            const hotel = topPickBookingHotel(props);
+            if (hotel) setLatestTopPick(hotel);
           } else if (chunk.type === 'component' && chunk.component === 'profile-update') {
             // The agent just persisted a confirmed profile change (server-side, RLS-scoped).
             // Re-load the saved profile so profileRef carries the fresh values on the NEXT turn
@@ -238,6 +267,25 @@ export default function ChatPage() {
     [applyUserText, applyRecommendationGates, brief.brief.type],
   );
 
+  // L17: the ASYNC assembly path lands its cards via AssemblyProgress's poll — no
+  // `recommendation-set` chunk ever streams. Apply the SAME gate locks (+ action-bar
+  // reveal) the sync tap applies, from the job's completion callback.
+  const briefTypeRef = useRef(brief.brief.type);
+  briefTypeRef.current = brief.brief.type;
+  const handleAssemblyComplete = useCallback(
+    (result: unknown) => {
+      const props = toRecommendationSetProps(result);
+      if (!props) return;
+      applyRecommendationGates({
+        destination: props.topPick.destination || null,
+        type: briefTypeRef.current ?? 'Confirmed',
+      });
+      const hotel = topPickBookingHotel(props);
+      if (hotel) setLatestTopPick(hotel);
+    },
+    [applyRecommendationGates],
+  );
+
   const shortlistActions = useMemo(
     () => ({
       save: shortlist.save,
@@ -250,10 +298,18 @@ export default function ChatPage() {
 
   // Phase 7 booking flow. The card's "Proceed to book" opens a deterministic modal:
   // confirm (travellers · rooms · dates, seeded from the saved profile) → live rooms/rates →
-  // room picker → deep-link checkout (opened in a new tab). The brief's `dates` is free-text
-  // (e.g. "early July"), not a resolvable start+end, so we pass null and let the confirm
-  // screen collect exact dates — the month-only path from the spec.
-  const bookingFlow = useBookingFlow({ profile: savedProfile, dates: null });
+  // room picker → deep-link checkout (opened in a new tab). Dates (L33b / spec 10c): when the
+  // user has typed an EXPLICIT start+end (detectTravelDates), resolveDates turns it into the
+  // booking shape and the confirm screen prefills; month-only/vague stays null and the
+  // confirm screen collects exact dates — the month-only path from the spec.
+  const bookingDates = useMemo(() => resolveDates(travelDates), [travelDates]);
+  // conversationId: the same client-minted id every chat turn carries (specs/14), so the
+  // booking spans join the conversation's hz.conversation_id view at the chat→booking handoff.
+  const bookingFlow = useBookingFlow({
+    profile: savedProfile,
+    dates: bookingDates,
+    conversationId: conversationIdRef.current,
+  });
   const bookingActions = useMemo(() => ({ proceed: bookingFlow.proceed }), [bookingFlow.proceed]);
 
   // Re-hydrate the working shortlist from Supabase on mount (keyed to the user), so a saved
@@ -319,6 +375,24 @@ export default function ChatPage() {
     [applyProfile],
   );
 
+  // Action-bar Share (spec 05 §7): copy the shortlist share link. The share_token is the
+  // capability (shortlists row, kept stable by saveShortlist); the copied URL is the ONE
+  // canonical share shape (shortlistShareUrl). Resolves the URL on success, null otherwise
+  // (signed out / persistence off / clipboard denied) — the bar only flashes "Link copied"
+  // on a truthy result, and a failure never crashes the chat.
+  const handleShare = useCallback(async () => {
+    if (!user) return null;
+    try {
+      const ids = shortlist.items.map((h) => h.hotelId);
+      const { shareToken } = await saveShortlist(ids, user.id);
+      const url = shortlistShareUrl(shareToken, window.location.origin);
+      await navigator.clipboard.writeText(url);
+      return url;
+    } catch {
+      return null;
+    }
+  }, [user, shortlist.items]);
+
   // Submitting the structured form seeds the brief, PERSISTS the profile (user-scoped),
   // and returns to the chat. Persistence is best-effort: a save failure surfaces in the
   // console trace but never blocks the UX (the brief still updates).
@@ -340,14 +414,17 @@ export default function ChatPage() {
     <ShortlistProvider actions={shortlistActions}>
       <BookingProvider actions={bookingActions}>
       <ChatShell
-        // Key on the re-attach load so ChatShell re-inits with the seeded in-flight job once it settles.
-        key={reattachReady ? (reattachMessages ? 'reattached' : 'fresh') : 'loading'}
+        // No key: ChatShell stays mounted through the re-attach load (M10). The seeded
+        // in-flight job is appended by useChatStream when `initialMessages` settles, so
+        // messages the user typed while loading survive.
         initialMessages={reattachMessages ?? undefined}
         source={source}
         briefCount={brief.filledCount}
         shortlistCount={shortlist.count}
         onSwitchToForm={() => setFormOpen(true)}
+        onOpenBrief={() => setBriefOpen(true)}
         onOpenShortlist={() => setShortlistOpen(true)}
+        onAssemblyComplete={handleAssemblyComplete}
         onMessages={(m) => {
           messagesRef.current = m;
         }}
@@ -360,9 +437,27 @@ export default function ChatPage() {
             />
           ) : null
         }
+        // Post-recommendation action bar (spec 05 §7) — appears once cards have rendered
+        // (sync chunk or async job). The escape hatch focuses the composer via the shell api.
+        actionBar={
+          latestTopPick
+            ? (api: ChatShellActionBarApi) => (
+                <ActionBar
+                  onSaveShortlist={() => setShortlistOpen(true)}
+                  onShare={handleShare}
+                  onProceedToBook={() => bookingFlow.proceed(latestTopPick)}
+                  onEscapeHatch={api.focusComposer}
+                />
+              )
+            : undefined
+        }
         rail={(api: ChatShellRailApi) => (
           <TripBrief
             brief={brief.brief}
+            // Sheet mode (spec 05 §5): desktop keeps the always-visible rail; below lg the
+            // topbar "Brief" button opens this as a slide-in sheet.
+            open={briefOpen}
+            onClose={() => setBriefOpen(false)}
             onFindHotels={() => {
               if (api.isBusy) return;
               api.sendMessage("Let's find hotels now — show me your recommendations.");

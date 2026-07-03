@@ -156,8 +156,9 @@ describe('reconcileProfileFromAssembleInput (safety-net persist)', () => {
         throw new Error('db down');
       },
     } as unknown as import('@supabase/supabase-js').SupabaseClient;
+    // Returns the persisted-field labels ([] on failure) so the route can emit a profile-update chunk.
     await expect(
       reconcileProfileFromAssembleInput({ children: [{ name: 'A', age: 7 }] }, USER, throwing),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
   });
 });

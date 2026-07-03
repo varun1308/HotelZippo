@@ -48,6 +48,10 @@ export interface RoomRateOption {
   bed?: string;
   /** Max occupancy for the room. */
   maxOccupancy?: number;
+  /** RouteStack's availability-level `currencyrate` multiplier — 1 on every captured payload.
+   * Propagated (never applied): the conversion direction is unverified (10c decision 6), so the
+   * wrapper warns loudly when ≠ 1 instead of guessing a conversion. */
+  currencyRate?: number;
 }
 
 /** Phase-1 result: the matched hotel's available rooms/rates for the picker, plus the

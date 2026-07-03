@@ -32,6 +32,10 @@ export interface CachedDestination {
 export interface IdCache {
   loadDestination(destination: string): Promise<CachedDestination | null>;
   saveDestination(destination: string, hit: CachedDestination): Promise<void>;
+  /** OPTIONAL self-heal hook: drop a cached destination row. Called by the orchestrator when a
+   * cached destination id yields ZERO hotels from search-hotels — a pre-anchor mis-resolution
+   * (e.g. "Bali" → the Fiji islet) must not be served warm forever. Best-effort like the rest. */
+  invalidateDestination?(destination: string): Promise<void>;
   /** RouteStack hotel id for one of our hotels (uuid), or null if not resolved yet. */
   loadHotelRsId(hotelId: string): Promise<string | null>;
   saveHotelRsId(hotelId: string, rsHotelId: string, rsHotelName: string | null): Promise<void>;
@@ -77,6 +81,10 @@ export function makeSupabaseIdCache(client: SupabaseClient): IdCache {
         },
         { onConflict: 'destination' },
       );
+    },
+
+    async invalidateDestination(destination) {
+      await client.from('routestack_destinations').delete().eq('destination', destination);
     },
 
     async loadHotelRsId(hotelId) {

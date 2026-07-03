@@ -58,6 +58,34 @@ describe('mapRoomRateOptions', () => {
     });
   });
 
+  it('prefers the room `id` over the rate-plan `rateid` when a node carries both (live shape)', () => {
+    // The live node has distinct id (room) + rateid (rate plan) and no roomId key — `rateid` must
+    // never be resolved as the roomId (it is not a roomId alias at all).
+    const payload = { recommendationId: 'reco-1', id: 'room-id-1', rateid: 'rate-plan-1' };
+    const [opt] = mapRoomRateOptions(payload);
+    expect(opt.roomId).toBe('room-id-1');
+  });
+
+  it('drops a node whose only room-ish id is a rate-plan id', () => {
+    const payload = { recommendationId: 'reco-1', rateid: 'rate-plan-1' };
+    expect(mapRoomRateOptions(payload)).toHaveLength(0);
+  });
+
+  it('propagates the availability-level currencyrate multiplier onto every option', () => {
+    const payload = {
+      availability: {
+        currencyrate: 1.08,
+        groups: [{ rooms: [{ recommendationId: 'r1', id: 'm1', totalRate: 100 }, { recommendationId: 'r2', id: 'm2' }] }],
+      },
+    };
+    const opts = mapRoomRateOptions(payload);
+    expect(opts).toHaveLength(2);
+    expect(opts.every((o) => o.currencyRate === 1.08)).toBe(true);
+    // …and omits it when the payload carries none.
+    const [bare] = mapRoomRateOptions({ recommendationId: 'r', roomId: 'm' });
+    expect(bare.currencyRate).toBeUndefined();
+  });
+
   it('de-dups repeated id pairs across mirror nodes', () => {
     const payload = {
       a: { recommendationId: 'x', roomId: 'y', total: 1 },

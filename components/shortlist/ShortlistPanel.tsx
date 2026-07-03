@@ -11,9 +11,19 @@ import { Bookmark, MapPin, Trash2, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { SavedHotel } from '@/lib/shortlist/types';
 
+/** The minimal hard-flag shape a shortlist row needs for its flag dots (spec 05 §6). */
+export interface SavedHotelFlag {
+  severity: 'moderate' | 'severe';
+}
+
+/** A SavedHotel that (optionally) carries its hard flags. Kept as an extension of the
+ *  core SavedHotel so legacy rows / callers without flags keep working unchanged —
+ *  a missing `hardFlags` simply renders no dots (M14 backward compat). */
+export type SavedHotelWithFlags = SavedHotel & { hardFlags?: SavedHotelFlag[] };
+
 export interface ShortlistPanelProps {
   open: boolean;
-  items: SavedHotel[];
+  items: SavedHotelWithFlags[];
   onRemove: (hotelId: string) => void;
   onClose: () => void;
 }
@@ -87,11 +97,14 @@ export function ShortlistPanel({ open, items, onRemove, onClose }: ShortlistPane
                       <MapPin aria-hidden className="h-[13px] w-[13px] text-text-tertiary" strokeWidth={1.75} />
                       {h.area ? `${h.area}, ${h.destination}` : h.destination}
                     </p>
-                    {h.priceTierLabel && (
-                      <span className="mt-2 inline-flex rounded-pill bg-surface-2 px-[10px] py-[2px] text-[12px] font-medium text-text-secondary">
-                        {h.priceTierLabel}
-                      </span>
-                    )}
+                    <span className="mt-2 flex items-center gap-2">
+                      {h.priceTierLabel && (
+                        <span className="inline-flex rounded-pill bg-surface-2 px-[10px] py-[2px] text-[12px] font-medium text-text-secondary">
+                          {h.priceTierLabel}
+                        </span>
+                      )}
+                      <FlagDots flags={h.hardFlags} hotelName={h.hotelName} />
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -108,6 +121,33 @@ export function ShortlistPanel({ open, items, onRemove, onClose }: ShortlistPane
         </div>
       </aside>
     </>
+  );
+}
+
+/** Hard-flag dots on a shortlist row (spec 05 §6). One dot per flag — moderate → amber,
+ *  severe → red (CSS vars: these hues are reserved for flags and never themed). Flags can
+ *  never be hidden, so a flagged hotel stays distinguishable even in the compact panel.
+ *  Accessible: the dot group carries a text label describing the count + severities. */
+function FlagDots({ flags, hotelName }: { flags?: SavedHotelFlag[]; hotelName: string }) {
+  if (!flags || flags.length === 0) return null;
+  const severe = flags.filter((f) => f.severity === 'severe').length;
+  const moderate = flags.length - severe;
+  const parts: string[] = [];
+  if (severe > 0) parts.push(`${severe} severe`);
+  if (moderate > 0) parts.push(`${moderate} moderate`);
+  const label = `${hotelName}: ${flags.length} hard ${flags.length === 1 ? 'flag' : 'flags'} (${parts.join(', ')})`;
+  return (
+    <span role="img" aria-label={label} title={label} className="inline-flex items-center gap-[5px]">
+      {flags.map((f, i) => (
+        <span
+          key={i}
+          aria-hidden
+          data-severity={f.severity}
+          className="h-[9px] w-[9px] rounded-full"
+          style={{ background: f.severity === 'severe' ? 'var(--red)' : 'var(--amber)' }}
+        />
+      ))}
+    </span>
   );
 }
 

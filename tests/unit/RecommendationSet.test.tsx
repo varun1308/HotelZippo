@@ -34,6 +34,26 @@ describe('RecommendationSet', () => {
     );
     expect(screen.getByText('Also consider')).toBeInTheDocument();
   });
+
+  /* M8-gap — recommendation_notes (08b-2) render deterministically beneath the set, so the
+   * caveat reaches the user on the SYNC chunk path too (not only via AssemblyProgress). */
+  it('renders recommendation notes as a role="note" beneath the cards', () => {
+    render(
+      <RecommendationSet
+        topPick={topPick}
+        otherPicks={[]}
+        recommendationNotes="All available options carry flags worth reviewing."
+      />,
+    );
+    expect(screen.getByRole('note')).toHaveTextContent(/flags worth reviewing/i);
+  });
+
+  it('renders no note when notes are absent or null', () => {
+    const { rerender } = render(<RecommendationSet topPick={topPick} otherPicks={[]} />);
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    rerender(<RecommendationSet topPick={topPick} otherPicks={[]} recommendationNotes={null} />);
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
 });
 
 describe('HotelCardSkeleton', () => {

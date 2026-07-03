@@ -2,6 +2,7 @@
 import {
   prepareForSynthesis,
   buildSynthesisInput,
+  filterToSynthesisWindow,
   cleanText,
   formatLine,
   SEGMENT_CAPS,
@@ -23,6 +24,22 @@ function review(over: Partial<TaggedReview>): TaggedReview {
     ...over,
   };
 }
+
+describe('filterToSynthesisWindow (L23 — the M2 window the worker counts over)', () => {
+  it('keeps only dated reviews within 12 months of the run date', () => {
+    const windowed = filterToSynthesisWindow(
+      [
+        review({ review_date: '2026-05-01' }), // in window
+        review({ review_date: '2024-01-01' }), // stale — stored forever, but not counted
+        review({ review_date: null }), // undated — excluded
+        review({ review_date: 'not-a-date' }), // unparseable — excluded
+      ],
+      NOW,
+    );
+    expect(windowed).toHaveLength(1);
+    expect(windowed[0].review_date).toBe('2026-05-01');
+  });
+});
 
 describe('formatLine (TC-P11 input format)', () => {
   it('renders [YYYY-MM-DD] [rating/5] {text}', () => {

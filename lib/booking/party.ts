@@ -80,6 +80,51 @@ export function describeParty(party: InferredParty): string {
   return summary;
 }
 
+/* ---- route-boundary validation (untrusted client input) ------------------ */
+
+/** Bounds for a client-supplied party. buildRoomsOccupancy allocates `rooms` entries and loops
+ * `adults` times, so unvalidated client numbers ({"rooms":1e9}) are an OOM/DoS vector at the API
+ * route. Caps are generous for a family-travel product (10c's inference tops out at
+ * 1 + spouse + grandparents adults, ~1 room per 2 adults). */
+export const PARTY_LIMITS = {
+  maxAdults: 8,
+  maxChildren: 8,
+  maxChildAge: 17,
+  maxRooms: 8,
+} as const;
+
+export type PartyValidation = { ok: true; party: TravelParty } | { ok: false; message: string };
+
+/** Validate + normalise an untrusted party payload at the route boundary. Returns a CLEAN
+ * TravelParty (extra keys dropped) or a human-readable rejection for the route's 400 shape.
+ * rooms > adults is REJECTED (not clamped): every room needs ≥1 adult (buildRoomsOccupancy's
+ * documented rule) — silently collapsing would book fewer rooms than the user confirmed. */
+export function validateParty(value: unknown): PartyValidation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, message: 'Missing booking details' };
+  }
+  const v = value as Record<string, unknown>;
+  const adults = v.adults;
+  const rooms = v.rooms;
+  const childAges = v.childAges;
+  if (!Number.isInteger(adults) || (adults as number) < 1 || (adults as number) > PARTY_LIMITS.maxAdults) {
+    return { ok: false, message: `Adults must be between 1 and ${PARTY_LIMITS.maxAdults}.` };
+  }
+  if (!Number.isInteger(rooms) || (rooms as number) < 1 || (rooms as number) > PARTY_LIMITS.maxRooms) {
+    return { ok: false, message: `Rooms must be between 1 and ${PARTY_LIMITS.maxRooms}.` };
+  }
+  if (!Array.isArray(childAges) || childAges.length > PARTY_LIMITS.maxChildren) {
+    return { ok: false, message: `Children must be between 0 and ${PARTY_LIMITS.maxChildren}.` };
+  }
+  if (!childAges.every((a) => Number.isInteger(a) && a >= 0 && a <= PARTY_LIMITS.maxChildAge)) {
+    return { ok: false, message: `Child ages must be between 0 and ${PARTY_LIMITS.maxChildAge}.` };
+  }
+  if ((rooms as number) > (adults as number)) {
+    return { ok: false, message: 'Each room needs at least one adult — reduce the rooms or add an adult.' };
+  }
+  return { ok: true, party: { adults: adults as number, childAges: childAges as number[], rooms: rooms as number } };
+}
+
 /** Distribute a confirmed party across its rooms into RouteStack's rooms[] occupancy
  * array. v1 keeps it simple and predictable: children (with ages) all go in the first
  * room; adults are spread as evenly as possible across the rooms; every room has ≥1 adult.

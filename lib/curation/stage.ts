@@ -26,31 +26,61 @@ export function mapDatasetItems(items: unknown[], destination: string): FetchedH
 
 export interface StageResult {
   staged: number;
+  /** Rows that could NOT be written (DB error). staged + failed === hotels.length. */
+  failed: number;
+  /** One "name: reason" line per failed row, for the route response / admin UI. */
+  errors: string[];
 }
 
-/** Upsert candidates into curation_hotels on (name, destination), preserving existing status. */
+/** Fields the founder can edit inline in the admin UI (the app/api/admin/hotels PATCH whitelist,
+ * minus `status` which is never in a fetched row and `google_place_id` which has its own rule).
+ * On re-stage an existing NON-NULL value WINS over the incoming fetch, so founder edits survive
+ * Refresh/Ingest (12a: "re-fetch preserves prior decisions"). */
+const FOUNDER_EDITABLE = ['brand', 'price_tier', 'latitude', 'longitude', 'address'] as const;
+
+/** Enrichment a TA-search re-fetch cannot (re)produce — the paid Google place resolution
+ * (google_place_id, PR #32) and a star class the actor may omit. Incoming wins ONLY when
+ * non-null; a null incoming value must never wipe an existing one. */
+const KEEP_UNLESS_INCOMING = ['google_place_id', 'star_rating'] as const;
+
+/** Upsert candidates into curation_hotels on (name, destination), preserving existing status,
+ * enrichment (google_place_id), and founder inline edits. Never throws on a per-row DB error —
+ * failures are counted + reported so a partial write is visible (not silently "Ingested N"). */
 export async function stageHotels(
   client: SupabaseClient,
   hotels: FetchedHotel[],
   fetchSource: string,
 ): Promise<StageResult> {
   let staged = 0;
+  const errors: string[] = [];
   for (const h of hotels) {
-    const { data: existing } = await client
+    const { data: existing, error: selectError } = await client
       .from('curation_hotels')
-      .select('id')
+      .select('id, google_place_id, star_rating, brand, price_tier, latitude, longitude, address')
       .eq('name', h.name)
       .eq('destination', h.destination)
       .maybeSingle();
+    if (selectError) {
+      errors.push(`${h.name}: lookup failed: ${selectError.message}`);
+      continue;
+    }
 
-    const row = { ...h, fetch_source: fetchSource };
+    const row: Record<string, unknown> = { ...h, fetch_source: fetchSource };
+    let writeError: { message: string } | null;
     if (existing) {
-      // Refresh fetched fields, KEEP the curation status (approve/reject decisions survive).
-      await client.from('curation_hotels').update(row).eq('id', existing.id);
+      // Refresh fetched fields, KEEP the curation status (approve/reject decisions survive)
+      // and never clobber enrichment / founder edits with a null-or-absent incoming value.
+      for (const k of KEEP_UNLESS_INCOMING) row[k] = h[k] ?? existing[k];
+      for (const k of FOUNDER_EDITABLE) row[k] = existing[k] ?? h[k] ?? null;
+      ({ error: writeError } = await client.from('curation_hotels').update(row).eq('id', existing.id));
     } else {
-      await client.from('curation_hotels').insert({ ...row, status: 'pending' });
+      ({ error: writeError } = await client.from('curation_hotels').insert({ ...row, status: 'pending' }));
+    }
+    if (writeError) {
+      errors.push(`${h.name}: write failed: ${writeError.message}`);
+      continue;
     }
     staged += 1;
   }
-  return { staged };
+  return { staged, failed: errors.length, errors };
 }
