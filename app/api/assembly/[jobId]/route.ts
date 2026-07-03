@@ -14,6 +14,7 @@ import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { createServiceClient } from '@/lib/db/server';
 import { reclaimStale } from '@/lib/recommendations/job-ledger';
+import { workerAuthHeaders } from '@/lib/recommendations/worker-auth';
 import { withSpan, HZ, isValidConversationId } from '@/lib/otel/trace';
 
 export const runtime = 'nodejs';
@@ -74,7 +75,8 @@ async function pollJob(req: Request, jobId: string): Promise<Response> {
     const origin = new URL(req.url).origin;
     void fetch(`${origin}/api/assembly/run`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Carries the internal worker-auth header when ASSEMBLY_WORKER_SECRET is configured.
+      headers: { 'Content-Type': 'application/json', ...workerAuthHeaders() },
       body: JSON.stringify({ jobId }),
       cache: 'no-store',
     }).catch(() => {});

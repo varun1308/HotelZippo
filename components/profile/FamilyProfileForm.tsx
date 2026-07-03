@@ -10,8 +10,9 @@
  *   • Decorative motion (toggle knob, active scale) is gated via motion-reduce.
  *   • Missing-image rules / streaming rules don't apply — this is a pure input form.
  *
- * The three food toggles collapse into the single `food` enum on submit; vegan implies
- * vegetarian. Children with an empty name or non-finite age are dropped from output.
+ * The food toggles collapse into the single `food` enum on submit (vegan > vegetarian >
+ * other > none); vegan implies vegetarian. Children with an empty name or non-finite age
+ * are dropped from output.
  */
 'use client';
 
@@ -170,6 +171,8 @@ export function FamilyProfileForm({
     initialFood === 'vegetarian' || initialFood === 'vegan',
   );
   const [vegan, setVegan] = useState(initialFood === 'vegan');
+  // Unlisted diets (Jain, halal, allergies…) — the 08b-1 'other' option; details go in notes.
+  const [otherDiet, setOtherDiet] = useState(initialFood === 'other');
   const [indianFoodMatters, setIndianFoodMatters] = useState(
     initial?.indianFoodMatters ?? false,
   );
@@ -229,6 +232,7 @@ export function FamilyProfileForm({
   function collapseFood(): FamilyProfile['food'] {
     if (vegan) return 'vegan';
     if (vegetarian) return 'vegetarian';
+    if (otherDiet) return 'other';
     return 'none';
   }
 
@@ -499,6 +503,12 @@ export function FamilyProfileForm({
                 onChange={setVeganToggle}
                 label="Vegan"
                 sub="Stricter — no dairy or animal products"
+              />
+              <ToggleSwitch
+                checked={otherDiet}
+                onChange={setOtherDiet}
+                label="Other dietary needs"
+                sub="Jain, halal, allergies — add the details in notes below"
               />
               <ToggleSwitch
                 checked={indianFoodMatters}

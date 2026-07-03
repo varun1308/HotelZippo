@@ -22,17 +22,30 @@ import {
 import type { AssemblyProgressProps } from '@/lib/chat/types';
 import { ResearchingPill } from './ResearchingPill';
 
-/** Warm fallback copy per error kind (spec 14 — never a raw error, always a next step). */
-function failureCopy(kind: AssemblyJobErrorKind | null, destination: string): string {
+/** Warm fallback copy per error kind (spec 14 — never a raw error, always a next step).
+ * `detail` is the persisted job result — on failure the worker stores the full assembly error
+ * variant there, so budget_mismatch can name the tiers that ARE available (08b-2 Step 1). */
+function failureCopy(kind: AssemblyJobErrorKind | null, destination: string, detail?: unknown): string {
   switch (kind) {
     case 'no_eligible_hotels':
       return `I couldn't find hotels with enough family review intelligence for ${destination} just yet. Want to try a different destination, or shall I widen the search?`;
+    case 'budget_mismatch': {
+      const tiers = (detail as { available_tiers?: string[] } | null)?.available_tiers ?? [];
+      const tierNote = tiers.length > 0 ? ` — the options I do have are ${formatTiers(tiers)}` : '';
+      return `Nothing in ${destination} quite fits that budget${tierNote}. Want me to widen the budget, or try a different destination?`;
+    }
     case 'timeout':
     case 'model_failed':
     case 'unknown':
     default:
       return 'I had trouble pulling those recommendations together. Want me to try again?';
   }
+}
+
+/** "a", "a and b", "a, b and c" — matches the concierge's conversational voice. */
+function formatTiers(tiers: string[]): string {
+  if (tiers.length === 1) return tiers[0];
+  return `${tiers.slice(0, -1).join(', ')} and ${tiers[tiers.length - 1]}`;
 }
 
 export interface AssemblyProgressComponentProps extends AssemblyProgressProps {
@@ -46,9 +59,19 @@ export function AssemblyProgress({ jobId, destination, conversationId, poll }: A
   if (job.status === 'succeeded') {
     const props = toRecommendationSetProps(job.result);
     if (props) {
+      // recommendation_notes (08b-2): overall caveats — all-options-flagged, only-one-eligible,
+      // a named hotel not in our records. On the async path no model ever narrates the result,
+      // so this block is where the caveat reaches the user. Rendered beneath the cards.
+      const notes =
+        (job.result as { recommendation_notes?: string | null } | null)?.recommendation_notes ?? null;
       return (
         <div className="mt-2">
           <ShortlistableRecommendationSet {...props} />
+          {notes && (
+            <p role="note" className="mt-2 text-[15.5px] leading-[1.55] text-text-secondary">
+              {notes}
+            </p>
+          )}
         </div>
       );
     }
@@ -57,7 +80,7 @@ export function AssemblyProgress({ jobId, destination, conversationId, poll }: A
   }
 
   if (job.status === 'failed') {
-    return <FallbackLine text={failureCopy(job.errorKind, destination)} />;
+    return <FallbackLine text={failureCopy(job.errorKind, destination, job.result)} />;
   }
 
   // pending / running / unknown → the advancing staged status line.

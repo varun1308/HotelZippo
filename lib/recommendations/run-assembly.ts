@@ -107,16 +107,26 @@ export async function resolveEligibility(
   };
 }
 
+/** The two stage boundaries runAssembly can report honestly (specs/03c "honest, advancing"):
+ * 'checking_intelligence' fires immediately before the candidate/intelligence query and 'writing'
+ * immediately before the assembly model call — never before the work actually starts. */
+export type AssemblyStage = 'checking_intelligence' | 'writing';
+
 export async function runAssembly(
   supabase: SupabaseClient,
   input: RunAssemblyInput,
   deps?: AssembleDeps,
   seedDeps?: RuntimeSeedDeps,
+  /** Progress hook — the async worker maps these onto recommendation_jobs.stage. Optional; the
+   * synchronous chat/route paths (no staged UX) simply don't pass one. Awaited so the stage is
+   * visible before the (slow) step it names begins. */
+  onStage?: (stage: AssemblyStage) => void | Promise<void>,
 ): Promise<AssemblyOrPreview> {
   // DEBUG_BOOKING=1 → step-by-step timing in Vercel Runtime Logs; the LAST line before a 60s function
   // kill names the step that hung. Free no-op when the flag is off.
   const t = startDebugTimer('assemble', { dest: input.trip_brief.destination });
 
+  await onStage?.('checking_intelligence');
   const eligibility = await resolveEligibility(supabase, input, seedDeps, t);
   // A terminal (no-model) outcome — preview cards, "still seeding", or no_eligible_hotels.
   if (!('assemble' in eligibility)) {
@@ -128,6 +138,7 @@ export async function runAssembly(
 
   // The assembly model call (Anthropic) — a common slow step. The next line after this mark is the model
   // response; if the function dies between them, the model call is the hang.
+  await onStage?.('writing');
   t.mark('assembleRecommendations:start');
   const assembled = await assembleRecommendations(
     {

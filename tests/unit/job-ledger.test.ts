@@ -11,9 +11,11 @@ import {
   markFailed,
   loadJob,
   findReusable,
+  findInflight,
   reclaimStale,
   JOB_STATUSES,
   JOB_STAGES,
+  JOB_ERROR_KINDS,
 } from '@/lib/recommendations/job-ledger';
 
 /* ---- a minimal in-memory fake of the chained Supabase client used by the ledger ---- */
@@ -21,6 +23,7 @@ interface Row {
   id: string;
   user_id: string | null;
   trip_brief_id: string | null;
+  conversation_id: string | null;
   destination: string;
   input_hash: string;
   input: unknown;
@@ -42,7 +45,7 @@ function makeFakeClient(seed: Row[] = []) {
   function from() {
     let op: 'insert' | 'update' | 'select' = 'select';
     let payload: Record<string, unknown> = {};
-    const filters: Array<{ col: keyof Row; op: 'eq' | 'neq' | 'gte'; val: unknown }> = [];
+    const filters: Array<{ col: keyof Row; op: 'eq' | 'neq' | 'gte' | 'in'; val: unknown }> = [];
     let orderDesc = false;
     let limitN = Infinity;
 
@@ -72,6 +75,10 @@ function makeFakeClient(seed: Row[] = []) {
         filters.push({ col, op: 'gte', val });
         return builder;
       },
+      in(col: keyof Row, val: unknown[]) {
+        filters.push({ col, op: 'in', val });
+        return builder;
+      },
       order(_col: string, opts: { ascending: boolean }) {
         orderDesc = !opts.ascending;
         return builder;
@@ -83,7 +90,13 @@ function makeFakeClient(seed: Row[] = []) {
       match(rs: Row[]) {
         return rs.filter((r) =>
           filters.every((f) =>
-            f.op === 'eq' ? r[f.col] === f.val : f.op === 'neq' ? r[f.col] !== f.val : (r[f.col] as string) >= (f.val as string),
+            f.op === 'eq'
+              ? r[f.col] === f.val
+              : f.op === 'neq'
+                ? r[f.col] !== f.val
+                : f.op === 'in'
+                  ? (f.val as unknown[]).includes(r[f.col])
+                  : (r[f.col] as string) >= (f.val as string),
           ),
         );
       },
@@ -93,6 +106,7 @@ function makeFakeClient(seed: Row[] = []) {
             id: `job-${++idc}`,
             user_id: null,
             trip_brief_id: null,
+            conversation_id: null,
             destination: '',
             input_hash: '',
             input: {},
@@ -152,13 +166,23 @@ describe('computeInputHash', () => {
 describe('job lifecycle', () => {
   it('create → claim → stage → succeed', async () => {
     const client = makeFakeClient();
-    const job = await createJob(client, { destination: 'Phuket', inputHash: 'h1', input: { trip_brief: { destination: 'Phuket' } } });
+    const job = await createJob(client, {
+      destination: 'Phuket',
+      inputHash: 'h1',
+      conversationId: 'conv-123',
+      input: { trip_brief: { destination: 'Phuket' } },
+    });
     expect(job.status).toBe('pending');
     expect(job.stage).toBe('queued');
+    // Conversation correlation (specs/14): stored at dispatch so the worker can stamp it.
+    expect(job.conversationId).toBe('conv-123');
 
     const claimed = await claimJob(client, job.id);
     expect(claimed?.status).toBe('running');
     expect(claimed?.stage).toBe('finding_hotels');
+    // The attempts bump lands in the SAME conditional update as the status flip — a crash can
+    // never claim without counting the attempt (the maxAttempts reclaim cap depends on this).
+    expect(claimed?.attempts).toBe(1);
 
     await markStage(client, job.id, 'writing');
     await markSucceeded(client, job.id, { top_pick: { hotel_id: 'x' } });
@@ -188,23 +212,63 @@ describe('job lifecycle', () => {
     expect(final?.status).toBe('failed');
     expect(final?.errorKind).toBe('model_failed');
   });
+
+  it('markFailed can persist the full error VARIANT payload (budget_mismatch copy source)', async () => {
+    const client = makeFakeClient();
+    const job = await createJob(client, { destination: 'Tokyo', inputHash: 'h4', input: {} });
+    await claimJob(client, job.id);
+    const variant = { error: 'budget_mismatch', reason: 'nothing in tier', available_tiers: ['luxury'] };
+    await markFailed(client, job.id, 'budget_mismatch', variant);
+    const final = await loadJob(client, job.id);
+    expect(final?.status).toBe('failed');
+    expect(final?.errorKind).toBe('budget_mismatch');
+    expect(final?.result).toEqual(variant);
+  });
 });
 
-describe('findReusable (no double-spend guard)', () => {
-  it('returns a recent non-failed job for the same input_hash', async () => {
+describe('findReusable (no double-spend guard — scoped to the SAME user)', () => {
+  const USER = 'user-a';
+
+  it("returns the same user's recent non-failed job for the same input_hash", async () => {
     const client = makeFakeClient();
-    const a = await createJob(client, { destination: 'Phuket', inputHash: 'dup', input: {} });
-    const found = await findReusable(client, 'dup');
+    const a = await createJob(client, { userId: USER, destination: 'Phuket', inputHash: 'dup', input: {} });
+    const found = await findReusable(client, 'dup', USER);
     expect(found?.id).toBe(a.id);
+  });
+
+  it("never hands out ANOTHER user's job (owner-read RLS would make it unpollable)", async () => {
+    const client = makeFakeClient();
+    await createJob(client, { userId: 'user-b', destination: 'Phuket', inputHash: 'dup', input: {} });
+    const found = await findReusable(client, 'dup', USER);
+    expect(found).toBeNull();
+  });
+
+  it('a null/undefined userId is never reusable (anon jobs poison nothing)', async () => {
+    const client = makeFakeClient();
+    await createJob(client, { userId: null, destination: 'Phuket', inputHash: 'dup', input: {} });
+    expect(await findReusable(client, 'dup', null)).toBeNull();
+    expect(await findReusable(client, 'dup', undefined)).toBeNull();
   });
 
   it('ignores failed jobs', async () => {
     const client = makeFakeClient();
-    const a = await createJob(client, { destination: 'Phuket', inputHash: 'dup2', input: {} });
+    const a = await createJob(client, { userId: USER, destination: 'Phuket', inputHash: 'dup2', input: {} });
     await claimJob(client, a.id);
     await markFailed(client, a.id, 'unknown');
-    const found = await findReusable(client, 'dup2');
+    const found = await findReusable(client, 'dup2', USER);
     expect(found).toBeNull();
+  });
+});
+
+describe('findInflight (unique-violation re-attach target)', () => {
+  it('finds the pending/running job for (user, input_hash) but never a terminal one', async () => {
+    const client = makeFakeClient();
+    const a = await createJob(client, { userId: 'u1', destination: 'Bali', inputHash: 'infl', input: {} });
+    expect((await findInflight(client, 'u1', 'infl'))?.id).toBe(a.id);
+    await claimJob(client, a.id); // running still counts as in-flight
+    expect((await findInflight(client, 'u1', 'infl'))?.id).toBe(a.id);
+    await markSucceeded(client, a.id, {});
+    expect(await findInflight(client, 'u1', 'infl')).toBeNull();
   });
 });
 
@@ -242,8 +306,9 @@ describe('reclaimStale (stuck-job recovery)', () => {
 });
 
 describe('constants', () => {
-  it('expose the status + stage vocabularies', () => {
+  it('expose the status + stage + error-kind vocabularies', () => {
     expect(JOB_STATUSES).toContain('succeeded');
     expect(JOB_STAGES).toContain('writing');
+    expect(JOB_ERROR_KINDS).toContain('budget_mismatch');
   });
 });

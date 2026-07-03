@@ -30,6 +30,7 @@ export function toRow(profile: FamilyProfile, userId: string): Record<string, un
   const food_preferences: string[] = [];
   if (profile.food === 'vegan') food_preferences.push('vegan');
   else if (profile.food === 'vegetarian') food_preferences.push('vegetarian');
+  else if (profile.food === 'other') food_preferences.push('other'); // unlisted diets (08b-1); details live in notes
   if (profile.indianFoodMatters) food_preferences.push('indian-food-matters');
 
   const family_members: FamilyMembers = { spouse: profile.spouse, children: profile.children };
@@ -55,7 +56,13 @@ export function fromRow(row: Record<string, unknown>): FamilyProfile {
     hometown: (row.hometown as string | null) ?? null,
     spouse: members.spouse ?? false,
     children: members.children ?? [],
-    food: food.includes('vegan') ? 'vegan' : food.includes('vegetarian') ? 'vegetarian' : 'none',
+    food: food.includes('vegan')
+      ? 'vegan'
+      : food.includes('vegetarian')
+        ? 'vegetarian'
+        : food.includes('other')
+          ? 'other'
+          : 'none',
     indianFoodMatters: food.includes('indian-food-matters'),
     budgetTier: (row.budget_tier as FamilyProfile['budgetTier']) ?? 'comfort',
     brandPreferences: (row.brand_preferences as string[]) ?? [],

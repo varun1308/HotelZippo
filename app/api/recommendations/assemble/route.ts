@@ -9,10 +9,13 @@
  * Returns the assembly JSON (success or {error: ...} variant) for the agent turn.
  * Server-side only; service client; ANTHROPIC_API_KEY server-side only. */
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { createServiceClient } from '@/lib/db/server';
+import { createSupabaseServerClient } from '@/lib/db/ssr';
 import { AssemblyError } from '@/lib/recommendations/assemble';
 import { runAssembly } from '@/lib/recommendations/run-assembly';
+import { currentTraceId } from '@/lib/otel/trace';
 import { DESTINATIONS, BUDGET_TIERS } from '@/lib/db/schemas';
 
 export const runtime = 'nodejs';
@@ -35,6 +38,35 @@ const requestSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  // HARD AUTH GATE (spec 04) — same gating as /api/chat and /api/booking/rates: when Supabase
+  // auth env is configured, assembly (a paid model call through the service client) requires a
+  // signed-in user. With no Supabase env (key-free CI / env-free dev) there is no auth system to
+  // gate on → run ungated, as before. Outside a request scope (direct handler invocation in
+  // tests) cookies() throws — nothing to gate on there; every network caller has request scope.
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    let user: { id: string } | null = null;
+    let sessionChecked = false;
+    try {
+      const cookieStore = await cookies();
+      const client = createSupabaseServerClient({
+        getAll: () => cookieStore.getAll(),
+        setAll: () => {},
+      });
+      ({
+        data: { user },
+      } = await client.auth.getUser());
+      sessionChecked = true;
+    } catch {
+      /* no request scope → no session to read */
+    }
+    if (sessionChecked && !user) {
+      return NextResponse.json(
+        { error: 'auth_required', message: 'Please sign in to get recommendations.' },
+        { status: 401 },
+      );
+    }
+  }
+
   // Parse + validate the request.
   let body: z.infer<typeof requestSchema>;
   try {
@@ -73,12 +105,15 @@ export async function POST(req: Request) {
         { status: 502 },
       );
     }
+    // Full detail stays server-side; the client gets warm copy + the trace id only — never a
+    // raw internal error message (spec 14).
+    console.error('[recommendations/assemble] failed', e);
     return NextResponse.json(
       {
         error: 'assembly_failed',
         message:
           "I couldn't finish your recommendation just now. That's on me, not you — try again in a moment?",
-        reason: e instanceof Error ? e.message : String(e),
+        traceId: currentTraceId() ?? undefined,
       },
       { status: 502 },
     );

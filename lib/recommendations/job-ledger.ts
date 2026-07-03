@@ -21,13 +21,16 @@ export type JobStatus = (typeof JOB_STATUSES)[number];
 export const JOB_STAGES = ['queued', 'finding_hotels', 'checking_intelligence', 'writing', 'done'] as const;
 export type JobStage = (typeof JOB_STAGES)[number];
 
-export const JOB_ERROR_KINDS = ['no_eligible_hotels', 'model_failed', 'timeout', 'unknown'] as const;
+export const JOB_ERROR_KINDS = ['no_eligible_hotels', 'budget_mismatch', 'model_failed', 'timeout', 'unknown'] as const;
 export type JobErrorKind = (typeof JOB_ERROR_KINDS)[number];
 
 export interface RecommendationJob {
   id: string;
   userId: string | null;
   tripBriefId: string | null;
+  /** Client-minted per-conversation correlation id (specs/14) captured at dispatch, so the
+   * worker (a separate HTTP request with no baggage) can stamp hz.conversation_id. */
+  conversationId: string | null;
   destination: string;
   inputHash: string;
   /** The RunAssemblyInput (family_profile + trip_brief) the worker re-runs. */
@@ -46,6 +49,7 @@ interface JobRow {
   id: string;
   user_id: string | null;
   trip_brief_id: string | null;
+  conversation_id: string | null;
   destination: string;
   input_hash: string;
   input: unknown;
@@ -60,13 +64,14 @@ interface JobRow {
 }
 
 const SELECT =
-  'id, user_id, trip_brief_id, destination, input_hash, input, status, stage, result, error_kind, attempts, created_at, started_at, finished_at';
+  'id, user_id, trip_brief_id, conversation_id, destination, input_hash, input, status, stage, result, error_kind, attempts, created_at, started_at, finished_at';
 
 function fromRow(r: JobRow): RecommendationJob {
   return {
     id: r.id,
     userId: r.user_id,
     tripBriefId: r.trip_brief_id,
+    conversationId: r.conversation_id ?? null,
     destination: r.destination,
     inputHash: r.input_hash,
     input: r.input,
@@ -84,19 +89,25 @@ function fromRow(r: JobRow): RecommendationJob {
 export interface CreateJobInput {
   userId?: string | null;
   tripBriefId?: string | null;
+  /** Per-conversation correlation id (specs/14) — stored so assembly.run carries it. */
+  conversationId?: string | null;
   destination: string;
   inputHash: string;
   /** The RunAssemblyInput the worker re-runs (family_profile + trip_brief). */
   input: unknown;
 }
 
-/** Insert a fresh job row in `pending`/`queued`. Returns the created job. */
+/** Insert a fresh job row in `pending`/`queued`. Returns the created job.
+ * NOTE: a partial unique index (0019) allows only ONE in-flight (pending/running) job per
+ * (user_id, input_hash) — a concurrent identical turn's insert throws a unique violation
+ * (Postgres 23505); callers should catch it and re-attach via findInflight (03c AC5). */
 export async function createJob(client: SupabaseClient, input: CreateJobInput): Promise<RecommendationJob> {
   const { data, error } = await client
     .from(TABLE)
     .insert({
       user_id: input.userId ?? null,
       trip_brief_id: input.tripBriefId ?? null,
+      conversation_id: input.conversationId ?? null,
       destination: input.destination,
       input_hash: input.inputHash,
       input: input.input,
@@ -109,22 +120,41 @@ export async function createJob(client: SupabaseClient, input: CreateJobInput): 
   return fromRow(data as JobRow);
 }
 
+/** True when a thrown Supabase/Postgres error is a unique violation (the in-flight index above). */
+export function isUniqueViolation(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === '23505';
+}
+
 /** Atomically claim a pending job for a worker: pending → running, stamp started_at, bump attempts.
- * Conditional on status='pending' so two concurrent workers can't both claim it — the loser gets null.
+ * Conditional on status='pending' AND the read attempts value, so two concurrent workers can't both
+ * claim it — the loser gets null — and the attempts bump lands in the SAME statement as the status
+ * flip (a crash can never claim without counting the attempt, so the maxAttempts cap holds).
  * Returns the claimed job, or null if it wasn't claimable (already running/terminal, or gone). */
 export async function claimJob(client: SupabaseClient, id: string): Promise<RecommendationJob | null> {
+  const { data: current, error: readError } = await client
+    .from(TABLE)
+    .select('status, attempts')
+    .eq('id', id)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!current || (current as JobRow).status !== 'pending') return null;
+
+  const attempts = (current as JobRow).attempts;
   const { data, error } = await client
     .from(TABLE)
-    .update({ status: 'running', stage: 'finding_hotels', started_at: new Date().toISOString() })
+    .update({
+      status: 'running',
+      stage: 'finding_hotels',
+      started_at: new Date().toISOString(),
+      attempts: attempts + 1,
+    })
     .eq('id', id)
     .eq('status', 'pending')
+    .eq('attempts', attempts) // optimistic guard: a racing claim/reclaim in between → no match
     .select(SELECT)
     .maybeSingle();
   if (error) throw error;
-  if (!data) return null;
-  // attempts bump in a follow-up (single statement can't read-modify-write a column portably).
-  await client.from(TABLE).update({ attempts: (data as JobRow).attempts + 1 }).eq('id', id);
-  return fromRow(data as JobRow);
+  return data ? fromRow(data as JobRow) : null;
 }
 
 /** Advance the stage of a running job (drives the progress UX). No-op-safe on a terminal job. */
@@ -142,11 +172,23 @@ export async function markSucceeded(client: SupabaseClient, id: string, result: 
   if (error) throw error;
 }
 
-/** Mark a job failed with a warm error kind (spec 14). */
-export async function markFailed(client: SupabaseClient, id: string, errorKind: JobErrorKind): Promise<void> {
+/** Mark a job failed with a warm error kind (spec 14). `result` optionally persists the full
+ * assembly error VARIANT (e.g. budget_mismatch's {reason, available_tiers}) so the client can
+ * render the correct copy — not just the coarse kind. */
+export async function markFailed(
+  client: SupabaseClient,
+  id: string,
+  errorKind: JobErrorKind,
+  result?: unknown,
+): Promise<void> {
   const { error } = await client
     .from(TABLE)
-    .update({ status: 'failed', error_kind: errorKind, finished_at: new Date().toISOString() })
+    .update({
+      status: 'failed',
+      error_kind: errorKind,
+      finished_at: new Date().toISOString(),
+      ...(result !== undefined ? { result } : {}),
+    })
     .eq('id', id);
   if (error) throw error;
 }
@@ -209,20 +251,47 @@ export async function loadInflightJob(
   return data ? fromRow(data as JobRow) : null;
 }
 
-/** Reuse guard: the most-recent non-failed job for this input within `withinMs`, or null. Lets two
- * identical recommendation turns re-attach to ONE job (one model call) instead of double-spending. */
+/** Reuse guard: the SAME USER's most-recent non-failed job for this input within `withinMs`, or
+ * null. Lets two identical recommendation turns re-attach to ONE job (one model call) instead of
+ * double-spending. Scoped to `userId` because the poll route reads jobs under OWNER-READ RLS —
+ * handing user B user A's jobId gives B a jobId they can never read (an infinite spinner). A null
+ * userId is never reusable (anonymous turns share no identity to reuse against). */
 export async function findReusable(
   client: SupabaseClient,
   inputHash: string,
+  userId: string | null | undefined,
   withinMs = 10 * 60 * 1000,
 ): Promise<RecommendationJob | null> {
+  if (!userId) return null;
   const since = new Date(Date.now() - withinMs).toISOString();
   const { data, error } = await client
     .from(TABLE)
     .select(SELECT)
     .eq('input_hash', inputHash)
+    .eq('user_id', userId)
     .neq('status', 'failed')
     .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? fromRow(data as JobRow) : null;
+}
+
+/** The user's current IN-FLIGHT (pending/running) job for this exact input, or null. This is the
+ * re-attach target after createJob hits the (user_id, input_hash) in-flight unique index (0019) —
+ * matches the index predicate exactly, with no recency window. */
+export async function findInflight(
+  client: SupabaseClient,
+  userId: string,
+  inputHash: string,
+): Promise<RecommendationJob | null> {
+  const { data, error } = await client
+    .from(TABLE)
+    .select(SELECT)
+    .eq('input_hash', inputHash)
+    .eq('user_id', userId)
+    .in('status', ['pending', 'running'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

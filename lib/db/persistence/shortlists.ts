@@ -24,9 +24,11 @@ export function makeShareToken(): string {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/** Persist the user's current shortlist (the set of saved hotel ids). Upserts the
- * single working shortlist row for this user — RLS WITH CHECK enforces ownership.
- * Returns the share_token so the UI can build a share link. */
+/** Persist the user's current shortlist (the set of saved hotel ids). ONE working row per
+ * user is enforced by unique(user_id) (migration 0019), so this is a race-safe upsert on
+ * user_id — the old select-then-insert could double-insert under concurrency, and a
+ * duplicate row made saved hotels permanently invisible (save and load both pick one row).
+ * RLS WITH CHECK enforces ownership. Returns the share_token for the share link. */
 export async function saveShortlist(
   hotelIds: string[],
   userId: string,
@@ -34,24 +36,23 @@ export async function saveShortlist(
 ): Promise<{ shareToken: string }> {
   const client = opts.client ?? createSupabaseBrowserClient();
 
-  // Reuse the existing working shortlist (keep its share_token stable) or mint one.
+  // Keep the existing row's share_token stable across saves; mint one only for the first save.
   const { data: existing } = await client
     .from('shortlists')
-    .select('id, share_token')
+    .select('share_token')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
   const shareToken = (existing?.share_token as string | undefined) ?? makeShareToken();
   const payload = {
-    ...(existing?.id ? { id: existing.id } : {}),
     user_id: userId,
     hotel_ids: hotelIds,
     trip_brief_id: opts.tripBriefId ?? null,
     share_token: shareToken,
   };
 
-  const { error } = await client.from('shortlists').upsert(payload);
+  const { error } = await client.from('shortlists').upsert(payload, { onConflict: 'user_id' });
   if (error) throw error;
   return { shareToken };
 }
