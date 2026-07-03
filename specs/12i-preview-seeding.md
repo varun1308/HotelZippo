@@ -1,7 +1,7 @@
 # 12i · Preview Destinations (Claude-seeded, RouteStack-verified)
 
 - **Notion:** https://app.notion.com/p/3814958429ac81b1a32cf1e8b5b79b5d (12i · Preview Destinations)
-- **Phase:** Launch / live-testing completeness · **Status:** SPEC (proposed 2026-06-16) — not yet built
+- **Phase:** Launch / live-testing completeness · **Status:** built ✅ (12i-B surfacing + 12i-C runtime seed BUILT 2026-06-17; the original §12i Claude-proposes path is **implemented but deliberately NOT wired** into the seed route — RouteStack-first is the only live path. Do not build against `proposeHotels`/`verifyAndStage` without a new founder decision.)
 - **Companion:** [12a · Curation Tool](12a-curation-tool.md), [12h · Apify Run Ledger](12h-apify-run-ledger.md), [10c · RouteStack Integration](10c-booking-routestack.md), [02 · Review-Intelligence Pipeline](02-review-intelligence-pipeline.md), [07 · Data Model](07-data-model.md), [14 · Error Handling](14-error-handling.md).
 
 ## Why

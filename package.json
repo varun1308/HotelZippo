@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:unit": "jest --selectProjects jsdom",
+    "test:coverage": "jest --selectProjects jsdom --coverage",
     "test:integration": "jest --selectProjects integration --runInBand",
     "pipeline:worker": "tsx --env-file=.env.local scripts/pipeline/run-worker.ts",
     "pipeline:remap": "tsx --env-file=.env.local scripts/pipeline/remap.ts",
