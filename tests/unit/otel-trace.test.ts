@@ -64,6 +64,37 @@ describe('withSpan', () => {
     });
     expect(byName('test.outcome').attributes[HZ.outcome]).toBe('no_eligible_hotels');
   });
+
+  it('preserves a call-site soft-error status on success (never clobbered by the OK default)', async () => {
+    // The webhook persist-failed pattern: the handler returns normally (deliberate 200 ack)
+    // but the call site marks the span ERROR so the dropped write is visible in Dash0.
+    await withSpan('test.soft-error', {}, async (span) => {
+      span.setStatus({ code: SpanStatusCode.ERROR, message: 'persist_failed' });
+      return 'acked';
+    });
+    const span = byName('test.soft-error');
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.status.message).toBe('persist_failed');
+  });
+
+  it('preserves a call-site OK status message too (any explicit status wins)', async () => {
+    await withSpan('test.explicit-ok', {}, async (span) => {
+      span.setStatus({ code: SpanStatusCode.OK, message: 'partial' });
+    });
+    expect(byName('test.explicit-ok').status.message).toBe('partial');
+  });
+
+  it('a throw still marks ERROR even if the call site set a status first', async () => {
+    await expect(
+      withSpan('test.throw-wins', {}, async (span) => {
+        span.setStatus({ code: SpanStatusCode.OK });
+        throw new Error('late kaboom');
+      }),
+    ).rejects.toThrow('late kaboom');
+    const span = byName('test.throw-wins');
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.events.some((e) => e.name === 'exception')).toBe(true);
+  });
 });
 
 describe('withCorrelation', () => {

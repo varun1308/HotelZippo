@@ -13,6 +13,10 @@ export interface RatesRequest {
   party: TravelParty;
   dates: BookingDates;
   currency?: string;
+  /** Client-minted per-conversation correlation id (specs/14) — validated server-side and
+   * bound into OTEL baggage so booking.rates + its routestack.* spans join the chat's
+   * hz.conversation_id Dash0 view. Optional so an older client omitting it still books. */
+  conversationId?: string;
 }
 
 export interface RatesResponse {
@@ -36,6 +40,8 @@ export interface PaymentUrlRequest {
    * sent to RouteStack. Optional so an older client omitting them still gets its deep link. */
   destination?: string;
   currency?: string;
+  /** Per-conversation correlation id (specs/14) — same contract as RatesRequest.conversationId. */
+  conversationId?: string;
 }
 
 export interface PaymentUrlResponse {

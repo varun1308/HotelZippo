@@ -114,9 +114,9 @@ const RAW_LOG_MAX_CHARS = 20_000;
 function recordMalformedRaw(span: Span, reason: string, raw: string): void {
   const bounded = raw.length > RAW_LOG_MAX_CHARS ? `${raw.slice(0, RAW_LOG_MAX_CHARS)}…[truncated ${raw.length} chars total]` : raw;
   span.addEvent('synthesis.malformed_output', {
-    'hz.reason': reason,
-    'hz.raw_response': bounded,
-    'hz.raw_length': raw.length,
+    [HZ.reason]: reason,
+    [HZ.rawResponse]: bounded,
+    [HZ.rawLength]: raw.length,
   });
   // eslint-disable-next-line no-console
   console.error(`[synthesis] malformed model output (${reason}; TC-P14) — raw response follows:\n${bounded}`);
@@ -208,16 +208,16 @@ export async function synthesise(
       }
 
       const gate = confidenceGate(result.data.confidence.overall);
-      span.setAttribute('hz.confidence', result.data.confidence.overall);
-      span.setAttribute('hz.hard_flag_count', result.data.hard_flags.length);
-      span.setAttribute('hz.low_confidence', gate.lowConfidence);
-      span.setAttribute('hz.review_queue', gate.reviewQueue);
-      span.setAttribute('hz.confidence_alert', gate.alert);
+      span.setAttribute(HZ.confidence, result.data.confidence.overall);
+      span.setAttribute(HZ.hardFlagCount, result.data.hard_flags.length);
+      span.setAttribute(HZ.lowConfidence, gate.lowConfidence);
+      span.setAttribute(HZ.reviewQueue, gate.reviewQueue);
+      span.setAttribute(HZ.confidenceAlert, gate.alert);
       if (gate.alert) {
         // TC-P12 low-confidence ALERT: loud + queryable. The span event feeds the Dash0 alert
         // rule; the console.error lands in worker/Vercel logs.
         span.addEvent('synthesis.low_confidence_alert', {
-          'hz.confidence': result.data.confidence.overall,
+          [HZ.confidence]: result.data.confidence.overall,
         });
         // eslint-disable-next-line no-console
         console.error(

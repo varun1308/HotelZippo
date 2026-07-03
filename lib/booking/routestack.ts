@@ -643,7 +643,7 @@ export async function searchAndRates(
         `totalRate may be in supplier currency; prices are stamped ${currency} UNCONVERTED. ` +
         'Verify the conversion direction with RouteStack before trusting these prices (10c decision 6).',
     );
-    trace.getActiveSpan()?.setAttribute('hz.currency_rate', currencyRate);
+    trace.getActiveSpan()?.setAttribute(HZ.currencyRate, currencyRate);
   }
   const options = mapped.map((o) => (o.currency ? o : { ...o, currency }));
 

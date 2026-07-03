@@ -58,6 +58,33 @@ export const HZ = {
   hotelId: 'hz.hotel_id',
   hotelCount: 'hz.hotel_count',
   destination: 'hz.destination',
+  /* chat profile persistence */
+  profileUpdatedCount: 'hz.profile.updated_count',
+  /* session snapshot (anthropic.session_snapshot) */
+  snapshotEstimatedTokens: 'hz.snapshot.estimated_tokens',
+  snapshotTokenCeiling: 'hz.snapshot.token_ceiling',
+  snapshotOverCeiling: 'hz.snapshot.over_ceiling',
+  /* recommendation assembly (anthropic.assemble) */
+  assembleCandidates: 'hz.assemble.candidates',
+  assemblePromptBytes: 'hz.assemble.prompt_bytes',
+  assembleOutputBytes: 'hz.assemble.output_bytes',
+  /* review synthesis (anthropic.review_synthesis; confidence gate 08a-2) */
+  confidence: 'hz.confidence',
+  hardFlagCount: 'hz.hard_flag_count',
+  lowConfidence: 'hz.low_confidence',
+  reviewQueue: 'hz.review_queue',
+  confidenceAlert: 'hz.confidence_alert',
+  /* malformed-model-output capture (TC-P14 span event) */
+  reason: 'hz.reason',
+  rawResponse: 'hz.raw_response',
+  rawLength: 'hz.raw_length',
+  /* booking / RouteStack */
+  currencyRate: 'hz.currency_rate',
+  /* webhook ingestion (webhook.routestack) */
+  webhookEvent: 'hz.webhook.event',
+  webhookModule: 'hz.webhook.module',
+  webhookOrderStatus: 'hz.webhook.order_status',
+  webhookMatched: 'hz.webhook.matched',
 } as const;
 
 /** Baggage keys used to carry correlation ids across span boundaries. */
@@ -89,15 +116,25 @@ export function withSpan<T>(
   return tracer.startActiveSpan(name, { kind: opts.kind ?? SpanKind.INTERNAL }, async (span) => {
     if (opts.attrs) span.setAttributes(opts.attrs);
     stampCorrelation(span);
+    // Track whether the CALL SITE set an explicit status (e.g. ERROR for a handled soft
+    // failure that still returns normally, like the webhook persist-failed path). setStatus
+    // is last-write-wins, so without this the success path would clobber it with OK.
+    let statusSetByCallSite = false;
+    const setStatus = span.setStatus.bind(span);
+    span.setStatus = (status) => {
+      statusSetByCallSite = true;
+      return setStatus(status);
+    };
     const start = Date.now();
     try {
       const out = await fn(span);
       // Only default to OK if the call site didn't already set a status (e.g. a soft error).
-      span.setStatus({ code: SpanStatusCode.OK });
+      if (!statusSetByCallSite) setStatus({ code: SpanStatusCode.OK });
       return out;
     } catch (e) {
       span.recordException(e as Error);
-      span.setStatus({ code: SpanStatusCode.ERROR });
+      // A throw is authoritative — ERROR even if the call site set a status before throwing.
+      setStatus({ code: SpanStatusCode.ERROR });
       throw e;
     } finally {
       span.setAttribute(HZ.durationMs, Date.now() - start);

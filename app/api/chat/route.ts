@@ -234,16 +234,28 @@ export async function POST(req: Request) {
       } catch (e) {
         turnError = true;
         turn.span.recordException(e as Error);
-        controller.enqueue(
-          encodeChunk({
-            type: 'text-delta',
-            delta: "\n\nI lost the thread there for a moment — try me again?",
-          }),
-        );
-        controller.enqueue(encodeChunk({ type: 'done' }));
+        try {
+          controller.enqueue(
+            encodeChunk({
+              type: 'text-delta',
+              delta: "\n\nI lost the thread there for a moment — try me again?",
+            }),
+          );
+          controller.enqueue(encodeChunk({ type: 'done' }));
+        } catch {
+          /* controller already errored/cancelled (e.g. tab closed mid-answer) — nothing to
+           * deliver; the finally below still ends + exports the span. */
+        }
       } finally {
-        controller.close();
+        // End the span BEFORE (and independently of) controller.close(): close() throws on an
+        // errored/cancelled controller, and an abandoned/errored turn is exactly the one that
+        // must still reach Dash0 (specs/14).
         turn.end(turnError ? SpanStatusCode.ERROR : SpanStatusCode.OK);
+        try {
+          controller.close();
+        } catch {
+          /* already closed/errored — the client is gone; nothing left to deliver */
+        }
       }
     }),
   });

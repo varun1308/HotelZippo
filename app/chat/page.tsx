@@ -301,7 +301,13 @@ export default function ChatPage() {
   // booking shape and the confirm screen prefills; month-only/vague stays null and the
   // confirm screen collects exact dates — the month-only path from the spec.
   const bookingDates = useMemo(() => resolveDates(travelDates), [travelDates]);
-  const bookingFlow = useBookingFlow({ profile: savedProfile, dates: bookingDates });
+  // conversationId: the same client-minted id every chat turn carries (specs/14), so the
+  // booking spans join the conversation's hz.conversation_id view at the chat→booking handoff.
+  const bookingFlow = useBookingFlow({
+    profile: savedProfile,
+    dates: bookingDates,
+    conversationId: conversationIdRef.current,
+  });
   const bookingActions = useMemo(() => ({ proceed: bookingFlow.proceed }), [bookingFlow.proceed]);
 
   // Re-hydrate the working shortlist from Supabase on mount (keyed to the user), so a saved

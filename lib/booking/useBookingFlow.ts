@@ -70,6 +70,10 @@ interface Deps {
   dates: BookingDates | null;
   /** Currency for the search (USD default for v1). */
   currency?: string;
+  /** The chat's client-minted per-conversation correlation id (specs/14) — sent with both
+   * booking requests so the server ties the chat→booking handoff into one hz.conversation_id
+   * Dash0 view. Optional (e.g. booking outside a chat session). */
+  conversationId?: string;
   /** Injectable fetch for tests; defaults to window.fetch. */
   fetchImpl?: typeof fetch;
   /** Injectable opener for tests; defaults to window.open. */
@@ -148,6 +152,8 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
       party,
       dates,
       currency: deps.currency,
+      // Conversation correlation (specs/14): ties booking.rates + its routestack.* spans to the chat.
+      conversationId: deps.conversationId,
     };
     try {
       const res = await doFetch('/api/booking/rates', {
@@ -165,7 +171,7 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
     } catch {
       setState((s) => ({ ...s, step: 'error', error: { kind: 'transport', message: 'I couldn’t reach the booking service.' } }));
     }
-  }, [doFetch, deps.currency, setState]);
+  }, [doFetch, deps.currency, deps.conversationId, setState]);
 
   const selectRoom = useCallback(
     async (option: RoomRateOption) => {
@@ -188,6 +194,8 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
         // phase 1 searched with (the server defaults an omitted currency to USD — v1 is USD-only).
         destination: handles.destination,
         currency: deps.currency ?? 'USD',
+        // Conversation correlation (specs/14): same id phase 1 carried.
+        conversationId: deps.conversationId,
       };
       try {
         const res = await doFetch('/api/booking/payment-url', {
@@ -206,7 +214,7 @@ export function useBookingFlow(deps: Deps): BookingFlowApi {
         setState((s) => ({ ...s, step: 'error', error: { kind: 'transport', message: 'I couldn’t reach the booking service.' } }));
       }
     },
-    [doFetch, open, setState],
+    [doFetch, open, deps.currency, deps.conversationId, setState],
   );
 
   return { state, proceed, setParty, setDates, confirm, selectRoom, close, retry };

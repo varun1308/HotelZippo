@@ -151,7 +151,10 @@ export async function runConversation(args: RunConversationArgs) {
     // OTEL (specs/14): let the AI SDK emit its own model spans (token usage, stop reason, tool
     // calls) instead of the opaque `fetch POST api.anthropic.com` span. recordInputs/Outputs OFF
     // so conversation content + the injected family profile never land in a span (warm-error /
-    // no-PII principle). conversationId rides in metadata so these spans join the same Dash0 view.
+    // no-PII principle). conversationId rides in metadata — the SDK prefixes it as
+    // `ai.telemetry.metadata.hz.conversation_id`, and the AiMetadataSpanProcessor
+    // (lib/otel/ai-metadata.ts) copies it back to bare `hz.conversation_id` on export so these
+    // spans still join the spec-14 Dash0 conversation view.
     experimental_telemetry: {
       isEnabled: true,
       recordInputs: false,
@@ -277,7 +280,7 @@ export async function runConversation(args: RunConversationArgs) {
                   async (span) => {
                     const res = await runUpdateProfile(input, args.userId!, args.profileClient!);
                     // How many profile fields this confirmed change actually persisted (0 ⇒ no-op).
-                    span.setAttribute('hz.profile.updated_count', res.updated.length);
+                    span.setAttribute(HZ.profileUpdatedCount, res.updated.length);
                     span.setAttribute(HZ.outcome, res.updated.length > 0 ? 'profile_updated' : 'profile_noop');
                     if (res.updated.length > 0) span.addEvent('profile_persisted');
                     return res;

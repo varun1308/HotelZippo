@@ -15,6 +15,7 @@
  * re-register, so each entrypoint calls it exactly once. */
 import { registerOTel } from '@vercel/otel';
 import { applyDash0Headers } from './dash0-headers';
+import { AiMetadataSpanProcessor } from './ai-metadata';
 
 export { applyDash0Headers };
 
@@ -26,5 +27,9 @@ export function registerHotelZippoOtel(): void {
     attributes: {
       'deployment.environment': process.env.NODE_ENV ?? 'development',
     },
+    // Copy the AI SDK's prefixed `ai.telemetry.metadata.hz.*` attributes onto bare `hz.*`
+    // before export, so its model/tool spans join the spec-14 hz.conversation_id Dash0 view.
+    // 'auto' keeps @vercel/otel's default export processor.
+    spanProcessors: [new AiMetadataSpanProcessor(), 'auto'],
   });
 }
