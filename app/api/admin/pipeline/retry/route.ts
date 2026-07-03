@@ -33,7 +33,23 @@ export async function POST(req: Request) {
   }
 
   try {
+    // NOTE: a single hotel's scrape+synthesis runs INLINE here. On a serverless host that could
+    // exceed the function timeout, but this admin surface is laptop-hosted by design — accepted.
     const outcome = await processHotel(supabase, run_id, hotel, {});
+
+    // TC-P21/22: keep the run's history counters honest after the retry flips this hotel's
+    // status. RECOUNT from pipeline_run_hotels (rather than incrementing) so repeated retries
+    // and mixed outcomes stay correct.
+    const { data: rows } = await supabase
+      .from('pipeline_run_hotels')
+      .select('status')
+      .eq('run_id', run_id);
+    if (rows) {
+      const hotels_complete = rows.filter((r) => r.status === 'complete').length;
+      const hotels_failed = rows.filter((r) => r.status === 'failed').length;
+      await supabase.from('pipeline_runs').update({ hotels_complete, hotels_failed }).eq('id', run_id);
+    }
+
     return NextResponse.json({ hotel_id, outcome });
   } catch (e) {
     return NextResponse.json(

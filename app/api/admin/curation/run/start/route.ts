@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/db/server';
 import { startRun, ApifyError } from '@/lib/apify/client';
 import { createRun, markRunning, markStatus, findReusable } from '@/lib/apify/run-ledger';
-import { buildSearchInput } from '@/lib/curation/apify-mapper';
+import { buildLiveSearchInput } from '@/lib/curation/apify-mapper';
 import { DESTINATIONS } from '@/lib/db/schemas';
 
 export const runtime = 'nodejs';
@@ -39,8 +39,9 @@ export async function POST(req: Request) {
 
   // Fetch a LARGE pool from the actor (~500) so ingest's selectTopHotels can rank + backfill to the
   // final top-N (APIFY_SEARCH_MAX_RESULTS, default 50). Pool ≫ N is the whole point of the new rule.
-  const pool = Number(process.env.APIFY_SEARCH_POOL_SIZE ?? 500);
-  const input = buildSearchInput(destination!, pool);
+  // Shared builder (searchPoolSize env default inside) → this input keys the same actor-cache entry
+  // as the sync fetch path and the dev preseed, so CURATION_USE_CACHE=1 covers this route too.
+  const input = buildLiveSearchInput(destination!);
   const supabase = createServiceClient();
 
   // Reuse guard — warn, never auto-reuse.

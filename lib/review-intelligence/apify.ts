@@ -26,6 +26,7 @@ import {
   mapTripadvisorReviewItem,
   mapGoogleReviewItem,
   extractReviewExternalId,
+  reviewsMaxResults,
 } from './apify-mapper';
 
 export type ReviewSource = 'tripadvisor' | 'google';
@@ -112,7 +113,7 @@ const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
 
 async function scrapeFromApify(target: ScrapeTarget, source: ReviewSource): Promise<SourceScrape> {
   const since = new Date(Date.now() - TWELVE_MONTHS_MS);
-  const maxResults = Number(process.env.APIFY_REVIEWS_MAX_RESULTS ?? 600);
+  const maxResults = reviewsMaxResults(); // shared env default → actor-cache keys match the preseed
 
   let items: unknown[];
   let mapItem: (item: unknown) => RawReviewInput | null;
@@ -163,6 +164,14 @@ function hasApifyFor(source: ReviewSource): boolean {
     : !!process.env.APIFY_GOOGLE_REVIEWS_ACTOR_ID;
 }
 
+/** TC-P4: mock fixtures are dev/test ONLY — they must never be stored as real data for real
+ * hotels just because the Apify token is missing or a live scrape failed. The mock layer is
+ * an EXPLICIT opt-in (PIPELINE_ALLOW_MOCK=1) or Jest (NODE_ENV=test); otherwise the source
+ * fails loudly and the gap is recorded (worker/TC-P3). */
+function mockAllowed(): boolean {
+  return process.env.PIPELINE_ALLOW_MOCK === '1' || process.env.NODE_ENV === 'test';
+}
+
 /** Scrape ONE source for a hotel through the degradation chain. Returns the outcome; never
  * throws (a thrown scrape becomes ok=false so the run continues — TC-P2/P3). */
 async function scrapeOneSource(
@@ -182,18 +191,41 @@ async function scrapeOneSource(
     }
   }
 
+  let liveError: unknown;
   if (hasApifyFor(source)) {
     try {
       const { reviews, payloads } = await scrapeFromApify(target, source);
       return { source, ok: true, reviews, payloads, via: 'apify' };
-    } catch {
+    } catch (apifyErr) {
+      liveError = apifyErr;
       try {
         const { reviews, payloads } = await scrapeFromPlaywright(target, source);
         return { source, ok: true, reviews, payloads, via: 'playwright' };
       } catch {
-        /* fall through to mock */
+        /* fall through to the mock gate below */
       }
     }
+  }
+
+  // TC-P4 gate: without the explicit opt-in, NEVER serve fixtures as real data — fail the
+  // source loudly (ok=false) so the worker records the gap instead of silently storing mocks.
+  if (!mockAllowed()) {
+    const why = liveError
+      ? `apify scrape failed: ${liveError instanceof Error ? liveError.message : String(liveError)}`
+      : 'apify not configured for this source (APIFY_API_TOKEN / actor id missing)';
+    return {
+      source,
+      ok: false,
+      reviews: [],
+      payloads: [],
+      error: `${why} — mock fixtures are disabled outside dev/test (set PIPELINE_ALLOW_MOCK=1 to opt in; TC-P4)`,
+    };
+  }
+  if (liveError) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[pipeline] ${source} live scrape failed for ${target.hotelId}; falling back to MOCK fixtures (PIPELINE_ALLOW_MOCK): ${liveError instanceof Error ? liveError.message : String(liveError)}`,
+    );
   }
   try {
     const { reviews, payloads } = await scrapeFromMock(target);

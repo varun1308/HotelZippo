@@ -9,7 +9,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fetchedHotelSchema, type FetchHotelsResult, type FetchedHotel } from './types';
 import { runActorGetItems } from '@/lib/apify/client';
-import { buildSearchInput, mapSearchItem } from './apify-mapper';
+import { buildLiveSearchInput, mapSearchItem, searchPoolSize } from './apify-mapper';
 import { selectTopHotels } from './select';
 import { DESTINATIONS } from '@/lib/db/schemas';
 
@@ -35,10 +35,10 @@ async function fetchFromApify(destination: string): Promise<FetchedHotel[]> {
   if (!(DESTINATIONS as readonly string[]).includes(destination)) {
     throw new Error(`unknown destination: ${destination}`);
   }
-  const poolSize = Number(process.env.APIFY_SEARCH_POOL_SIZE ?? 500);
+  const poolSize = searchPoolSize();
   const items = await runActorGetItems({
     actorId,
-    input: buildSearchInput(destination, poolSize),
+    input: buildLiveSearchInput(destination), // shared builder → cache/reuse keys match everywhere
     limit: poolSize,
   });
   const pool = items

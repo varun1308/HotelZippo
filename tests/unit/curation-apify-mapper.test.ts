@@ -125,4 +125,15 @@ describe('mapSearchItem', () => {
     // items[1] (Angsana) has no type/category — must still map.
     expect(mapSearchItem(items[1], 'Phuket')).not.toBeNull();
   });
+
+  // L24: the TripAdvisor bubble score (`rating`) is guest satisfaction, NOT the hotel class —
+  // a 4.5-bubble 3-star hotel must never be staged as 4-star (it skews selectTopHotels).
+  it('never derives star class from the bubble rating; null when hotelClass/stars absent', () => {
+    const h = mapSearchItem({ name: 'Bubble Only Hotel', category: 'hotel', rating: 4.5 }, 'Phuket');
+    expect(h).not.toBeNull();
+    expect(h!.star_rating).toBeNull();
+    // hotelClass / stars still map normally.
+    expect(mapSearchItem({ name: 'Classed', hotelClass: '3.0', rating: 4.5 }, 'Phuket')!.star_rating).toBe(3);
+    expect(mapSearchItem({ name: 'Starred', stars: 5 }, 'Phuket')!.star_rating).toBe(5);
+  });
 });

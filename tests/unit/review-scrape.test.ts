@@ -5,6 +5,34 @@ jest.mock('server-only', () => ({}));
 
 import { scrapeHotelReviews, type ScrapeTarget } from '@/lib/review-intelligence/apify';
 
+// Pin the env: next/jest loads .env.local, so a dev machine may carry real Apify creds (the
+// chain would then attempt a live call) and NODE_ENV=dev. These tests exercise the key-free
+// fixture path, which since L27 requires the explicit PIPELINE_ALLOW_MOCK opt-in.
+const env = process.env as Record<string, string | undefined>;
+const savedEnv = {
+  token: env.APIFY_API_TOKEN,
+  ta: env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID,
+  google: env.APIFY_GOOGLE_REVIEWS_ACTOR_ID,
+  allow: env.PIPELINE_ALLOW_MOCK,
+};
+beforeEach(() => {
+  delete env.APIFY_API_TOKEN;
+  delete env.APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID;
+  delete env.APIFY_GOOGLE_REVIEWS_ACTOR_ID;
+  env.PIPELINE_ALLOW_MOCK = '1';
+});
+afterAll(() => {
+  for (const [k, v] of [
+    ['APIFY_API_TOKEN', savedEnv.token],
+    ['APIFY_TRIPADVISOR_REVIEWS_ACTOR_ID', savedEnv.ta],
+    ['APIFY_GOOGLE_REVIEWS_ACTOR_ID', savedEnv.google],
+    ['PIPELINE_ALLOW_MOCK', savedEnv.allow],
+  ] as const) {
+    if (v === undefined) delete env[k];
+    else env[k] = v;
+  }
+});
+
 const target: ScrapeTarget = {
   hotelId: '00000000-0000-0000-0000-000000000001',
   hotelName: 'Mock Test Resort',
@@ -61,5 +89,32 @@ describe('scrapeHotelReviews', () => {
     expect(res.partial).toBe(false); // both failed → not "partial"
     expect(res.sources.every((s) => !s.ok)).toBe(true);
     expect(res.payloads).toHaveLength(0);
+  });
+
+  // L27 (TC-P4): mock fixtures are dev/test ONLY. Outside Jest, without the explicit
+  // PIPELINE_ALLOW_MOCK=1 opt-in, a missing token must FAIL the sources loudly — never
+  // silently store fixture reviews as real data for real hotels.
+  describe('mock fallback gating (TC-P4)', () => {
+    const savedNodeEnv = env.NODE_ENV;
+    afterEach(() => {
+      env.NODE_ENV = savedNodeEnv;
+    });
+
+    it('outside dev/test without the opt-in: sources fail loudly instead of serving fixtures', async () => {
+      env.NODE_ENV = 'production';
+      delete env.PIPELINE_ALLOW_MOCK;
+      const res = await scrapeHotelReviews(target); // no Apify creds either
+      expect(res.reviews).toHaveLength(0);
+      expect(res.sources.every((s) => !s.ok)).toBe(true);
+      expect(res.sources[0].error).toMatch(/mock fixtures are disabled/i);
+    });
+
+    it('PIPELINE_ALLOW_MOCK=1 re-enables the fixture fallback explicitly', async () => {
+      env.NODE_ENV = 'production';
+      env.PIPELINE_ALLOW_MOCK = '1';
+      const res = await scrapeHotelReviews(target);
+      expect(res.reviews.length).toBe(4); // mock-test-resort.json served
+      expect(res.sources.every((s) => s.ok && s.via === 'mock')).toBe(true);
+    });
   });
 });

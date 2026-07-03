@@ -6,20 +6,43 @@
  *
  * Server-side; service client (raw_review_payloads + raw_reviews are service-role only). Part of
  * the worker chain (run via scripts/pipeline/remap.ts under tsx) — no `import 'server-only'`. */
+import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ReviewSource } from './apify';
 import { mapTripadvisorReviewItem, mapGoogleReviewItem } from './apify-mapper';
 import { tagReviews, type RawReviewInput, type TaggedReview } from './tagging';
 import { loadRawPayloads, storeRawReviews, type StoredPayload, type StoreResult } from './store';
 
+/** The mock/test-fake payload shape: apify.ts banks the RawReviewInput ITSELF for the mock and
+ * injected-scraper paths (snake_case review_text / review_date / reviewer_name), which the LIVE
+ * mappers do not read (they read text / publishedDate / user…). STRICT so a real actor item
+ * (which always carries extra fields) can never take this branch. Without it, a re-map of a
+ * mock-seeded hotel produces null/degraded rows — and --replace then destroys its raw_reviews. */
+const rawReviewInputShape = z
+  .object({
+    source: z.enum(['tripadvisor', 'google']),
+    review_date: z.string().nullable(),
+    reviewer_name: z.string().nullable(),
+    review_text: z.string().nullable(),
+    rating: z.number().nullable(),
+  })
+  .strict();
+
 /** Re-run the source mappers + tagging over stored payloads → TaggedReview[]. Pure (no DB).
- * Dispatches on source; drops items the (current) mapper skips, exactly like the live scrape. */
+ * Dispatches on source; drops items the (current) mapper skips, exactly like the live scrape.
+ * Payloads already in RawReviewInput shape (mock/test-fake banks) pass through unchanged —
+ * checked FIRST because the live TA mapper would otherwise half-read them (rating only). */
 export function remapPayloads(
   payloads: Array<Pick<StoredPayload, 'source' | 'payload'>>,
   opts: { indian?: boolean } = {},
 ): TaggedReview[] {
   const mapped: RawReviewInput[] = [];
   for (const { source, payload } of payloads) {
+    const asInput = rawReviewInputShape.safeParse(payload);
+    if (asInput.success) {
+      if (asInput.data.source === source) mapped.push(asInput.data);
+      continue;
+    }
     const r = source === 'tripadvisor' ? mapTripadvisorReviewItem(payload) : mapGoogleReviewItem(payload);
     if (r) mapped.push(r);
   }

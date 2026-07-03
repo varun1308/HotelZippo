@@ -51,19 +51,26 @@ function byRecency(a: TaggedReview, b: TaggedReview): number {
   return (b.review_date ?? '').localeCompare(a.review_date ?? '');
 }
 
+/** The M2 recency window (spec 02 Stage 5 step 1): reviews dated within 12 months of the run
+ * date; undated/unparseable dates are excluded. Exported so the worker computes its
+ * review_count_* inputs over the SAME corpus synthesis actually sees — counting the full
+ * permanent store would misstate volumes and mis-trigger the "<10 reviews → low" rule. */
+export function filterToSynthesisWindow(reviews: TaggedReview[], now: Date): TaggedReview[] {
+  const cutoff = now.getTime() - TWELVE_MONTHS_MS;
+  return reviews.filter((r) => {
+    if (!r.review_date) return false;
+    const t = Date.parse(r.review_date);
+    return !Number.isNaN(t) && t >= cutoff;
+  });
+}
+
 /** Run the full producer prep. `now` is injectable for deterministic tests. */
 export function prepareForSynthesis(
   reviews: TaggedReview[],
   now: Date,
 ): FormattedSegments {
-  const cutoff = now.getTime() - TWELVE_MONTHS_MS;
-
   // M2: 12-month recency filter (drop undated or older-than-12mo).
-  const recent = reviews.filter((r) => {
-    if (!r.review_date) return false;
-    const t = Date.parse(r.review_date);
-    return !Number.isNaN(t) && t >= cutoff;
-  });
+  const recent = filterToSynthesisWindow(reviews, now);
 
   // Priority-exclusive segmentation: family → indian → general.
   const family: TaggedReview[] = [];
@@ -105,7 +112,8 @@ export function prepareForSynthesis(
 
 /** Build the user message for the synthesis prompt from the formatted segments + hotel
  * facts. Mirrors the INPUTS block in the 08a-1 prompt. review_count_* are the TOTAL tagged
- * counts (not the capped line counts) so the prompt sees true volumes. */
+ * counts within the 12-month synthesis window (not the capped line counts) so the prompt
+ * sees the true volume of the corpus it is actually synthesising from. */
 export function buildSynthesisInput(args: {
   hotelName: string;
   destination: string;

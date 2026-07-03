@@ -10,8 +10,10 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/db/server';
 import { pullDatasetItems } from '@/lib/apify/client';
+import { withActorCache } from '@/lib/dev/actor-cache';
 import { loadRun, markIngested } from '@/lib/apify/run-ledger';
 import { mapDatasetItems, stageHotels } from '@/lib/curation/stage';
+import { searchPoolSize } from '@/lib/curation/apify-mapper';
 import { selectTopHotels } from '@/lib/curation/select';
 
 export const runtime = 'nodejs';
@@ -50,8 +52,13 @@ export async function POST(req: Request) {
   let items: unknown[];
   try {
     // Pull the FULL fetched pool (not just the final 50) so selectTopHotels can rank + backfill.
-    const pool = Number(process.env.APIFY_SEARCH_POOL_SIZE ?? 500);
-    items = await pullDatasetItems(run.apifyDatasetId, { limit: pool });
+    // Wrapped in the dev actor-cache keyed on the run's OWN (actorId, input) — the same key the
+    // sync fetch path and a cache-synthetic startRun use — so CURATION_USE_CACHE=1 replays a
+    // banked pool with zero live calls, and a live pull is banked for next time.
+    const dsId = run.apifyDatasetId;
+    items = (await withActorCache('apify', run.actorId, run.input, () =>
+      pullDatasetItems(dsId, { limit: searchPoolSize() }),
+    )) as unknown[];
   } catch (e) {
     return NextResponse.json(
       { error: 'pull_failed', reason: e instanceof Error ? e.message : String(e) },
@@ -64,8 +71,26 @@ export async function POST(req: Request) {
   const pool = mapDatasetItems(items, run.scopeValue);
   const topN = Number(process.env.APIFY_SEARCH_MAX_RESULTS ?? 50);
   const hotels = selectTopHotels(pool, { topN });
-  const { staged } = await stageHotels(supabase, hotels, 'apify');
-  await markIngested(supabase, run.id, { itemCount: items.length });
+  const { staged, failed, errors } = await stageHotels(supabase, hotels, 'apify');
 
-  return NextResponse.json({ ingested: staged, items: items.length, pool: pool.length });
+  // A total staging failure must NOT flip the ledger to ingested (the run stays re-ingestable);
+  // a partial failure is surfaced in the response so the UI can show it.
+  if (staged === 0 && failed > 0) {
+    return NextResponse.json(
+      { error: 'stage_failed', ingested: 0, failed, errors, items: items.length, pool: pool.length },
+      { status: 502 },
+    );
+  }
+  if (staged > 0) {
+    await markIngested(supabase, run.id, { itemCount: items.length });
+  }
+
+  return NextResponse.json({
+    ingested: staged,
+    failed,
+    errors,
+    items: items.length,
+    pool: pool.length,
+    ingestMarked: staged > 0,
+  });
 }

@@ -1,7 +1,11 @@
 /* Async Apify client primitives (12h · run ledger) — startRun / getRunStatus / pullDatasetItems.
  * Network-free: an injected fetchImpl returns canned Apify API shapes. Asserts the URL/method, the
- * status mapping, the Bearer auth, and that the token never lands in the URL. */
-import { startRun, getRunStatus, pullDatasetItems, ApifyError } from '@/lib/apify/client';
+ * status mapping (unknown → NON-terminal, L22), itemCount parsing, the Bearer auth, that the token
+ * never lands in the URL, and the CURATION_USE_CACHE seam (M18: banked input → synthetic run). */
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { startRun, getRunStatus, pullDatasetItems, isCacheRunId, ApifyError } from '@/lib/apify/client';
+import { cacheKeyFor } from '@/lib/dev/actor-cache';
 
 const OLD_ENV = process.env;
 beforeEach(() => {
@@ -54,12 +58,16 @@ describe('startRun', () => {
 
 describe('getRunStatus', () => {
   it.each([
-    ['SUCCEEDED', 'succeeded'],
     ['RUNNING', 'running'],
     ['READY', 'running'],
     ['FAILED', 'failed'],
     ['TIMED-OUT', 'failed'],
     ['ABORTED', 'failed'],
+    // L22: unknown / future / missing statuses must stay NON-terminal — mapping them to
+    // 'failed' is terminal in the ledger and strands paid data.
+    ['MIGRATING', 'running'],
+    ['SOME-FUTURE-STATE', 'running'],
+    ['', 'running'],
   ])('maps Apify status %s → %s', async (apifyStatus, expected) => {
     const fetchImpl = (async (url: string) => {
       expect(url).toContain('/v2/actor-runs/run_123');
@@ -68,6 +76,73 @@ describe('getRunStatus', () => {
     const out = await getRunStatus('run_123', fetchImpl);
     expect(out.status).toBe(expected);
     expect(out.costEstimate).toBe(0.42);
+  });
+
+  it('L22: parses itemCount from the dataset on a SUCCEEDED run (fixes the "? items" UI gap)', async () => {
+    const fetchImpl = (async (url: string) => {
+      if (url.includes('/v2/actor-runs/run_123')) {
+        return jsonResponse({ data: { status: 'SUCCEEDED', defaultDatasetId: 'ds_456', usageTotalUsd: 0.42 } });
+      }
+      expect(url).toContain('/v2/datasets/ds_456');
+      return jsonResponse({ data: { itemCount: 487 } });
+    }) as unknown as typeof fetch;
+    const out = await getRunStatus('run_123', fetchImpl);
+    expect(out).toEqual({ status: 'succeeded', costEstimate: 0.42, itemCount: 487 });
+  });
+
+  it('L22: a failed dataset lookup is best-effort (status still succeeded, itemCount absent)', async () => {
+    const fetchImpl = (async (url: string) => {
+      if (url.includes('/v2/actor-runs/')) {
+        return jsonResponse({ data: { status: 'SUCCEEDED', defaultDatasetId: 'ds_456' } });
+      }
+      return jsonResponse({ error: 'boom' }, false, 500);
+    }) as unknown as typeof fetch;
+    const out = await getRunStatus('run_123', fetchImpl);
+    expect(out.status).toBe('succeeded');
+    expect(out.itemCount).toBeUndefined();
+  });
+});
+
+describe('CURATION_USE_CACHE seam (M18)', () => {
+  const ACTOR = 'maxcopell~tripadvisor';
+  const INPUT = { query: 'Phuket', maxItemsPerQuery: 500 };
+  const CACHE_DIR = path.join(process.cwd(), 'scripts', 'dev', '.cache', 'routes');
+  const bankFile = path.join(CACHE_DIR, cacheKeyFor('apify', ACTOR, INPUT));
+
+  afterEach(async () => {
+    await fs.rm(bankFile, { force: true });
+  });
+
+  it('startRun with a banked input returns a synthetic succeeded run — NO live call, NO token needed', async () => {
+    delete process.env.APIFY_API_TOKEN; // free mode must not even need a token
+    process.env.CURATION_USE_CACHE = '1';
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+    await fs.writeFile(bankFile, JSON.stringify([{ name: 'Banked Hotel' }]), 'utf8');
+
+    const fetchImpl = (async () => {
+      throw new Error('live Apify must not be called on a cache HIT');
+    }) as unknown as typeof fetch;
+
+    const out = await startRun({ actorId: ACTOR, input: INPUT }, fetchImpl);
+    expect(isCacheRunId(out.apifyRunId)).toBe(true);
+    expect(out.apifyDatasetId).toBe(out.apifyRunId);
+    // …and the status poll resolves it as succeeded with no live call either.
+    await expect(getRunStatus(out.apifyRunId, fetchImpl)).resolves.toEqual({ status: 'succeeded' });
+  });
+
+  it('startRun falls through to the live start on a cache MISS', async () => {
+    process.env.CURATION_USE_CACHE = '1'; // no bank file written
+    const fetchImpl = (async () =>
+      jsonResponse({ data: { id: 'run_live', defaultDatasetId: 'ds_live' } })) as unknown as typeof fetch;
+    const out = await startRun({ actorId: ACTOR, input: INPUT }, fetchImpl);
+    expect(out).toEqual({ apifyRunId: 'run_live', apifyDatasetId: 'ds_live' });
+  });
+
+  it('pullDatasetItems refuses a synthetic cache dataset id with a clear error', async () => {
+    const fetchImpl = (async () => jsonResponse([])) as unknown as typeof fetch;
+    await expect(pullDatasetItems('cache:apify__x__deadbeef.json', {}, fetchImpl)).rejects.toMatchObject({
+      kind: 'bad_response',
+    });
   });
 });
 

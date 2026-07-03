@@ -15,7 +15,7 @@
  * Same RouteStack-first, no-LLM, grounded pipeline as 12i-B — nothing fabricated. Server-side only. */
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { seedPreviewFromRouteStack } from './verify';
+import { seedPreviewFromRouteStack, previewSeedBlockedByMock } from './verify';
 import type { BookingDeps } from '@/lib/booking/routestack';
 
 export type EnsureSeedOutcome =
@@ -39,6 +39,15 @@ export async function ensurePreviewSeed(
   deps: BookingDeps,
   opts: { limit?: number } = {},
 ): Promise<EnsureSeedOutcome> {
+  // 10e AC5: with the mock RouteStack transport active, runtime seeding must NO-OP — canned
+  // "Mock …" hotels must never persist in the real hotels table. Checked BEFORE the latch so a
+  // demo session can't burn/poison the seed-once state for the destination.
+  if (previewSeedBlockedByMock(deps)) {
+    // eslint-disable-next-line no-console
+    console.warn(`[preview] runtime seed skipped for ${destination} — RouteStack transport is MOCK (10e AC5)`);
+    return { state: 'failed', reason: 'routestack mock transport active — runtime seeding disabled' };
+  }
+
   // Latch state first.
   const { data: existing } = await client
     .from('preview_seeds')
@@ -67,11 +76,27 @@ export async function ensurePreviewSeed(
   // Run the FAST seed inline (one search call; images deferred → placeholder).
   try {
     const res = await seedPreviewFromRouteStack(client, destination, deps, { fast: true, limit: opts.limit });
+
+    // 12i-C: 'done' means SEEDED. A 0-hotel result (e.g. a RouteStack empty-inventory blip) must
+    // NOT latch the destination done forever — record a retryable 'failed' instead, so a later
+    // request (or the failed→running retry claim above) can try again.
+    if (res.staged === 0) {
+      await client
+        .from('preview_seeds')
+        .update({
+          status: 'failed',
+          hotel_count: 0,
+          error: 'seed staged 0 hotels (RouteStack returned no inventory)',
+          finished_at: new Date().toISOString(),
+        })
+        .eq('destination', destination);
+      return { state: 'empty' };
+    }
+
     await client
       .from('preview_seeds')
-      .update({ status: 'done', hotel_count: res.staged, finished_at: new Date().toISOString() })
+      .update({ status: 'done', hotel_count: res.staged, error: null, finished_at: new Date().toISOString() })
       .eq('destination', destination);
-    if (res.staged === 0) return { state: 'empty' };
     return { state: 'seeded', staged: res.staged };
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);

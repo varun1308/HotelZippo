@@ -8,6 +8,10 @@ export interface RunHotelStatus {
   status: string;
   error_reason: string | null;
   reviews_scraped: number | null;
+  /** Per-source scrape gaps recorded on partial failure (TC-P3): [{ source, error }] or null. */
+  scrape_gaps: Array<{ source: string; error: string }> | null;
+  /** Confidence gate outcome (TC-P12): true = medium confidence, flagged for human review. */
+  review_queue: boolean;
 }
 
 export interface PipelineStatus {
@@ -33,9 +37,9 @@ export async function getPipelineStatus(client: SupabaseClient, historyLimit = 2
   if (active) {
     const { data } = await client
       .from('pipeline_run_hotels')
-      .select('hotel_id, status, error_reason, reviews_scraped')
+      .select('hotel_id, status, error_reason, reviews_scraped, scrape_gaps, review_queue')
       .eq('run_id', active.id);
-    hotels = (data ?? []) as RunHotelStatus[];
+    hotels = (data ?? []) as unknown as RunHotelStatus[];
   }
 
   const { data: history } = await client
