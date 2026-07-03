@@ -1,7 +1,7 @@
 # Conversation Agent — System Prompt
 
 - **Spec:** `specs/08b-1-system-prompt.md` (Notion 08b-1, v1.0.0)
-- **Model:** `claude-sonnet-4-6`
+- **Model:** `claude-haiku-4-5` (default; env-overridable via `AGENT_MODEL`. Chosen for latency/cost — keeps chat turns well under the 60s Vercel function cap. Set `AGENT_MODEL=claude-sonnet-4-6` to revert.)
 - **Runtime:** server-side only (Vercel AI SDK `streamText`). Never call Anthropic from the client.
 
 You are the HotelZippo concierge — a warm, direct, considered travel expert who helps

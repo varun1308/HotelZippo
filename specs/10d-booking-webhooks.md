@@ -103,12 +103,12 @@ create index webhook_events_event_idx on public.webhook_events (event);
 
 `POST` only, **public** (no Supabase auth gate — RouteStack is the caller), `runtime = nodejs`, `dynamic = force-dynamic`. Steps:
 
-1. **Verify the shared secret.** Read the configured access key from `ROUTESTACK_WEBHOOK_SECRET`. RouteStack delivers it per its webhook settings — **verify the exact delivery mechanism against a live test ping** (likely a header e.g. `x-webhook-key` / `authorization`, or a query param). Compare with **timing-safe equality**. Mismatch / missing (when a secret is configured) → **401**, log + record nothing. If `ROUTESTACK_WEBHOOK_SECRET` is unset (local/dev), skip verification (so sandbox testing works) but `log.warn`.
+1. **Verify the shared secret** *(updated 2026-07-03, post-review sweep)*. Read the configured access key from `ROUTESTACK_WEBHOOK_SECRET`. The secret is accepted from the **HEADER carriers only** — `x-webhook-key`, `x-webhook-secret`, `x-routestack-webhook-key`, or `Authorization: Bearer <key>` (`lib/booking/webhook.ts::verifyWebhookSecret`). **Query-param carriers (`?key=` / `?access_key=`) are deliberately NOT accepted** — a secret in the URL gets persisted by request/proxy/CDN logs. Compare with **timing-safe equality**. Mismatch / missing (when a secret is configured) → **401**, log + record nothing. If `ROUTESTACK_WEBHOOK_SECRET` is unset, the endpoint **FAILS CLOSED in production** (every delivery 401s — anyone could otherwise forge lifecycle events); outside production (local/dev/sandbox) verification is skipped with a `log.warn` so sandbox pings and tunnels work.
 2. **Parse + validate** the body against a Zod schema (`lib/booking/webhook.ts`). Unknown/garbage → **400** (don't persist). Non-HOTEL `module` → **200** ack + skip (we only track hotels in v1).
 3. **Redact + persist the raw event** to `webhook_events` (always, matched or not) — `billing_name` + `billing_email` masked in the stored `payload` (PII; the match key is used transiently, not stored raw in the audit log). Reuse the `redact()` approach from `lib/booking/payload-log.ts`.
-4. **Correlate + update the order:**
+4. **Correlate + update the order** *(updated 2026-07-03, post-review sweep)*:
    - If `orderid` present and a `booking_orders` row already has that `rs_order_id` → **update** its `order_status` / `payment_status` / `last_event` / `price`.
-   - Else match the **most-recent `linked = false` `booking_orders` row** with `lower(user_email) = lower(billing_email)` (created within a sane window, e.g. 24h) → set its `rs_order_id`, statuses, `linked = true`, `billing_email`.
+   - Else — **only when the event CARRIES an `orderid`** — match the **most-recent `linked = false` `booking_orders` row** with `lower(user_email) = lower(billing_email)` (created within a sane window, e.g. 24h) → set its `rs_order_id`, statuses, `linked = true`, `billing_email`. A **null-`orderid` failure event** (e.g. `ORDER_CREATION_FAILED`) must **NOT consume the pending row**: linking it would leave `linked = true` with `rs_order_id = null`, so the user's successful retry could never link (step 1 finds no `rs_order_id` row; the email match finds no `linked = false` row). Such events are still **recorded** in `webhook_events` — they just never touch `booking_orders`.
    - No match → leave the event recorded as **unmatched** (`matched = false`); never error.
 5. **Always return `200`** for any authentic, well-formed event (even unmatched) so RouteStack doesn't retry endlessly. Auth/parse failures are the only non-200s.
 
@@ -122,7 +122,7 @@ After `selectAndPaymentUrl` succeeds (we have a deep-link URL), **before returni
 
 | Var | Scope | Purpose |
 | --- | --- | --- |
-| `ROUTESTACK_WEBHOOK_SECRET` | server-only | Shared secret matching RouteStack's **Webhook access key**. When set, the endpoint verifies every inbound delivery (timing-safe) and 401s on mismatch. Unset (local/dev) → verification skipped with a warn, so sandbox pings work. |
+| `ROUTESTACK_WEBHOOK_SECRET` | server-only | Shared secret matching RouteStack's **Webhook access key**. When set, the endpoint verifies every inbound delivery (timing-safe, **header carriers only**) and 401s on mismatch. Unset → **fails closed in production** (all deliveries 401); local/dev/sandbox skips verification with a warn, so sandbox pings work. *(updated 2026-07-03, post-review sweep)* |
 
 Founder configures the **Webhook URL** in RouteStack (sandbox first): `https://<host>/api/webhooks/routestack`, and the matching access key both in RouteStack settings and as this env var.
 

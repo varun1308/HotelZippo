@@ -23,9 +23,10 @@ describe('session-snapshot prompt artifact (contract)', () => {
     expect(prompt.trim().length).toBeGreaterThan(0);
   });
 
-  it('pins the spec and the server-side model', () => {
+  it('pins the spec and the server-side model (haiku default, SNAPSHOT_MODEL override)', () => {
     expect(prompt).toMatch(/specs\/08b-3-session-snapshot\.md/);
-    expect(prompt).toMatch(/claude-sonnet-4-6/);
+    expect(prompt).toMatch(/claude-haiku-4-5/);
+    expect(prompt).toMatch(/SNAPSHOT_MODEL/);
   });
 
   it('encodes the plain-text-only rule (no JSON, no markdown)', () => {

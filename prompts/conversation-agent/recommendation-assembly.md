@@ -49,7 +49,7 @@ If filtering leaves zero candidates → output `{ "error": "no_eligible_hotels",
 | Recent family reviews | High | High | High |
 | Budget | Medium | High | Medium |
 
-- **Budget match:** `value` → mid-range only; `comfort` → mid-range or luxury; `luxury` → all tiers. If no candidate matches the family's budget tier → `{ "error": "budget_mismatch", "reason": "...", "available_tiers": [...] }`.
+- **Budget match:** `value` → mid-range only; `comfort` → mid-range or luxury; `luxury` → luxury or ultra-luxury. If no candidate matches the family's budget tier → `{ "error": "budget_mismatch", "reason": "...", "available_tiers": [...] }`.
 - **Brand preference:** tiebreaker only. A stronger-signal hotel beats a preferred brand with weaker signals. Treat IHG as lower-preference unless exceptional.
 - **Kids/grandparent awareness:** infant (<2) → crib, in-room kettle, restaurant flexibility; 5–10 → kids club, pool; grandparents → vegetarian food, accessibility.
 

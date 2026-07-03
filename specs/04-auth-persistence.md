@@ -58,6 +58,7 @@ Use `@supabase/ssr` for cookie-based sessions in the App Router (server + client
 - Unauthenticated request to `/chat` (and any future user route) → redirect to `/` (landing).
 - An authenticated user hitting `/` may be routed straight to `/chat` (optional).
 - **Admin tools (`/admin/*`) remain no-auth internal for v1** — consistent with the curation tool (12a) and the pipeline admin UI (08a-5). The middleware does **not** gate them.
+- **Server-side API gate (updated 2026-07-03, post-review sweep).** The sign-in gate is no longer middleware/pages-only: **`POST /api/chat` and `POST /api/recommendations/assemble` enforce it server-side** — when the Supabase auth env is configured, an unauthenticated request is rejected with **401 `auth_required`** (these routes trigger paid model calls through the service client, so the page redirect alone wasn't sufficient). With no Supabase env (key-free CI / env-free dev) there is no auth system to check against and the routes stay open, matching the codebase's lazy-env discipline.
 
 ## Stage 4 — Persistence
 
