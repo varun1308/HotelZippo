@@ -144,3 +144,88 @@ export function makeMockFetch(overrides: PathOverrides = {}): {
 /** Deterministic clock/nonce for auth tests. */
 export const FIXED_NOW = () => 1_700_000_000_000;
 export const FIXED_NONCE = () => 'fixed-nonce-uuid';
+
+/* ---- webhook lifecycle (10d) — captured LIVE 2026-07-03 -------------------
+ *
+ * A real sandbox booking (StripViewSuites at Jockey Club, Las Vegas, 2026-07-17→2026-07-20)
+ * delivered this exact 4-event order lifecycle to our webhook endpoint via
+ * `x-webhook-access-key` (the confirmed live carrier header — see lib/booking/webhook.ts).
+ * `billing_email`/`billing_name` are genericised per house convention (never a real email in
+ * committed fixtures); every other field — event names, orderid, orderstatus, price, currency,
+ * paymentstatus, account_code — is the REAL captured shape, unmodified. */
+export const WEBHOOK_ORDER_CREATION_SUCCESS = {
+  event: 'ORDER_CREATION_SUCCESS',
+  orderid: 'RSA-75271203599',
+  orderstatus: 'INCOMPLETE',
+  message: 'Created order successfully',
+  billing_email: 'raj@example.com',
+  billing_name: 'Raj Mehta',
+  price: 1567.69,
+  currency: 'USD',
+  module: 'HOTEL',
+  event_timestamp: '2026-07-03T14:06:20.904Z',
+  createdat: '2026-07-03T14:06:20.904Z',
+  account_code: 'AWP889CG',
+};
+
+export const WEBHOOK_ORDER_PAYMENT_AUTHORIZED = {
+  event: 'ORDER_PAYMENT_AUTHORIZED',
+  orderid: 'RSA-75271203599',
+  orderstatus: 'INCOMPLETE',
+  message: 'Authorized payment successfully',
+  createdat: '2026-07-03T19:36:18.540Z',
+  billing_email: 'raj@example.com',
+  billing_name: 'Raj Mehta',
+  price: 1567.69,
+  currency: 'USD',
+  module: 'HOTEL',
+  event_timestamp: '2026-07-03 14:06:32',
+  paymentstatus: 'AUTHORIZED',
+  account_code: 'AWP889CG',
+};
+
+export const WEBHOOK_BOOKING_SUCCESS = {
+  event: 'BOOKING_SUCCESS',
+  orderid: 'RSA-75271203599',
+  orderstatus: 'INCOMPLETE',
+  message: 'Booked hotel successfully',
+  billing_email: 'raj@example.com',
+  billing_name: 'Raj Mehta',
+  price: 1567.69,
+  currency: 'USD',
+  module: 'HOTEL',
+  event_timestamp: '2026-07-03T14:06:45.669Z',
+  createdat: '2026-07-03T19:36:18.540Z',
+  paymentstatus: 'AUTH_ONLY',
+  account_code: 'AWP889CG',
+};
+
+export const WEBHOOK_ORDER_PAYMENT_CAPTURED_SUCCESS = {
+  event: 'ORDER_PAYMENT_CAPTURED_SUCCESS',
+  orderid: 'RSA-75271203599',
+  orderstatus: 'CONFIRMED',
+  message: 'Captured payment successfully',
+  createdat: '2026-07-03T19:36:18.540Z',
+  billing_email: 'raj@example.com',
+  billing_name: 'Raj Mehta',
+  price: 1567.69,
+  currency: 'USD',
+  module: 'HOTEL',
+  event_timestamp: '2026-07-03 14:06:46',
+  paymentstatus: 'COMPLETED',
+  account_code: 'AWP889CG',
+};
+
+/** The full real lifecycle in delivery order (RouteStack retried CREATION_SUCCESS ×3 and
+ * BOOKING_SUCCESS ×3 while our webhook 401'd on the pre-fix header name — captured as delivered,
+ * duplicates included, to also exercise idempotent re-delivery, TC-P5-style). */
+export const WEBHOOK_LIVE_LIFECYCLE = [
+  WEBHOOK_ORDER_CREATION_SUCCESS,
+  WEBHOOK_ORDER_CREATION_SUCCESS,
+  WEBHOOK_ORDER_CREATION_SUCCESS,
+  WEBHOOK_ORDER_PAYMENT_AUTHORIZED,
+  WEBHOOK_BOOKING_SUCCESS,
+  WEBHOOK_ORDER_PAYMENT_CAPTURED_SUCCESS,
+  WEBHOOK_BOOKING_SUCCESS,
+  WEBHOOK_BOOKING_SUCCESS,
+];

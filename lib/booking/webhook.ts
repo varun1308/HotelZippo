@@ -61,8 +61,10 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /** Verify the inbound request carries the configured shared secret. RouteStack's exact delivery
- * mechanism must be confirmed against a live ping — we accept the secret from any of the likely
- * HEADER carriers and compare timing-safe. Query-param carriers (?key= / ?access_key=) are
+ * mechanism was live-confirmed 2026-07-03 (real sandbox delivery via a `x-webhook-access-key`
+ * header, carrying our `ROUTESTACK_WEBHOOK_SECRET` verbatim) — `x-webhook-access-key` is now the
+ * PRIMARY carrier; the other header names are kept as fallbacks in case RouteStack's dashboard
+ * config ever names it differently per-account. Query-param carriers (?key= / ?access_key=) are
  * deliberately NOT accepted: a secret in the URL gets persisted by request/proxy/CDN logs.
  *
  * When NO secret is configured this FAILS CLOSED in production (anyone could otherwise forge
@@ -80,6 +82,7 @@ export function verifyWebhookSecret(req: {
   }
 
   const presented =
+    req.headers.get('x-webhook-access-key') ??
     req.headers.get('x-webhook-key') ??
     req.headers.get('x-webhook-secret') ??
     req.headers.get('x-routestack-webhook-key') ??

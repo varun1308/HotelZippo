@@ -71,7 +71,12 @@ describe('verifyWebhookSecret', () => {
       (process.env as Record<string, string | undefined>).NODE_ENV = prevNodeEnv;
     }
   });
-  it('matches via x-webhook-key header', () => {
+  it('matches via x-webhook-access-key header (PRIMARY — live-confirmed 2026-07-03 against a real RouteStack sandbox delivery)', () => {
+    process.env.ROUTESTACK_WEBHOOK_SECRET = 's3cr3t';
+    expect(verifyWebhookSecret(reqWith({ 'x-webhook-access-key': 's3cr3t' }))).toBe(true);
+    expect(webhookSecretConfigured()).toBe(true);
+  });
+  it('matches via x-webhook-key header (fallback carrier)', () => {
     process.env.ROUTESTACK_WEBHOOK_SECRET = 's3cr3t';
     expect(verifyWebhookSecret(reqWith({ 'x-webhook-key': 's3cr3t' }))).toBe(true);
     expect(webhookSecretConfigured()).toBe(true);

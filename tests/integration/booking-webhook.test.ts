@@ -37,9 +37,28 @@ const evt = (over: Record<string, unknown>) => ({
 async function cleanup() {
   await admin.from('webhook_events').delete().eq('rs_order_id', ORDER_ID);
   await admin.from('booking_orders').delete().eq('user_email', EMAIL);
+  await admin.from('raw_routestack_payloads').delete().eq('path', '/api/webhooks/routestack');
 }
 beforeEach(cleanup);
 afterAll(cleanup);
+
+/** The route's debug-payload capture is deliberately fire-and-forget (best-effort — a webhook
+ * ack must never wait on it, mirroring the outbound 10c convention), so `await post(...)`
+ * resolving does NOT guarantee the insert has landed yet. Poll briefly rather than assume. */
+async function waitForPayloadRow(): Promise<Record<string, unknown> | null> {
+  for (let i = 0; i < 20; i++) {
+    const { data } = await admin
+      .from('raw_routestack_payloads')
+      .select('step, path, request, response, success, code, error, hotel_id')
+      .eq('path', '/api/webhooks/routestack')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) return data as Record<string, unknown>;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return null;
+}
 
 describe('POST /api/webhooks/routestack', () => {
   // no ROUTESTACK_WEBHOOK_SECRET in test env → verification skipped (dev/sandbox path)
@@ -113,5 +132,50 @@ describe('POST /api/webhooks/routestack', () => {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{ not json',
     }));
     expect(res.status).toBe(400);
+  });
+
+  describe('ROUTESTACK_DEBUG_PAYLOADS=1 — raw inbound webhook capture (found missing in the live 2026-07-03 booking; this proves the fix against real Supabase)', () => {
+    const savedFlag = process.env.ROUTESTACK_DEBUG_PAYLOADS;
+    beforeEach(async () => {
+      process.env.ROUTESTACK_DEBUG_PAYLOADS = '1';
+      // The outer beforeEach cleans webhook_events/booking_orders by this test's own ids, but
+      // NOT raw_routestack_payloads (that table carries no order/email column to scope by) — a
+      // stale row from a PRIOR test in this describe (or a same-millisecond insert) can outrank
+      // the row THIS test just wrote under `order(created_at desc).limit(1)`. Clear it fresh.
+      await admin.from('raw_routestack_payloads').delete().eq('path', '/api/webhooks/routestack');
+    });
+    afterEach(() => {
+      if (savedFlag === undefined) delete process.env.ROUTESTACK_DEBUG_PAYLOADS;
+      else process.env.ROUTESTACK_DEBUG_PAYLOADS = savedFlag;
+    });
+
+    it('a real delivery lands a REDACTED row in raw_routestack_payloads (step=webhook, request=null)', async () => {
+      const res = await post(evt({}));
+      expect(res.status).toBe(200);
+
+      const data = await waitForPayloadRow();
+      expect(data?.step).toBe('webhook');
+      expect(data?.request).toBeNull(); // inbound delivery — no outbound request to log
+      expect(data?.success).toBe(true);
+      expect(data?.code).toBe(200);
+      expect(data?.hotel_id).toBeNull();
+      const response = data?.response as Record<string, unknown>;
+      expect(response.orderid).toBe(ORDER_ID); // non-PII kept
+      expect(response.billing_email).toBe('[redacted]'); // same redaction as webhook_events
+      expect(response.billing_name).toBe('[redacted]');
+    });
+
+    it('an unauthorized delivery is ALSO captured (success=false, code=401) — auth failures visible in the log too', async () => {
+      process.env.ROUTESTACK_WEBHOOK_SECRET = 'configured-secret';
+      try {
+        await post(evt({})); // no header carrying the secret → 401
+        const data = await waitForPayloadRow();
+        expect(data?.success).toBe(false);
+        expect(data?.code).toBe(401);
+        expect(data?.error).toBe('unauthorized');
+      } finally {
+        delete process.env.ROUTESTACK_WEBHOOK_SECRET;
+      }
+    });
   });
 });
