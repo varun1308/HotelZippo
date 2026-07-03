@@ -1,7 +1,7 @@
 # 08b-3 · Conversation Agent — Session Snapshot
 
 - **Notion:** https://app.notion.com/p/3754958429ac814a8e99e6dc122ef7d0
-- **Phase:** 5 · **Status:** SPECCED
+- **Phase:** 5 · **Status:** built (generate + persist + load live at `lib/chat/session-snapshot.ts`)
 - **Prompt artifact:** `/prompts/conversation-agent/session-snapshot.md`
 - **Model:** `claude-haiku-4-5` (default; env-overridable via `SNAPSHOT_MODEL` — `lib/chat/session-snapshot.ts`. Set `SNAPSHOT_MODEL=claude-sonnet-4-6` to revert with no redeploy. Mirrors `AGENT_MODEL`/`ASSEMBLY_MODEL`.) *(updated 2026-07-03, post-review sweep)*
 

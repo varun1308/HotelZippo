@@ -1,6 +1,6 @@
 # 10d · RouteStack Booking Webhooks (order lifecycle → tracked orders)
 
-- **Notion:** extends 10c (RouteStack integration) · 08c (Booking Agent). **Phase:** 7 follow-up. **Status:** SPEC (build in progress).
+- **Notion:** extends 10c (RouteStack integration) · 08c (Booking Agent). **Phase:** 7 follow-up. **Status:** built (endpoint + `booking_orders`/`webhook_events` + tests live; contract re-synced 2026-07-03).
 - **Cross-refs:** 10c · RouteStack (the deep-link booking flow this completes) · 07 · Data Model · 13 · Environment · 14 · Error Handling · 15 · Test Strategy.
 
 > **What this closes.** 10c's deep-link model hands the user off to RouteStack's checkout and HotelZippo learns **nothing** about the outcome — `get-payment-url` returns only `{ url, success }`, no order id, and our anonymous partner can't `list-bookings`. RouteStack now provides **outbound HTTP webhooks** that push the **order lifecycle** (creation → payment → booking → cancel/refund) to a URL we configure, each event carrying an `orderid` + `billing_email`. This spec adds the **inbound webhook endpoint** + **pending-order correlation** so a deep-link booking becomes a **tracked order** in HotelZippo — enabling end-to-end verification of the RouteStack flow (and, later, a `/bookings` page + chat status, which are OUT of this spec).

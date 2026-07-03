@@ -1,7 +1,7 @@
 # 08b-1 · Conversation Agent — System Prompt
 
 - **Notion:** https://app.notion.com/p/3754958429ac812fbb98c107e4c9734d
-- **Phase:** 3 · **Status:** specced (v1.0.0)
+- **Phase:** 3 · **Status:** built (prompt live at `/prompts/conversation-agent/system-prompt.md`; contract re-synced 2026-07-03)
 - **Prompt artifact:** `/prompts/conversation-agent/system-prompt.md`
 - **Model:** `claude-haiku-4-5` (default; env-overridable via `AGENT_MODEL` — `lib/chat/agent.ts`. Chosen for latency/cost so chat turns stay well under the 60s Vercel function cap; set `AGENT_MODEL=claude-sonnet-4-6` to revert with no redeploy. Mirrors `ASSEMBLY_MODEL`/`SNAPSHOT_MODEL`.) *(updated 2026-07-03, post-review sweep)*
 
