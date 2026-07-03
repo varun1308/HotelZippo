@@ -174,6 +174,60 @@ describe('searchAndRates (phase 1)', () => {
     });
     expect(searchCalls).toBe(5); // page 1 + 4 bounded follow-ups
   });
+
+  it('stall guard: a REPEATED nextResultsKey (server ignored the request key) stops after one follow-up', async () => {
+    const base = makeMockFetch();
+    let searchCalls = 0;
+    const fetchImpl: typeof base.fetchImpl = async (path, body, headers) => {
+      if (path === '/mcp/hotel/search-hotels') {
+        searchCalls++;
+        return {
+          success: true,
+          result: {
+            correlationId: 'corr-fixture-123',
+            token: 'listing-token-abc',
+            nextResultsKey: 'page-2', // SAME key every time — the unconfirmed request field was ignored
+            result: [{ id: `H-${searchCalls}`, name: `Filler Hotel ${searchCalls}` }],
+          },
+        };
+      }
+      return base.fetchImpl(path, body, headers);
+    };
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(searchAndRates(INPUT, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE })).rejects.toMatchObject({
+      kind: 'not-found',
+    });
+    expect(searchCalls).toBe(2); // page 1 + ONE follow-up that came back identical — not the full 5-page budget
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('pagination stalled'));
+    warn.mockRestore();
+  });
+
+  it('stall guard: an EMPTY follow-up page stops the walk early', async () => {
+    const base = makeMockFetch();
+    let searchCalls = 0;
+    const fetchImpl: typeof base.fetchImpl = async (path, body, headers) => {
+      if (path === '/mcp/hotel/search-hotels') {
+        searchCalls++;
+        return {
+          success: true,
+          result: {
+            correlationId: 'corr-fixture-123',
+            token: 'listing-token-abc',
+            nextResultsKey: `page-${searchCalls + 1}`,
+            result: searchCalls === 1 ? [{ id: 'H-9', name: 'Some Other Hotel' }] : [], // page 2 empty
+          },
+        };
+      }
+      return base.fetchImpl(path, body, headers);
+    };
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(searchAndRates(INPUT, { fetchImpl, now: FIXED_NOW, nonce: FIXED_NONCE })).rejects.toMatchObject({
+      kind: 'not-found',
+    });
+    expect(searchCalls).toBe(2);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('empty page'));
+    warn.mockRestore();
+  });
 });
 
 describe('selectAndPaymentUrl (phase 2)', () => {

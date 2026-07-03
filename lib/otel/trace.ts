@@ -80,6 +80,12 @@ export const HZ = {
   rawLength: 'hz.raw_length',
   /* booking / RouteStack */
   currencyRate: 'hz.currency_rate',
+  resultCount: 'hz.result_count', // hotels on a search page / bookable room options on rates
+  page: 'hz.page', // 1-based search-hotels page index
+  nextKeyPresent: 'hz.next_key_present', // page carried a nextResultsKey
+  pagesScanned: 'hz.pages_scanned', // total search pages walked for this booking step
+  matched: 'hz.matched', // chosen hotel found in the scanned inventory
+  paginationStalled: 'hz.pagination_stalled', // stall guard fired (repeated key / empty page)
   /* webhook ingestion (webhook.routestack) */
   webhookEvent: 'hz.webhook.event',
   webhookModule: 'hz.webhook.module',
