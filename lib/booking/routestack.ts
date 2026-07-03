@@ -137,6 +137,9 @@ async function tracedCall(
   token: string | null,
   body: unknown,
   attrs: Record<string, string | number>,
+  // Derives result-shaped attributes (counts, pagination hints) stamped on the span after a
+  // successful envelope — so Dash0 shows WHAT came back, not just that something did (specs/14).
+  resultAttrs?: (result: unknown) => Record<string, string | number | boolean>,
 ): Promise<Envelope> {
   const tracer = trace.getTracer(TRACER);
   return tracer.startActiveSpan(`routestack.${step}`, async (span: Span) => {
@@ -175,6 +178,12 @@ async function tracedCall(
         span.recordException(err);
         span.setStatus({ code: SpanStatusCode.ERROR });
         throw err;
+      }
+      if (resultAttrs) {
+        // Best-effort: a malformed result must never fail the call over an attribute.
+        try {
+          for (const [k, v] of Object.entries(resultAttrs(env.result))) span.setAttribute(k, v);
+        } catch { /* attribute derivation only */ }
       }
       span.setStatus({ code: SpanStatusCode.OK });
       return env;
@@ -380,7 +389,7 @@ export async function searchHotelsInDestination(
   dates: { checkIn: string; checkOut: string },
   deps: BookingDeps,
   currencyArg?: string,
-): Promise<{ searchResult: unknown; dest: DestinationHit; nextPage: (nextResultsKey: string) => Promise<unknown> }> {
+): Promise<{ searchResult: unknown; dest: DestinationHit; nextPage: (nextResultsKey: string, page?: number) => Promise<unknown> }> {
   const dateAttrs = { check_in: dates.checkIn, check_out: dates.checkOut };
   const jwt = await getPartnerToken(deps.fetchImpl, { now: deps.now, nonce: deps.nonce, mock: deps.mock });
   const currency = currencyArg ?? DEFAULT_CURRENCY;
@@ -412,7 +421,9 @@ export async function searchHotelsInDestination(
 
   // search hotels in that destination (mints the session token + carries availability). `nextKey`
   // fetches a follow-up page (openapi HotelSearchResult.nextResultsKey) within the same session.
-  const searchPage = (d: DestinationHit, nextKey?: string) =>
+  // Each page span records how many hotels came back + whether another page exists, so a slow or
+  // stalled pagination walk is diagnosable from Dash0 alone.
+  const searchPage = (d: DestinationHit, nextKey?: string, page = 1) =>
     tracedCall(deps, 'search_hotels', '/mcp/hotel/search-hotels', jwt, {
       destinationId: d.id,
       destinationType: d.type,
@@ -423,7 +434,11 @@ export async function searchHotelsInDestination(
       rooms,
       currency,
       ...(nextKey ? { nextResultsKey: nextKey } : {}),
-    }, dateAttrs);
+    }, dateAttrs, (result) => ({
+      [HZ.resultCount]: extractHotelList(result).length,
+      [HZ.page]: page,
+      [HZ.nextKeyPresent]: nextResultsKey(result) !== null,
+    }));
 
   let searchEnv: Envelope | null = null;
   let searchErr: unknown = null;
@@ -456,7 +471,7 @@ export async function searchHotelsInDestination(
   return {
     searchResult: searchEnv!.result,
     dest,
-    nextPage: async (nextResultsKey: string) => (await searchPage(dest, nextResultsKey)).result,
+    nextPage: async (nextResultsKey: string, page?: number) => (await searchPage(dest, nextResultsKey, page ?? 2)).result,
   };
 }
 
@@ -599,12 +614,36 @@ export async function searchAndRates(
   let match = findMatch(pageResult);
   let handles = sessionHandles(pageResult);
   let key = nextResultsKey(pageResult);
+  let pagesScanned = 1;
+  let stalled = false;
   for (let scanned = 1; !match && key && scanned < MAX_SEARCH_PAGES; scanned++) {
-    pageResult = await nextPage(key);
+    const prevKey = key;
+    pageResult = await nextPage(key, scanned + 1);
+    pagesScanned = scanned + 1;
     match = findMatch(pageResult);
     handles = sessionHandles(pageResult) ?? handles;
     key = nextResultsKey(pageResult);
+    // STALL GUARD: the request-side pagination field name is unconfirmed against a live paged
+    // capture (10c note). If the server ignored our key (same key back) or served an empty page,
+    // walking further only repeats slow paid calls against inventory we've already seen — stop
+    // early and fail honestly rather than burning the full page budget.
+    if (!match && key !== null && (key === prevKey || extractHotelList(pageResult).length === 0)) {
+      stalled = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[booking] search-hotels pagination stalled for "${input.destination}" at page ${pagesScanned} ` +
+          `(${key === prevKey ? 'nextResultsKey repeated — server likely ignored the request key' : 'empty page'}); stopping early`,
+      );
+      break;
+    }
   }
+
+  // Roll the walk up onto the enclosing booking.* span (booking.rates / booking.payment_url):
+  // how far we scanned, whether the hotel matched, and whether the stall guard fired.
+  const bookingSpan = trace.getActiveSpan();
+  bookingSpan?.setAttribute(HZ.pagesScanned, pagesScanned);
+  bookingSpan?.setAttribute(HZ.matched, Boolean(match));
+  if (stalled) bookingSpan?.setAttribute(HZ.paginationStalled, true);
 
   if (!match) throw new BookingError('not-found', `"${input.hotelName}" not found in ${input.destination} availability`);
   // Lazy-populate the id↔hotel mapping on a fresh resolve (no-op if already cached the same id).
@@ -622,7 +661,7 @@ export async function searchAndRates(
     checkIn: input.dates.checkIn,
     checkOut: input.dates.checkOut,
     rooms,
-  }, dateAttrs);
+  }, dateAttrs, (result) => ({ [HZ.resultCount]: mapRoomRateOptions(result).length }));
 
   const mapped = mapRoomRateOptions(ratesEnv.result);
   if (mapped.length === 0) {
