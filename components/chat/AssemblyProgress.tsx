@@ -11,6 +11,7 @@
  * the progress automatically — the recommendation_jobs row is the source of truth. */
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { ShortlistableRecommendationSet } from '@/components/recommendation';
 import { toRecommendationSetProps } from '@/lib/chat/map-recommendation';
 import {
@@ -51,27 +52,37 @@ function formatTiers(tiers: string[]): string {
 export interface AssemblyProgressComponentProps extends AssemblyProgressProps {
   /** Injectable poll (tests). Defaults to GET /api/assembly/:jobId. */
   poll?: AssemblyPoll;
+  /** Fired ONCE when the job succeeds with a result (L17) — lets the page apply the same
+   *  trip-brief gate locks / action-bar reveal as the sync recommendation-set chunk path. */
+  onComplete?: (result: unknown) => void;
 }
 
-export function AssemblyProgress({ jobId, destination, conversationId, poll }: AssemblyProgressComponentProps) {
+export function AssemblyProgress({
+  jobId,
+  destination,
+  conversationId,
+  poll,
+  onComplete,
+}: AssemblyProgressComponentProps) {
   const job = useAssemblyJob(jobId, poll, conversationId);
+
+  // Notify completion exactly once (the poll keeps the state stable afterwards).
+  const completedRef = useRef(false);
+  useEffect(() => {
+    if (job.status === 'succeeded' && job.result != null && !completedRef.current) {
+      completedRef.current = true;
+      onComplete?.(job.result);
+    }
+  }, [job.status, job.result, onComplete]);
 
   if (job.status === 'succeeded') {
     const props = toRecommendationSetProps(job.result);
     if (props) {
-      // recommendation_notes (08b-2): overall caveats — all-options-flagged, only-one-eligible,
-      // a named hotel not in our records. On the async path no model ever narrates the result,
-      // so this block is where the caveat reaches the user. Rendered beneath the cards.
-      const notes =
-        (job.result as { recommendation_notes?: string | null } | null)?.recommendation_notes ?? null;
+      // recommendation_notes (08b-2) ride on the mapped props — the set component renders
+      // them deterministically beneath the cards (same path as the sync chunk render).
       return (
         <div className="mt-2">
           <ShortlistableRecommendationSet {...props} />
-          {notes && (
-            <p role="note" className="mt-2 text-[15.5px] leading-[1.55] text-text-secondary">
-              {notes}
-            </p>
-          )}
         </div>
       );
     }

@@ -17,6 +17,7 @@ export function RecommendationSet({
   topPick,
   otherPicks,
   altHeading,
+  recommendationNotes,
 }: RecommendationSetProps) {
   const heading = altHeading ?? defaultAltHeading(otherPicks.length);
   return (
@@ -38,6 +39,14 @@ export function RecommendationSet({
             ))}
           </div>
         </>
+      )}
+
+      {/* recommendation_notes (08b-2): overall caveats — rendered deterministically beneath
+          the cards on EVERY path (sync chunk + async job) so they reliably reach the user. */}
+      {recommendationNotes && (
+        <p role="note" className="mt-2 text-[15.5px] leading-[1.55] text-text-secondary">
+          {recommendationNotes}
+        </p>
       )}
     </div>
   );

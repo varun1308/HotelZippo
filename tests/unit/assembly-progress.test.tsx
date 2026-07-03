@@ -90,6 +90,28 @@ describe('AssemblyProgress', () => {
     expect(await screen.findByText('Anantara Phuket')).toBeInTheDocument();
     expect(screen.getByText(/structural flags worth reviewing/)).toBeInTheDocument();
   });
+
+  it('fires onComplete exactly once with the job result when the cards land (L17)', async () => {
+    const poll: AssemblyPoll = async () => ({ status: 'succeeded', stage: 'done', result: SUCCESS_RESULT });
+    const onComplete = jest.fn();
+    const { rerender } = render(
+      <AssemblyProgress jobId="job-8" destination="Phuket" poll={poll} onComplete={onComplete} />,
+    );
+    await screen.findByText('Anantara Phuket');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith(SUCCESS_RESULT);
+    // A re-render must not re-fire it.
+    rerender(<AssemblyProgress jobId="job-8" destination="Phuket" poll={poll} onComplete={onComplete} />);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT fire onComplete on a failed job', async () => {
+    const poll: AssemblyPoll = async () => ({ status: 'failed', stage: 'done', error_kind: 'model_failed' });
+    const onComplete = jest.fn();
+    render(<AssemblyProgress jobId="job-9" destination="Bali" poll={poll} onComplete={onComplete} />);
+    await screen.findByText(/had trouble pulling those recommendations together/);
+    expect(onComplete).not.toHaveBeenCalled();
+  });
 });
 
 describe('useAssemblyJob poll-budget expiry (H8)', () => {

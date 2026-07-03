@@ -13,7 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/db/ssr';
 import { PRICE_TIER_LABELS } from '@/components/recommendation/types';
-import type { SavedHotel } from '@/lib/shortlist/types';
+import type { SavedHotelFlag, SavedHotelWithFlags } from '@/components/shortlist';
 
 /** A short, URL-safe share token. Not security-sensitive (the share link is the
  * capability); just needs to be unique enough for the shortlists.share_token column. */
@@ -57,6 +57,12 @@ export async function saveShortlist(
   return { shareToken };
 }
 
+/** The share link for a shortlist share_token (spec 05 §6/§7 Share). The token IS the
+ *  capability; one helper so every Share affordance renders the same URL shape. */
+export function shortlistShareUrl(shareToken: string, origin: string): string {
+  return `${origin.replace(/\/$/, '')}/shortlist/shared/${encodeURIComponent(shareToken)}`;
+}
+
 /** Load the user's saved hotel ids (the working shortlist), or [] if none. */
 export async function loadShortlistHotelIds(
   client: SupabaseClient = createSupabaseBrowserClient(),
@@ -85,10 +91,16 @@ interface ShortlistHotelRow {
  * hotel ids, then read those hotels (RLS: `hotels` is reference-readable) and map them to the
  * panel's shape — preserving the SAVED order (not the DB order). This is the read half the
  * persistence header always intended; the chat page calls it on mount so a saved shortlist
- * survives a reload. Missing/unpublished ids are simply dropped (never a broken row). */
+ * survives a reload. Missing/unpublished ids are simply dropped (never a broken row).
+ *
+ * Hard flags (M14 / spec 05 §6): re-hydrated from `hotel_intelligence` (also
+ * reference-readable), the same source the assembly draws them from — so the panel's flag
+ * dots survive a reload WITHOUT widening the shortlists row (hotel_ids stays the only
+ * durable bit). Best-effort + backward compatible: a hotel with no intelligence row (or an
+ * intelligence read failure) simply gets no dots, never a broken shortlist. */
 export async function loadShortlistHotels(
   client: SupabaseClient = createSupabaseBrowserClient(),
-): Promise<SavedHotel[]> {
+): Promise<SavedHotelWithFlags[]> {
   const ids = await loadShortlistHotelIds(client);
   if (ids.length === 0) return [];
 
@@ -97,6 +109,8 @@ export async function loadShortlistHotels(
     .select('id, name, destination, area, price_tier, images')
     .in('id', ids);
   if (error) throw error;
+
+  const flagsById = await loadHardFlagSeverities(client, ids);
 
   const byId = new Map<string, ShortlistHotelRow>(
     ((data as ShortlistHotelRow[] | null) ?? []).map((h) => [h.id, h]),
@@ -112,5 +126,33 @@ export async function loadShortlistHotels(
       area: h.area,
       priceTierLabel: h.price_tier ? PRICE_TIER_LABELS[h.price_tier] ?? h.price_tier : null,
       heroImageUrl: h.images?.[0] ?? null,
+      hardFlags: flagsById.get(h.id) ?? [],
     }));
+}
+
+/** Minimal hard-flag severities per hotel, from `hotel_intelligence.hard_flags` (jsonb).
+ *  Best-effort: any failure (missing table access, malformed rows) → empty map. */
+async function loadHardFlagSeverities(
+  client: SupabaseClient,
+  hotelIds: string[],
+): Promise<Map<string, SavedHotelFlag[]>> {
+  const map = new Map<string, SavedHotelFlag[]>();
+  try {
+    const { data, error } = await client
+      .from('hotel_intelligence')
+      .select('hotel_id, hard_flags')
+      .in('hotel_id', hotelIds);
+    if (error || !data) return map;
+    for (const row of data as Array<{ hotel_id: string; hard_flags: unknown }>) {
+      if (!Array.isArray(row.hard_flags)) continue;
+      const flags = row.hard_flags
+        .map((f) => (f && typeof f === 'object' ? (f as { severity?: unknown }).severity : null))
+        .filter((s): s is SavedHotelFlag['severity'] => s === 'moderate' || s === 'severe')
+        .map((severity) => ({ severity }));
+      if (flags.length > 0) map.set(row.hotel_id, flags);
+    }
+  } catch {
+    /* warm-fail: no dots is safe degradation; the card-level flags remain authoritative */
+  }
+  return map;
 }

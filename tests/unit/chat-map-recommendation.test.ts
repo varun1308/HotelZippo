@@ -39,6 +39,15 @@ const assembly = {
 };
 
 describe('toRecommendationSetProps', () => {
+  it('carries recommendation_notes onto the props (M8-gap — deterministic sync-path render)', () => {
+    const withNotes = { ...assembly, recommendation_notes: 'Only one hotel cleared my bar.' };
+    expect(toRecommendationSetProps(withNotes)!.recommendationNotes).toBe(
+      'Only one hotel cleared my bar.',
+    );
+    // null / absent both normalise to null (nothing renders).
+    expect(toRecommendationSetProps(assembly)!.recommendationNotes).toBeNull();
+  });
+
   it('maps a success assembly with hydrated hotels', () => {
     const props = toRecommendationSetProps(assembly)!;
     expect(props).not.toBeNull();

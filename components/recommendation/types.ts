@@ -112,6 +112,11 @@ export interface RecommendationSetProps {
   otherPicks: StandardCardProps[];
   /** Heading rendered on the alternatives divider. */
   altHeading?: string;
+  /** assembly `recommendation_notes` (08b-2) — overall caveats (all options flagged,
+   *  only one eligible, a named hotel not in our records). Rendered deterministically
+   *  beneath the set (role="note") so the caveat reliably reaches the user (spec 03b)
+   *  on BOTH the sync-chunk and async-job paths. null/absent → nothing renders. */
+  recommendationNotes?: string | null;
 }
 
 /** Convenience map: DB price_tier (`PRICE_TIERS`) → display label.

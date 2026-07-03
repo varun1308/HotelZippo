@@ -63,6 +63,7 @@ export function toRecommendationSetProps(assembly: unknown): RecommendationSetPr
       why_top_pick?: string;
     };
     other_picks?: Array<PickLike & { summary: string }>;
+    recommendation_notes?: string | null;
   };
   if (!a.top_pick) return null;
 
@@ -85,5 +86,7 @@ export function toRecommendationSetProps(assembly: unknown): RecommendationSetPr
     // (08b-2). The StandardCard degrades to summary-only (no "See full details"). 3a-fix.
   }));
 
-  return { topPick, otherPicks };
+  // recommendation_notes (08b-2): carried onto the props so the set component renders
+  // the caveat deterministically — on the SYNC chunk path no model reliably voices it.
+  return { topPick, otherPicks, recommendationNotes: a.recommendation_notes ?? null };
 }

@@ -14,7 +14,7 @@
  * the brief pill (the one allowed spinner) without ending the turn. */
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ChatMessage,
   ChatStatus,
@@ -39,7 +39,10 @@ export interface ResearchingState {
 export interface UseChatStreamOptions {
   /** The injected source. Required — the page passes the mock; 3c the real agent. */
   source: StreamSource;
-  /** Seed the thread (e.g. for tests or a resumed session). */
+  /** Seed the thread (e.g. for tests or a resumed session / a re-attached in-flight
+   *  assembly job). Read at mount, AND late-appended: seed messages that arrive on a
+   *  later render (an async load settling) are appended by id without remounting —
+   *  so anything the user typed in the meantime survives (M10). */
   initialMessages?: ChatMessage[];
 }
 
@@ -63,6 +66,26 @@ export function useChatStream({
   const [researching, setResearching] = useState<ResearchingState | null>(null);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
 
+  /* The committed conversation, mirrored into a ref so sendMessage can read the
+   * prior history synchronously (L18) — never via a side effect inside a
+   * setMessages updater (React may defer/replay updaters). */
+  const messagesRef = useRef<ChatMessage[]>(initialMessages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  /* Late seeding (M10): `initialMessages` may settle AFTER mount (e.g. the re-attached
+   * in-flight assembly job loads async). Append any seed message we haven't applied
+   * yet — by id — instead of forcing the caller to remount the shell (which would
+   * destroy whatever the user typed while the load was in flight). */
+  const seededIdsRef = useRef<Set<string>>(new Set(initialMessages.map((m) => m.id)));
+  useEffect(() => {
+    const fresh = initialMessages.filter((m) => !seededIdsRef.current.has(m.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((m) => seededIdsRef.current.add(m.id));
+    setMessages((prev) => [...prev, ...fresh]);
+  }, [initialMessages]);
+
   /* Guard against overlapping sends (e.g. double-submit). The ref is read
    * synchronously so a second call bails before mutating state. */
   const busyRef = useRef(false);
@@ -80,12 +103,10 @@ export function useChatStream({
       };
 
       // Capture history BEFORE appending the new user turn (the source contract
-      // is `source(input, priorHistory)`).
-      let history: ChatMessage[] = [];
-      setMessages((prev) => {
-        history = prev;
-        return [...prev, userMessage];
-      });
+      // is `source(input, priorHistory)`). Read from the ref — synchronous and
+      // current — rather than gambling on when React runs a setMessages updater.
+      const history: ChatMessage[] = messagesRef.current;
+      setMessages((prev) => [...prev, userMessage]);
 
       const assistantId = nextId('assistant');
       setStatus('thinking');
